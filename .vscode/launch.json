@@ -2,7 +2,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "run full stack app",
+      "name": "run backend",
       "type": "debugpy",
       "request": "launch",
       "python": "${workspaceFolder}/.venv/bin/python",
@@ -18,6 +18,37 @@
       "console": "integratedTerminal",
       "justMyCode": true,
       "subProcess": true
+    },
+    {
+      "name": "serve front end",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run dev",
+      "cwd": "${workspaceFolder}/src/frontend",
+      "envFile": "${workspaceFolder}/src/frontend/.env.local"
+    },
+    {
+      "name": "serve built app",
+      "type": "debugpy",
+      "request": "launch",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "module": "uvicorn",
+      "args": [
+        "src.backend.main:app",
+        "--host", "127.0.0.1",
+        "--port", "8000"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "preLaunchTask": "build front end"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "run full stack app",
+      "configurations": ["run backend", "serve front end"],
+      "stopAll": true
     }
   ]
 }

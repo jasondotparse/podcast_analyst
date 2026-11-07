@@ -1,0 +1,10 @@
+body {
+  font-family: system-ui, sans-serif;
+  line-height: 1.5;
+  margin: 3rem;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}

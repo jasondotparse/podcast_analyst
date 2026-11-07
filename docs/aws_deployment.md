@@ -1,8 +1,9 @@
 # Docker and AWS deployment
 
-This deploys the current hello world page. React, login, databases, and model API
-calls are later work. The page is publicly accessible; it contains no credentials
-and cannot trigger paid model calls.
+This packages the React hello world UI and FastAPI API in one application image.
+FastAPI serves the built UI at `/app/` and health JSON at `/api/health`; `/`
+redirects to `/app/`. Login, databases, and model calls are later work. The page
+is publicly accessible and cannot trigger paid model calls.
 
 ## What runs where
 
@@ -61,14 +62,17 @@ From the repository root:
 
 ```bash
 docker compose --env-file /dev/null up -d --build app
-curl -i http://127.0.0.1:8000/
+curl -i http://127.0.0.1:8000/app/
+curl -i http://127.0.0.1:8000/api/health
 docker compose --env-file /dev/null logs -f app
 ```
 
 Use `--env-file /dev/null` so Compose does not load the existing local `.env`;
 this app requires no secrets. Stop a VS Code/terminal server on port 8000 first.
-The container runs as a non-root user and checks `/` for health. Source edits
-require rebuilding the image; VS Code still provides the faster hot-reload flow.
+The Docker build compiles React in a Node stage and copies only the generated
+`dist/` into the non-root Python runtime. The container checks `/api/health`.
+Source edits require rebuilding the image; use the VS Code Vite/HMR flow in
+[local_development.md](local_development.md) for rapid frontend edits.
 
 Stop the local containers when switching back to VS Code:
 
@@ -128,8 +132,9 @@ plus a UTC timestamp and random suffix, so uncommitted iterations do not overwri
 earlier releases. Commit before releasing when you need a source-reproducible
 release. Save the printed release tag for rollback.
 
-The script does not run CDK or build anything on EC2. Code changes reuse Docker's
-dependency cache. Dependencies are installed again only when requirements change.
+The script does not run CDK or build anything on EC2. Docker builds React and
+packages it with FastAPI. Code changes reuse Docker's dependency cache;
+Python/npm dependencies are reinstalled when their manifests or lockfiles change.
 Releases briefly restart the single app container; this is not zero-downtime hosting.
 
 ## Roll back or redeploy an existing image
@@ -190,7 +195,18 @@ provision retained database storage and backups as described in [devops.md](devo
 
 ## Validation
 
-Verified in AWS on **November 7, 2026**:
+The **React release** was deployed to beta on **November 7, 2026**, using
+`./scripts/deploy.py beta` without an infrastructure deployment.
+
+- Release tag: `4ca7e5ffddbc-20261107T181832-a3db5c`.
+- Chrome renders **Hello world!** and **Backend: ok** at
+  `https://beta.podcastanalystagent.com/app/`.
+- Public HTTPS serves the exact locally built HTML, JavaScript, and CSS.
+- `/api/health` returns `{"status":"ok"}`. HTTP and `/` redirect to HTTPS `/app/`;
+  unknown API paths, missing assets, and `/docs` return 404.
+
+The following checks describe the original hello world release in AWS on
+**November 7, 2026**, before the React conversion:
 
 - CDK bootstrap and `PodcastAnalyst-beta` deployment succeeded in us-east-1.
 - The host was resized through CDK to `t3.medium`; AWS reports Unlimited CPU
