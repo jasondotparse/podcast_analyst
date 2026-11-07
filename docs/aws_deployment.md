@@ -1,20 +1,15 @@
 # Docker and AWS deployment
 
-**Local harness work in progress:** Codex chat currently runs locally only.
-The Docker/runtime setup below still describes the deployed React hello world
-release. Codex executable packaging, API-key configuration, and authentication
-must be added before deploying the harness; see [local_codex_chat.md](local_codex_chat.md).
-Git-managed configuration and the Codex home bind mount are now prepared below;
-this change does not deploy the harness or complete its container runtime setup.
+The beta image contains React, FastAPI, and **Codex 0.167.0**. FastAPI serves
+`/app/` and streams replies over `/api/*`. The Git-managed defaults select
+`gpt-6-luna`, high reasoning, read-only sandboxing, and live web search.
 
-The planned authentication uses a password supplied to test users ahead of time.
-FastAPI will keep login sessions server-side and issue opaque session-ID cookies
-to protect both `/app/*` and API/SSE requests. See the [authentication plan](devops.md#5-shared-password-login-and-server-side-sessions).
-
-This packages the React hello world UI and FastAPI API in one application image.
-FastAPI serves the built UI at `/app/` and health JSON at `/api/health`; `/`
-redirects to `/app/`. Login, databases, and model calls are later work. The page
-is publicly accessible and cannot trigger paid model calls.
+Beta requires the shared test-user password before serving the UI or paid API
+endpoints. FastAPI stores login state in memory; the browser receives only an
+opaque `HttpOnly`, `Secure`, `SameSite=Lax` cookie. Sessions expire after 12 hours;
+logout and backend restarts invalidate them. Each chat belongs to one login
+session. `/health` remains public for container liveness; `/api/health` and `/ready`
+require login. See [the auth design](devops.md#5-shared-password-login-and-server-side-sessions).
 
 ## What runs where
 
@@ -69,37 +64,34 @@ checked against the AWS pricing API on November 7, 2026; see
 
 ## Run the container locally
 
-The following hello world commands describe the previously deployed release.
-The current harness image is not runnable end-to-end until the remaining runtime
-work above is completed. VS Code/local Python development continues to work.
+VS Code/local Python development remains the fastest local workflow. For a
+container check, create a **gitignored** `runtime.env` containing only:
 
-From the repository root:
-
-```bash
-docker compose --env-file /dev/null up -d --build app
-curl -i http://127.0.0.1:8000/app/
-curl -i http://127.0.0.1:8000/api/health
-docker compose --env-file /dev/null logs -f app
+```dotenv
+OPENAI_API_KEY=<your-api-key>
+PODCAST_APP_PASSWORD=<a-test-password>
 ```
 
-Use `--env-file /dev/null` so Compose does not load the existing local `.env`.
-The hello world release required no secrets; the harness needs backend-only
-credentials supplied at runtime. Stop a VS Code/terminal server on port 8000 first.
-The Docker build compiles React in a Node stage and copies only the generated
-`dist/` into the non-root Python runtime. The container checks `/api/health`.
-Source edits require rebuilding the image; use the VS Code Vite/HMR flow in
-[local_development.md](local_development.md) for rapid frontend edits.
-
-Stop the local containers when switching back to VS Code:
+Then run from the repository root (stop any server using port 8000 first):
 
 ```bash
-docker compose --env-file /dev/null down
+docker buildx build --platform linux/amd64 --load -t podcast-analyst:local .
+docker run --rm --name podcast-analyst-local -p 127.0.0.1:8000:8000 \
+  --env-file runtime.env -e PODCAST_REQUIRE_AUTH=1 \
+  -e PODCAST_PUBLIC_ORIGIN=http://127.0.0.1:8000 \
+  -e PODCAST_CODEX_HOME=/home/app/.codex podcast-analyst:local
 ```
 
-The `cloud` Compose profile adds Caddy. It is enabled by the deploy script on EC2;
-it is not needed for local development. `.dockerignore` allows app source and
-the managed `codex/` configuration into the build context and excludes `.env`
-files and Python caches.
+Open <http://127.0.0.1:8000/app/> and sign in. This local container check uses an
+unpersisted home; cloud Compose uses the persistent
+host mount below. Local HTTP cookies omit `Secure`; HTTPS beta cookies include it.
+The image runs as UID 10001, includes the native Codex binary and a writable
+`/app/.local/agent-workspace`, and has no runtime Node/Vite dependency.
+Source/configuration edits require rebuilding the image.
+
+The `cloud` Compose profile adds Caddy. Only Caddy exposes public ports; the app
+port is host-loopback only. `.dockerignore` excludes `.env`, `runtime.env`, local
+Codex homes, and caches; no runtime credentials are passed to the image build.
 
 ## Codex home and configuration
 
@@ -155,6 +147,32 @@ lookups, keeping infrastructure synthesis repeatable. To deliberately refresh th
 AMI, reset its SSM context key with `npm run cdk -- context --reset <key>`, then
 review `cdk diff`. Refreshing the AMI or changing bootstrap can replace EC2.
 
+## Runtime secrets (one-time setup or rotation)
+
+The local root `.env` must contain `OPENAI_API_KEY`. With explicit authorization
+to transfer that key to the AWS account, run:
+
+```bash
+.venv/bin/python scripts/configure_runtime.py beta
+```
+
+This creates a random test-user password if `PODCAST_BETA_PASSWORD` is absent,
+saves it in the gitignored local `.env` (mode `0600`), and uploads **only** the API
+key and test-user password to `/podcast-analyst/beta/runtime` in **us-east-1**
+Parameter Store as a standard `SecureString` using the AWS-managed SSM KMS key.
+It never prints the secrets or passes them as command-line arguments. Share the
+password with testers out of band. To rotate it, change `PODCAST_BETA_PASSWORD`
+in `.env`, rerun this command, and deploy; existing login sessions then end.
+
+The existing EC2 `AmazonSSMManagedInstanceCore` policy already permits parameter
+retrieval; no CDK update, EC2 replacement, or new service is needed. This existing
+AWS-managed policy grants parameter reads account-wide; this demo adds no further
+IAM grants. The deploy command downloads the parameter using the host's role to
+`/opt/podcast-analyst/runtime.env` with mode `0600`. Compose injects those variables
+only into the app container. Secrets stay out of ECR images, SSM command payloads,
+CloudFormation outputs, frontend bundles, and release logs. Administrators with
+SSM access or Docker access on the host remain trusted.
+
 ## Every application release
 
 From the repository root:
@@ -165,7 +183,7 @@ From the repository root:
 
 The script looks up stack outputs, builds for **linux/amd64** (the EC2 architecture),
 pushes a unique immutable ECR tag, transfers Compose/Caddy configuration through
-SSM, pulls the images, and waits for container health. It then verifies the public
+SSM, retrieves runtime secrets, pulls the images, and waits for container health. It then verifies the public
 HTTPS URL. First-time DNS propagation and certificate issuance may take a few
 minutes. Failures produce a nonzero exit code and an SSM command ID for diagnosis.
 
@@ -175,7 +193,7 @@ earlier releases. Commit before releasing when you need a source-reproducible
 release. Save the printed release tag for rollback.
 
 The script does not run CDK or build anything on EC2. Docker builds React and
-packages it with FastAPI. Code changes reuse Docker's dependency cache;
+packages it with FastAPI and the pinned native Codex binary. Code changes reuse Docker's dependency cache;
 Python/npm dependencies are reinstalled when their manifests or lockfiles change.
 Releases briefly restart the single app container; this is not zero-downtime hosting.
 
@@ -218,11 +236,34 @@ If SSM is offline, check EC2 instance status, the instance role, and outbound
 internet access. For HTTPS failures, verify the A record points to `PublicIp`,
 then check Caddy logs. Port 8000 and SSH intentionally have no public ingress.
 
+### Codex tool failures
+
+Container logs cover startup, HTTP requests, and turn-level failures. A tool can
+fail while Codex still completes a normal assistant reply, so a successful HTTP
+response or `turn/completed` is not proof that the tool worked.
+
+For tool-level diagnostics, inspect Codex's persisted JSONL traces under
+`/var/lib/podcast-analyst/codex/sessions/` on the host (the same path inside the app
+container). Use SSM as above and `docker compose exec -T app python ...` to read a
+specific recent trace. Match `custom_tool_call` to `custom_tool_call_output` by
+`call_id`; older traces may use `function_call` / `function_call_output` instead.
+Web operations may appear inside the generic `exec` tool's input rather than as
+a top-level weather/search event. Inspect the matching **output**, not just the
+call or the assistant's summary. Traces contain conversation content; select only
+the affected turn and redact secrets rather than dumping entire files into logs.
+
+One beta failure returned `failed to spawn code-mode host
+/usr/local/bin/codex-code-mode-host: No such file or directory`. The runtime image
+must package both `codex` and its sibling `codex-code-mode-host` executable from
+the same pinned release. Configuration/readiness checks alone do not catch a
+missing tool-execution helper; verify a successful real tool result after a
+runtime packaging change.
+
 ## Infrastructure changes and cleanup
 
 For infrastructure changes, run `npm run cdk -- diff -c stage=beta` from `infra/`,
 review it, then `npm run cdk -- deploy -c stage=beta`. Normal app edits use only
-the release script. To create prod, deploy with `-c stage=prod`, then run
+the release script. To create prod, deploy with `-c stage=prod`, configure its runtime secrets, then run
 `./scripts/deploy.py prod` from the repository root.
 
 To remove an environment, run `npm run cdk -- destroy -c stage=beta` from `infra/`.
@@ -236,6 +277,41 @@ instance replacement/deletion loses the root disk. Before adding durable data,
 provision retained database storage and backups as described in [devops.md](devops.md).
 
 ## Validation
+
+The tool-runtime fix was deployed on **November 7, 2026** as
+`8abc73fd9016-20261107T220255-tools`. The image includes both pinned executables.
+An isolated native x86 container on EC2 returned actual Chicago weather data;
+the deployed public HTTPS chat then streamed a weather reply in 30 text chunks.
+The local Docker Desktop amd64-emulation test killed the helper with SIGKILL,
+so the native EC2 test is the runtime validation for this fix.
+
+
+The **Codex chat release** was deployed to beta on **November 7, 2026**, without
+an infrastructure deployment:
+
+- Release tag: `0b8dbea2655e-20261107T214942-9d7bcd`.
+- All 15 offline tests pass, covering configuration preservation, login/logout,
+  expiry, cross-site rejection, chat ownership, and the existing RPC/SSE behavior.
+- The Linux/amd64 image initializes native Codex 0.167.0 as UID 10001.
+- Public HTTPS redirects anonymous UI requests to login and rejects API/SSE calls
+  with 401. Login issues an opaque `Secure`, `HttpOnly`, `SameSite=Lax` cookie.
+- Authenticated HTTPS checks verified progressive reply text (20 delta events),
+  a same-thread follow-up retaining context, independent login-session isolation,
+  and logout revocation. These checks used HTTP cookie jars, not browser automation.
+- The initial web-tool check verified invocation and the assistant reply but
+  missed failed tool outputs. The missing code-mode helper was diagnosed from
+  the matching `custom_tool_call_output`; see the tool-failure procedure above.
+- Host inspection verified `gpt-6-luna`, high reasoning, live web search, and
+  `/var/lib/podcast-analyst/codex` on the EBS-backed root filesystem, owned by
+  `10001:10001` with mode `0700`. Runtime secrets have mode `0600`, owned by root.
+- A controlled app-container restart preserved the persisted thread file's
+  SHA-256 hash. Codex history remains on disk; the application still starts fresh
+  browser conversations after reload/restart.
+
+Automated Chrome verification was unavailable in this session; the HTTPS/API
+checks above are the live verification record.
+
+### Previous releases
 
 The **React release** was deployed to beta on **November 7, 2026**, using
 `./scripts/deploy.py beta` without an infrastructure deployment.
@@ -273,4 +349,5 @@ in the application image.
 References: [CDK bootstrap](https://docs.aws.amazon.com/cdk/v2/guide/bootstrapping-env.html),
 [Compose installation](https://docs.docker.com/compose/install/linux/),
 [Caddy HTTPS](https://caddyserver.com/docs/automatic-https),
-[SSM Run Command](https://docs.aws.amazon.com/systems-manager/latest/userguide/run-command.html).
+[SSM Run Command](https://docs.aws.amazon.com/systems-manager/latest/userguide/run-command.html),
+[encrypted runtime parameters](https://docs.aws.amazon.com/systems-manager/latest/userguide/secure-string-parameter-kms-encryption.html).

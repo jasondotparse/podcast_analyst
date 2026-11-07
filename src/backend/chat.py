@@ -18,6 +18,7 @@ log = logging.getLogger(__name__)
 @dataclass
 class ChatSession:
     thread_id: str
+    owner_session_id: str | None = None
     busy: bool = False
     active_turn_id: str | None = None
     invalid: bool = False
@@ -44,16 +45,16 @@ class ChatHarness:
         if not self.client.ready:
             raise HTTPException(503, "Codex is not ready. Check the backend and reload the page.")
 
-    def session(self, session_id: str) -> ChatSession:
+    def session(self, session_id: str, owner_session_id: str | None = None) -> ChatSession:
         self.require_ready()
         session = self.sessions.get(session_id)
-        if session is None:
+        if session is None or session.owner_session_id != owner_session_id:
             raise HTTPException(404, "Unknown chat session. Reload the page to start a new chat.")
         if session.invalid:
             raise HTTPException(503, "This chat connection was lost. Reload the page to start a new chat.")
         return session
 
-    async def create_session(self) -> str:
+    async def create_session(self, owner_session_id: str | None = None) -> str:
         self.require_ready()
         params = {
             "cwd": str(self.workspace), "approvalPolicy": "never", "sandbox": "read-only",
@@ -64,13 +65,13 @@ class ChatHarness:
             params["model"] = self.model
         result = await self.client.request("thread/start", params)
         session_id = str(uuid4())
-        session = ChatSession(thread_id=result["thread"]["id"])
+        session = ChatSession(thread_id=result["thread"]["id"], owner_session_id=owner_session_id)
         self.sessions[session_id] = session
         self.by_thread[session.thread_id] = session
         return session_id
 
-    async def start_turn(self, session_id: str, text: str):
-        session = self.session(session_id)
+    async def start_turn(self, session_id: str, text: str, owner_session_id: str | None = None):
+        session = self.session(session_id, owner_session_id)
         # There is no await between admission and claiming busy, so this is atomic
         # on our one asyncio event loop, including concurrent HTTP requests.
         if session.busy:

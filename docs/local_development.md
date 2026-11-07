@@ -116,7 +116,7 @@ and the EC2 host's amd64 architecture; the runtime serves the compiled UI withou
 Node or `node_modules`.
 
 The current chat harness's live streaming tests are recorded in
-[local_codex_chat.md](local_codex_chat.md). Its Docker deployment is deferred.
+[local_codex_chat.md](local_codex_chat.md). For the password-protected beta release, follow [AWS deployment](aws_deployment.md).
 
 References: [Vite server options](https://vite.dev/config/server-options.html),
 [VS Code compound launches](https://code.visualstudio.com/docs/debugtest/debugging-configuration#_compound-launch-configurations),

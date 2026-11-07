@@ -41,11 +41,12 @@ def release_archive() -> str:
     return base64.b64encode(archive.getvalue()).decode("ascii")
 
 
-def remote_command(repository: str, tag: str, url: str) -> str:
+def remote_command(repository: str, tag: str, url: str, stage: str) -> str:
     registry = repository.split("/")[0]
     environment = f"APP_IMAGE={repository}:{tag}\nAPP_DOMAIN={url.removeprefix('https://')}\n"
     environment64 = base64.b64encode(environment.encode()).decode("ascii")
     return f"""set -eu
+umask 077
 # SSM may register before cloud-init has finished installing Docker/Compose.
 for attempt in $(seq 1 120); do
     test ! -f /opt/podcast-analyst/.bootstrap-complete || break
@@ -60,6 +61,10 @@ flock -n 9
 install -d -m 700 -o 10001 -g 10001 /var/lib/podcast-analyst/codex
 printf %s {shlex.quote(release_archive())} | base64 --decode | tar -xz
 printf %s {shlex.quote(environment64)} | base64 --decode > .env.next
+# Retrieve secrets using the host role; never include them in command payloads/logs.
+aws ssm get-parameter --region {REGION} --name /podcast-analyst/{stage}/runtime --with-decryption --query Parameter.Value --output text > runtime.env.next
+test -s runtime.env.next
+mv runtime.env.next runtime.env
 aws ecr get-login-password --region {REGION} | docker login --username AWS --password-stdin {shlex.quote(registry)}
 docker compose --env-file .env.next --profile cloud pull --quiet
 if ! docker compose --env-file .env.next --profile cloud up -d --no-build --wait --wait-timeout 120; then
@@ -68,6 +73,7 @@ if ! docker compose --env-file .env.next --profile cloud up -d --no-build --wait
     exit 1
 fi
 docker compose --env-file .env.next --profile cloud exec -T edge caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+docker compose --env-file .env.next exec -T app python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"
 if test -f .env; then cp .env .env.previous; fi
 mv .env.next .env
 docker compose --profile cloud ps
@@ -137,7 +143,7 @@ def main() -> None:
     result = aws("ssm", "send-command", "--instance-ids", instance_id,
                  "--document-name", "AWS-RunShellScript", "--timeout-seconds", "600",
                  "--comment", f"podcast-analyst {tag}", "--parameters",
-                 json.dumps({"commands": [remote_command(repository, tag, url)], "executionTimeout": ["840"]}))
+                 json.dumps({"commands": [remote_command(repository, tag, url, args.stage)], "executionTimeout": ["840"]}))
     command_id = result["Command"]["CommandId"]
     print(f"SSM command: {command_id}", flush=True)
     wait_for_command(command_id, instance_id)

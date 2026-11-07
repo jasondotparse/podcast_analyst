@@ -8,3 +8,5 @@ infra/build/
 infra/cdk.out/
 src/frontend/dist/
 .local/
+runtime.env
+runtime.env.*
