@@ -1,5 +1,14 @@
 # Docker and AWS deployment
 
+**Local harness work in progress:** Codex chat currently runs locally only.
+The Docker/runtime setup below still describes the deployed React hello world
+release. Codex packaging, API-key configuration, state storage, and authentication
+must be added before deploying the harness; see [local_codex_chat.md](local_codex_chat.md).
+
+The planned authentication uses a password supplied to test users ahead of time.
+FastAPI will keep login sessions server-side and issue opaque session-ID cookies
+to protect both `/app/*` and API/SSE requests. See the [authentication plan](devops.md#5-shared-password-login-and-server-side-sessions).
+
 This packages the React hello world UI and FastAPI API in one application image.
 FastAPI serves the built UI at `/app/` and health JSON at `/api/health`; `/`
 redirects to `/app/`. Login, databases, and model calls are later work. The page

@@ -59,9 +59,15 @@ PostgreSQL + pgvector  ──>  Structured claim extraction  ──>  LadybugDB
 | **Ingestion pipeline** | Mechanically repeatable acquisition → validation → chunking → embedding → claim extraction → publication. An agent can initiate a run, but does not freely mutate pipeline state. |
 | **PostgreSQL + pgvector** | Source of truth for transcripts, episode/guest metadata, passage embeddings, provenance, and durable processing history. |
 | **LadybugDB** | Typed property graph for claims, entities, theses, and their relationships. Can be rebuilt from authoritative evidence and validated extractions. |
-| **AWS CDK + EC2** | Minimal infrastructure. Initially one EC2 host, Nginx for HTTPS/static React/reverse proxy, FastAPI service | 
-| **Auth** | Since this is a demo app with a small audience, we'll distribute a password to them ahead of time and they can use that to signin via a simple web UI. Then all auth is handled on the FastAPI side: we'll create a session and give the browser a cookie. Starlette's SessionMiddleware will handle this for us largely. We'll serve React and FastAPI under the same domain (e.g. myapp.com and myapp.com/api/*) using a reverse proxy
+| **AWS CDK + EC2** | One EC2 host; Caddy handles HTTPS and proxies to FastAPI, which serves the built React UI and API. |
+| **Auth** | Give test users a shared password ahead of time. FastAPI verifies it, creates a server-side login-session record, and sends an opaque session-ID cookie. Every protected UI/API request looks up that session; logout or expiry invalidates it. React and FastAPI share the same origin. |
 
+The cookie carries only an opaque identifier; login state remains in the backend.
+Starlette's `SessionMiddleware` is cookie-based by default and does not replace
+our server-side store. Authentication is planned for Phase B; the current chat
+harness remains local-only.
+
+```text
 React frontend
      |
      |  HTTPS + session cookie
@@ -69,13 +75,14 @@ React frontend
 FastAPI
      |
      +-- Authentication middleware
-     |     Verify signed cookie
+     |     Verify cookie and look up server-side login session
      |
      +-- Protected API routes
      |
      +-- OpenAI API
      |
      +-- PostgreSQL / LadybugDB
+```
 
 **Operational rules:** Pipeline stages have explicit statuses, retry/failure handling, and deduplication by stable episode/source IDs. We'll be super basic - just a beta and prod env. No claim is published without a resolvable passage reference. Agent tools have bounded permissions; credentials remain server-side. The browser never accesses databases or the model API key directly.
 

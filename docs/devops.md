@@ -2,6 +2,12 @@
 
 **Status:** React + Vite provides the local UI with HMR; FastAPI serves `/api/*` and the compiled UI at `/app/`. Docker builds the UI and backend into one image for the existing ECR/SSM release flow. Follow [AWS deployment instructions](aws_deployment.md) and [VS Code local setup](local_development.md). The React build is deployed and verified on beta. The authentication topology below describes later work; no authentication or database is implemented yet.
 
+**Local agent work:** The Codex chat harness now streams replies locally; see
+[local_codex_chat.md](local_codex_chat.md). It is not packaged for deployment yet.
+The accepted [agent harness design](agent_harness_design.md) uses a password
+distributed to test users ahead of time, server-side login sessions, and cookies.
+Authentication remains a planned Phase B change; it is not implemented in this PR.
+
 **Decisions:** AWS region **us-east-1**; CDK language **TypeScript**. The domain `podcastanalystagent.com` is registered in Route 53.
 
 **Current beta:** `https://beta.podcastanalystagent.com` runs on a `t3.medium`
@@ -16,7 +22,7 @@
 - **Minimize DevOps work.** One EC2 instance; no Kubernetes, ECS, load balancer, or elaborate CI/CD for the prototype.
 - **Infrastructure ≠ application releases.** AWS CDK creates/changes cloud resources; a separate script publishes Docker images and restarts containers. Most code changes must **not** require `cdk deploy`.
 - **Ship in containers.** Use Docker for reproducible builds and Docker Compose to run services on EC2 and locally.
-- **Protect paid resources.** Require Cognito sign-in before serving the application **or calling any API**, including streaming/chat and ingestion endpoints.
+- **Protect paid resources.** FastAPI validates a pre-shared test-user password, creates a server-side login session, and checks its cookie before serving the protected UI or API, including streaming/chat and ingestion endpoints.
 - **Keep credentials out of code.** The owner's AWS CLI profile is used locally; the personal OpenAI API key stays server-side in AWS Secrets Manager (or an equivalent protected runtime secret).
 - **Optimize the feedback loop.** Local hot reload; one command to deploy application changes; simple logs, health checks, and rollback.
 
@@ -34,26 +40,23 @@ Internet / invited reviewer
   │ HTTPS (app.example.com)
   ▼
 EC2 instance — public ports 80/443 only
-  ├─ Caddy             TLS termination, HTTPS redirect
-  ├─ oauth2-proxy      OIDC login/session enforcement (Cognito)
-  ├─ Nginx             compiled React SPA + /api reverse proxy
-  └─ FastAPI           /api/health, /api/stream; later agent/ingestion
-           │
-           └─ later: PostgreSQL + pgvector, LadybugDB, Codex
-
-Amazon Cognito User Pool
-  └─ invite-only accounts + hosted/managed login
+  ├─ Caddy             TLS termination, HTTPS redirect → FastAPI
+  └─ FastAPI           public login page + password check
+       ├─ server-side login sessions ← opaque session-ID cookie
+       ├─ protected React /app/* + /api/*, including SSE
+       ├─ Codex App Server subprocess
+       └─ later: PostgreSQL + pgvector, LadybugDB
 
 AWS supporting services
   ├─ ECR               Docker image registries
-  ├─ Secrets Manager   OpenAI key, OIDC client secret, session secret
+  ├─ Secrets Manager   OpenAI key, app password, session-signing secret
   ├─ IAM + SSM         controlled EC2 management without public SSH
   └─ Route 53 / DNS    hostname → EC2 Elastic IP
 ```
 
-**Why Caddy and Nginx?** Caddy handles automatic HTTPS certificates with less certificate-management work. Nginx serves the built React files and forwards `/api/*` to FastAPI. `oauth2-proxy` sits between them so authentication is enforced for the *entire site*. These are internal Compose services; only Caddy binds public ports. We can simplify the proxy setup later if it becomes unnecessary overhead.
+**Request handling:** Caddy handles automatic HTTPS and proxies to FastAPI over the private Compose network. FastAPI serves the built React files and owns password verification, server-side login sessions, and authorization for both the UI and API. Only Caddy binds public ports.
 
-**Domain prerequisite:** Automatic public HTTPS and the Cognito OAuth callback need a stable hostname with DNS pointed at the instance. The registered domain is `podcastanalystagent.com`; choose the application hostname when configuring deployment. Use a Cognito-provided domain for its login pages; no Cognito custom-login domain is necessary for P−1.
+**Domain prerequisite:** Automatic public HTTPS needs a stable hostname with DNS pointed at the instance. The registered domain is `podcastanalystagent.com`; beta uses `beta.podcastanalystagent.com`. Login, the protected UI, and the API share that origin so the browser sends its session cookie on requests.
 
 ## 3. Container packaging
 
@@ -61,12 +64,10 @@ Initial Compose services:
 
 | Service | Image / role | Publicly reachable? |
 |---|---|---|
-| `edge` | Caddy: HTTPS → `auth` | **Yes**, ports 80/443 |
-| `auth` | oauth2-proxy: validates Cognito login, then proxies to `web` | No |
-| `web` | Multi-stage Docker build: Vite compiles React; Nginx serves artifacts and proxies `/api` | No |
-| `api` | Python slim image: FastAPI / Uvicorn | No |
+| `edge` | Caddy: HTTPS → `app` | **Yes**, ports 80/443 |
+| `app` | Vite builds React; FastAPI serves it at `/app/`, handles `/api/*`, and enforces server-side session authentication | No |
 
-The *React build* and *FastAPI service* are our two application images in **Amazon ECR**, tagged by Git commit SHA (not only `latest`). Base proxy images can be version-pinned. A single `compose.yaml` connects the services over a private Docker network. Browser requests use same-origin `/api/*`, avoiding unnecessary CORS configuration.
+The *React build* and *FastAPI service* ship together in one application image in **Amazon ECR**, tagged by Git commit SHA plus a unique release suffix. Caddy's image is version-pinned. A single `compose.yaml` connects the services over a private Docker network. Browser requests use same-origin `/api/*`, avoiding unnecessary CORS configuration. The application image still needs Codex packaging and the planned login/session implementation before hosting the harness.
 
 When P0 starts, add persistent PostgreSQL/pgvector and the embedded Ladybug database. **Never store durable data solely inside a disposable container filesystem.** Use an EBS-backed volume or managed storage, with backup/snapshot planning. The Codex runtime is added only after the P−1 web stack is working.
 
@@ -79,10 +80,9 @@ Use **AWS CDK v2 with TypeScript** in `infra/`, targeting **us-east-1**. The sta
 - One appropriately sized **EC2** instance with Docker + Compose and SSM Agent configured via user data/bootstrap; EBS storage.
 - An **IAM instance role** with only required ECR pull, SSM management, and scoped secret-read permissions.
 - A **security group** allowing public **80/443 only**; no inbound SSH (`22`) or direct access to API/database/auth ports.
-- **ECR repositories** for `web` and `api` images.
-- An **Amazon Cognito User Pool**, app client, and Cognito-hosted login domain.
-- **Secrets Manager** secrets/placeholders and non-sensitive configuration as needed.
-- A **stable address** (Elastic IP + DNS A record, if a domain is available) and useful CloudFormation outputs (instance ID, ECR URLs, user pool/client IDs, app URL).
+- An **ECR repository** for the combined application image.
+- **Secrets Manager** secrets/placeholders for the OpenAI key, shared app password, and independent session-signing secret.
+- A **stable address** (Elastic IP + DNS A record) and useful CloudFormation outputs (instance ID, ECR URL, app URL).
 
 The account is the **owner's personal AWS account**, accessed with their existing AWS CLI credentials/profile. **Never commit local AWS credentials** or place AWS access keys inside containers. EC2 uses its **instance role**, not a copy of the developer's credentials.
 
@@ -92,25 +92,27 @@ world host and HTTPS routing; authentication and secrets are later steps.
 
 CDK bootstrap is per AWS account/region. Use `cdk diff` before subsequent infrastructure changes. This path is for **infrastructure only**, not the routine code-edit loop.
 
-## 5. Cognito: private, invite-only access
+## 5. Shared-password login and server-side sessions
 
 **Threat model:** If a public visitor can hit chat/ingestion endpoints, they can consume the owner's OpenAI credits. Protecting only the React login screen is **not enough**; the backend must also be inaccessible without authentication.
 
-Planned sign-in design:
+Planned sign-in design (Phase B):
 
-1. Cognito User Pool with **self-registration disabled**. Only the owner creates/invites user accounts (reviewers can receive accounts when needed). Enable MFA for the owner's account; apply reasonable session expiry.
-2. Cognito **authorization-code/OIDC** flow with a configured **HTTPS callback**, e.g. `https://app.example.com/oauth2/callback`.
-3. `oauth2-proxy` manages the OAuth flow and session cookie, using Cognito as the OIDC identity provider. Client secret and cookie-encryption secret remain on the server.
-4. Caddy forwards all external requests to `oauth2-proxy`. The proxy permits authenticated sessions through to Nginx; unauthenticated users are redirected to login.
-5. Nginx serves React and proxies `/api/*` to FastAPI **only inside Docker's private network**. No alternate public route may bypass the proxy. API endpoints, SSE streams, and processing actions are therefore covered by the same authentication gate.
-6. Session cookies are `Secure`, `HttpOnly`, and appropriately `SameSite` configured. No model credentials or OAuth client secrets appear in React bundles.
+1. Give invited test users the app URL and shared password ahead of time. A public login page submits the password to `POST /api/login`; FastAPI verifies it against a backend-only runtime secret. There is no public registration or separate user-account provisioning.
+2. On successful login, FastAPI generates an unpredictable login-session ID and stores the login state and expiry **server-side**. A small in-memory store is sufficient for the single-worker demo; restarting the backend signs users out.
+3. Send only the opaque login-session ID in the browser cookie. Use `HttpOnly`, `Secure` in HTTPS deployments, `SameSite=Lax`, and a defined expiry. Any cookie-signing secret is independent of the shared password. Passwords, authentication claims, and model credentials stay out of the cookie and frontend bundle.
+4. For `/app/*` and protected `/api/*` requests, verify the cookie and look up its unexpired server-side session. Redirect unauthenticated UI requests to login; reject unauthenticated API/SSE requests with 401. Only login entry points and intentionally minimal liveness checks are public.
+5. Bind each Codex app-session ID to its owning login session. Check ownership on turn, events, and interrupt endpoints, so knowing the shared password does not grant access to another browser's conversation.
+6. `POST /api/logout` removes the server-side login record and clears the cookie; expiry also ends access. Login and other state-changing requests use same-origin/CSRF protection. Verify login, logout, expiry, direct API requests, and SSE authorization before inviting users.
 
-**Important:** Cognito makes the site *access-controlled*, not undiscoverable; anyone who finds the URL might see the login page, but cannot enter the app or spend API tokens. For interview review, share the URL **plus a deliberately invited reviewer account**, rather than enabling open sign-up. Test with a fresh incognito browser and direct unauthenticated `/api/*` requests.
+**Starlette detail:** `SessionMiddleware` provides signed, cookie-based sessions by default; it does not supply a server-side session store. If used as a signing helper, its cookie should carry only our opaque session ID. FastAPI must still store and validate login state on the server.
+
+Anyone who finds the URL may see the login page, but the protected UI and paid API actions require a valid server-side session. Test in a fresh incognito browser and with direct unauthenticated API/SSE requests.
 
 ## 6. Secrets, cost, and permissions
 
 - Owner's **OpenAI API key**: store as an AWS secret; retrieve on the server at runtime/startup. **Never** pass it to the browser, Docker build arguments, source control, or logs.
-- Cognito **app-client secret** and oauth2-proxy **cookie secret**: same treatment. CDK may create the app client, but explicitly wire its generated client secret into protected runtime configuration; do not assume CloudFormation automatically copies it to Secrets Manager.
+- **Shared app password** and independent **session-signing secret**: store as protected runtime secrets alongside the OpenAI key. Do not put them in React build variables, images, CloudFormation outputs, or logs.
 - Runtime secrets are mounted/read with restrictive permissions; avoid committing `.env`, tokens, credentials, or real hostnames containing sensitive identifiers.
 - Restrict EC2 IAM access to the specific secret ARNs; use AWS CLI/SSM under the developer's personal identity, not a long-lived instance access key.
 - Set AWS **Budget alerts** and OpenAI usage monitoring. Monitoring is not necessarily a hard spending cap; avoid unbounded ingestion or anonymous model calls.
@@ -123,7 +125,7 @@ Planned sign-in design:
 1. Select AWS region/profile and a domain; verify domain DNS control.
 2. Scaffold CDK, Dockerfiles, `compose.yaml`, and a minimal React/FastAPI application.
 3. `cdk bootstrap` and `cdk deploy`: create AWS resources and configure the EC2 host.
-4. Set runtime secrets securely and invite the initial Cognito user.
+4. Set the OpenAI key, shared app password, and session-signing secret securely; give test users the password out of band.
 5. Run the first application release; verify HTTPS, sign-in, app page, and `/api/health`.
 
 ### Every normal application release
@@ -144,7 +146,7 @@ The current deploy script uses Docker Buildx, ECR, and **SSM Run Command**. It b
 
 **Rollback:** Keep prior SHA-tagged images and a small release record. Revert the Compose image tags to the previous known-good commit, then recreate containers. Avoid deploying new infrastructure during a simple application rollback.
 
-**Logs and diagnosis:** `docker compose logs -f api`, container health checks, and SSM execution output are sufficient for P−1. Add persistent log aggregation only if it provides clear value. For streaming, configure Nginx to disable buffering on SSE routes and verify that oauth2-proxy/Caddy flush events promptly.
+**Logs and diagnosis:** `docker compose logs -f app`, container health checks, and SSM execution output are sufficient for P−1. Add persistent log aggregation only if it provides clear value. Verify that Caddy forwards FastAPI's SSE responses progressively through the session-authenticated connection.
 
 ## Preserving the data layer
 We don't want our databases to get wiped each time we do a deploy to beta/prod! Persistent Docker volumes don't automatically protect us against EC2 instance replacement.
@@ -181,8 +183,9 @@ P−1 is **complete only when all are demonstrably working**:
 - [ ] A fresh `cdk deploy` provisions a usable EC2 web environment in the personal AWS account.
 - [ ] Local React + FastAPI hot reload works.
 - [ ] A browser can reach the deployed React app over **HTTPS** at a stable URL.
-- [ ] Anonymous visitors cannot access **either** the app or `/api/*` (including chat/ingestion endpoints); authorized Cognito users can.
-- [ ] Public self-registration is disabled; an invited reviewer can sign in and sign out.
+- [ ] Anonymous visitors cannot access the protected UI or API/SSE endpoints; test users with valid server-side login sessions can.
+- [ ] A reviewer can sign in with the pre-shared password and sign out; logout and expiry invalidate access server-side.
+- [ ] Two logged-in browsers cannot access each other's Codex sessions, even though they use the same app password.
 - [ ] React successfully calls authenticated FastAPI `GET /api/health`.
 - [ ] A dummy FastAPI SSE endpoint streams progressively all the way to the browser.
 - [ ] A frontend or backend edit goes live using **one application-deploy command**, without `cdk deploy`.
@@ -204,7 +207,6 @@ P−1 is **complete only when all are demonstrably working**:
 ## Reference documentation
 
 - [AWS CDK deployment and bootstrapping](https://docs.aws.amazon.com/cdk/v2/guide/deploy.html)
-- [AWS Cognito user creation / disabling self-registration](https://docs.aws.amazon.com/cognito/latest/developerguide/how-to-create-user-accounts.html)
-- [Amazon Cognito managed sign-in](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-how-to-authenticate.html)
-- [oauth2-proxy configuration](https://oauth2-proxy.github.io/oauth2-proxy/configuration/overview/)
+- [Starlette session middleware semantics](https://starlette.dev/middleware/#sessionmiddleware)
+- [Starlette response cookies](https://starlette.dev/responses/#set-cookie)
 - [AWS Systems Manager Run Command](https://docs.aws.amazon.com/systems-manager/latest/userguide/run-command.html)

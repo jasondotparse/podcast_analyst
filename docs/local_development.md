@@ -14,7 +14,9 @@ python3 -m venv .venv
 npm --prefix src/frontend ci
 ```
 
-No AWS credentials or API keys are needed. Install Microsoft's **Python** and
+The chat harness now also needs Codex **0.167.0** and a backend-only
+`OPENAI_API_KEY` in the root `.env`. Follow [local Codex chat](local_codex_chat.md)
+for setup and runtime details. No AWS credentials are needed. Install Microsoft's **Python** and
 **Python Debugger** VS Code extensions; the JavaScript debugger is built into
 VS Code. The frontend configuration reads only its optional
 `src/frontend/.env.local`, rather than the backend's root `.env`.
@@ -25,19 +27,19 @@ Open **Run and Debug**, choose a configuration, and press **F5**:
 
 | Configuration | Starts | Open |
 |---|---|---|
-| **run full stack app** | FastAPI with Python reload + Vite with React HMR | <http://127.0.0.1:5173/app/> |
-| **run backend** | FastAPI only, with Python reload/debugging | <http://127.0.0.1:8000/api/health> |
+| **run full stack app** | FastAPI/Codex with Python reload + Vite with React HMR | <http://127.0.0.1:5173/app/> |
+| **run backend** | FastAPI/Codex, with Python reload/debugging | <http://127.0.0.1:8000/api/health> |
 | **serve front end** | Vite only, with React HMR; uses the running backend | <http://127.0.0.1:5173/app/> |
-| **serve built app** | Builds React, then starts FastAPI serving the compiled UI | <http://127.0.0.1:8000/app/> |
+| **serve built app** | Builds React, then starts FastAPI/Codex serving the compiled UI | <http://127.0.0.1:8000/app/> |
 
 For everyday UI work, use **run full stack app**, or start **run backend** once
 and use **serve front end** independently. Saving `src/frontend/src/App.jsx` or
 CSS updates the browser without a manual build or refresh. Python edits restart
 FastAPI; breakpoints in `src/backend/main.py` work in the backend debugger.
 
-**serve front end** does not start the backend. If the page says **Backend:
-Unavailable**, start FastAPI and click **Check backend**. The full-stack compound
-starts both servers in parallel, so this can also happen briefly at startup.
+**serve front end** does not start the backend. Start FastAPI/Codex first, then
+open the UI. The chat creates a fresh session when the page opens; reload the
+page after restarting the backend. Wait for **Ready** before sending a message.
 
 Stop with **Shift+F5**. Stopping a session launched by the full-stack compound
 stops both sessions. Stop existing servers before switching launch modes: the
@@ -48,11 +50,12 @@ occupied, rather than silently choosing another port.
 
 ```text
 Browser → 127.0.0.1:5173/app/ → Vite → React + HMR
-Browser → 127.0.0.1:5173/api/health → Vite proxy → 127.0.0.1:8000/api/health
+Browser → 127.0.0.1:5173/api/sessions → Vite proxy → 127.0.0.1:8000/api/sessions
 ```
 
-React uses `fetch('/api/health')`, so the same code works in both modes. In dev,
-Vite forwards `/api` requests to FastAPI. In the built app, FastAPI handles them
+React uses `/api/...` URLs for session creation, message submission, and SSE, so
+the same code works in both modes. In dev, Vite forwards `/api` requests to
+FastAPI. In the built app, FastAPI handles them
 directly on port 8000. No CORS configuration or environment-specific API URL is
 needed.
 
@@ -61,7 +64,7 @@ needed.
 From the repository root, start these in separate terminals:
 
 ```bash
-.venv/bin/python -m uvicorn src.backend.main:app --host 127.0.0.1 --port 8000 --reload --reload-dir src/backend
+.venv/bin/python -m uvicorn src.backend.main:app --host 127.0.0.1 --port 8000 --reload --reload-dir src/backend --timeout-graceful-shutdown 3
 ```
 
 ```bash
@@ -76,7 +79,7 @@ Open <http://127.0.0.1:5173/app/>. Both servers stay local to your machine.
 
 ```bash
 npm --prefix src/frontend run build
-.venv/bin/python -m uvicorn src.backend.main:app --host 127.0.0.1 --port 8000
+.venv/bin/python -m uvicorn src.backend.main:app --host 127.0.0.1 --port 8000 --timeout-graceful-shutdown 3
 ```
 
 Open <http://127.0.0.1:8000/app/>. The generated HTML, JavaScript, and CSS are in
@@ -104,13 +107,16 @@ for Docker checks and `./scripts/deploy.py beta`.
 
 ## Verified behavior
 
-The React page and `Backend: ok` were checked in Chrome through both Vite and
+The original React page and `Backend: ok` were checked in Chrome through both Vite and
 FastAPI. Editing `App.jsx` changed the visible heading through HMR without a
 browser refresh. The VS Code frontend launch and full-stack compound were run;
 stopping the compound freed both ports. HTTP checks covered redirects, API proxying,
 built assets, and the missing-build response. Docker builds passed for native ARM
 and the EC2 host's amd64 architecture; the runtime serves the compiled UI without
 Node or `node_modules`.
+
+The current chat harness's live streaming tests are recorded in
+[local_codex_chat.md](local_codex_chat.md). Its Docker deployment is deferred.
 
 References: [Vite server options](https://vite.dev/config/server-options.html),
 [VS Code compound launches](https://code.visualstudio.com/docs/debugtest/debugging-configuration#_compound-launch-configurations),

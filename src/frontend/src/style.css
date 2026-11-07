@@ -1,10 +1,41 @@
-body {
+:root {
   font-family: system-ui, sans-serif;
-  line-height: 1.5;
-  margin: 3rem;
+  color: #17212e;
+  background: #f4f6f9;
+  font-synthesis: none;
 }
 
-button {
-  font: inherit;
-  cursor: pointer;
+* { box-sizing: border-box; }
+body { margin: 0; }
+
+.chat {
+  max-width: 800px;
+  height: 100dvh;
+  margin: auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+header { border-bottom: 1px solid #dde2e9; padding-bottom: 16px; }
+h1 { font-size: 22px; margin: 0 0 6px; }
+header p { color: #596779; font-size: 14px; margin: 0; }
+.messages { flex: 1; overflow-y: auto; list-style: none; padding: 20px 0; margin: 0; }
+.empty { color: #647286; margin-top: 24px; text-align: center; }
+.message { width: fit-content; max-width: 85%; margin-bottom: 16px; padding: 12px 16px; border-radius: 18px; }
+.message.user { margin-left: auto; background: #1767d4; color: white; border-bottom-right-radius: 5px; }
+.message.assistant { background: white; border: 1px solid #e2e6ec; border-bottom-left-radius: 5px; }
+.speaker { font-size: 12px; font-weight: 600; opacity: .8; }
+.message p { margin: 5px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55; }
+.error { color: #a62330; font-size: 14px; }
+form { display: flex; gap: 12px; padding-top: 16px; border-top: 1px solid #dde2e9; }
+textarea { flex: 1; min-width: 0; resize: vertical; max-height: 180px; padding: 12px; border: 1px solid #bdc7d4; border-radius: 12px; font: inherit; }
+textarea:focus { outline: 2px solid #1767d4; outline-offset: 1px; }
+button { align-self: flex-end; padding: 12px 20px; border: 0; border-radius: 12px; font: inherit; font-weight: 600; background: #1767d4; color: white; cursor: pointer; }
+button:disabled { background: #d3dbe6; color: #647286; cursor: default; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+@media (max-width: 500px) {
+  .chat { padding: 16px; }
+  .message { max-width: 92%; }
 }
