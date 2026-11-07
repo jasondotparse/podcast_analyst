@@ -255,9 +255,29 @@ provision retained database storage and backups as described in [devops.md](devo
 
 ## Validation
 
-The Codex beta deployment work adds password/session authorization tests,
-conversation ownership checks, and Linux container startup verification. A live
-release is recorded here only after deployment succeeds.
+The **Codex chat release** was deployed to beta on **November 7, 2026**, without
+an infrastructure deployment:
+
+- Release tag: `0b8dbea2655e-20261107T214942-9d7bcd`.
+- All 15 offline tests pass, covering configuration preservation, login/logout,
+  expiry, cross-site rejection, chat ownership, and the existing RPC/SSE behavior.
+- The Linux/amd64 image initializes native Codex 0.167.0 as UID 10001.
+- Public HTTPS redirects anonymous UI requests to login and rejects API/SSE calls
+  with 401. Login issues an opaque `Secure`, `HttpOnly`, `SameSite=Lax` cookie.
+- Authenticated HTTPS checks verified progressive reply text (20 delta events),
+  a same-thread follow-up retaining context, independent login-session isolation,
+  and logout revocation. These checks used HTTP cookie jars, not browser automation.
+- The persisted Codex trace confirms two web searches via its generic `exec`
+  orchestration tool calling `web.run`; the resulting reply reached the client.
+- Host inspection verified `gpt-6-luna`, high reasoning, live web search, and
+  `/var/lib/podcast-analyst/codex` on the EBS-backed root filesystem, owned by
+  `10001:10001` with mode `0700`. Runtime secrets have mode `0600`, owned by root.
+- A controlled app-container restart preserved the persisted thread file's
+  SHA-256 hash. Codex history remains on disk; the application still starts fresh
+  browser conversations after reload/restart.
+
+Automated Chrome verification was unavailable in this session; the HTTPS/API
+checks above are the live verification record.
 
 ### Previous releases
 
