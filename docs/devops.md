@@ -2,6 +2,11 @@
 
 **Status:** React + Vite provides the local UI with HMR; FastAPI serves `/api/*` and the compiled UI at `/app/`. Docker builds the UI and backend into one image for the existing ECR/SSM release flow. Follow [AWS deployment instructions](aws_deployment.md) and [VS Code local setup](local_development.md). The React build is deployed and verified on beta. The authentication topology below describes later work; no authentication or database is implemented yet.
 
+**Local agent work:** The Codex chat harness now streams replies locally; see
+[local_codex_chat.md](local_codex_chat.md). It is not packaged for deployment yet.
+The accepted [agent harness design](agent_harness_design.md) supersedes the older
+Cognito proposal below with shared-password FastAPI sessions for the next phase.
+
 **Decisions:** AWS region **us-east-1**; CDK language **TypeScript**. The domain `podcastanalystagent.com` is registered in Route 53.
 
 **Current beta:** `https://beta.podcastanalystagent.com` runs on a `t3.medium`
