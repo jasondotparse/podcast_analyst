@@ -1,0 +1,8 @@
+**
+!Dockerfile
+!src/
+!src/**
+**/.env
+**/.env.*
+**/__pycache__
+**/*.py[cod]

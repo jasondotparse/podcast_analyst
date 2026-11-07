@@ -1,8 +1,12 @@
 # Podcast Intelligence Agent: DevOps & Deployment
 
-**Status:** Local hello world boilerplate is implemented: FastAPI serves a single HTML file. Follow [local setup and VS Code instructions](local_development.md) to run it. No CDK stack, EC2 instance, Docker image, Cognito pool, or deployment pipeline has been created or verified yet. Cloud deployment below remains **planned**.
+**Status:** The hello world app now has Docker/Compose packaging, a TypeScript CDK stack, and an ECR/SSM application-release script. Follow [AWS deployment instructions](aws_deployment.md) for the current implementation and [local setup](local_development.md) for VS Code. Cloud deployment verification is recorded in the deployment guide. The React/authentication topology below describes later work; the current cloud stack is Caddy → FastAPI, with no authentication or database yet.
 
-**Decisions:** AWS region **us-east-1**; CDK language **TypeScript**. The domain `podcastanalystagent.com` is registered in Route 53, per the high-level design; DNS routing to an app instance is still pending.
+**Decisions:** AWS region **us-east-1**; CDK language **TypeScript**. The domain `podcastanalystagent.com` is registered in Route 53.
+
+**Current beta:** `https://beta.podcastanalystagent.com` runs on a `t3.medium`
+(2 vCPUs, 4 GiB RAM, Unlimited CPU credits). Its DNS and HTTPS are verified; see
+[the deployment guide](aws_deployment.md) for the recorded checks.
 
 **Audience:** Engineer joining the project on day one.  
 **Immediate milestone:** **P−1: deploy a minimal React + FastAPI application to the owner's personal AWS account, securely accessible through a web browser, with fast repeatable deployments.**
@@ -22,7 +26,7 @@
 Developer's machine
   ├─ aws CLI (personal AWS profile)
   ├─ AWS CDK v2 → CloudFormation (initial infra + infra changes)
-  └─ ./scripts/deploy.sh
+  └─ ./scripts/deploy.py beta
        ├─ build Linux Docker images → push to ECR
        └─ SSM Run Command → EC2 pulls images and restarts Compose
 
@@ -82,16 +86,9 @@ Use **AWS CDK v2 with TypeScript** in `infra/`, targeting **us-east-1**. The sta
 
 The account is the **owner's personal AWS account**, accessed with their existing AWS CLI credentials/profile. **Never commit local AWS credentials** or place AWS access keys inside containers. EC2 uses its **instance role**, not a copy of the developer's credentials.
 
-Expected first-time commands (illustrative; profile and stack name are not chosen yet, and `infra/` has not been scaffolded):
-
-```bash
-aws sts get-caller-identity --profile <personal-profile>
-export AWS_REGION=us-east-1
-cd infra
-npm install
-npx cdk bootstrap --profile <personal-profile>
-npx cdk deploy --profile <personal-profile>
-```
+The implemented `PodcastAnalyst-beta` stack and exact first-time commands are in
+[aws_deployment.md](aws_deployment.md). The stack currently provisions the hello
+world host and HTTPS routing; React, authentication, and secrets are later steps.
 
 CDK bootstrap is per AWS account/region. Use `cdk diff` before subsequent infrastructure changes. This path is for **infrastructure only**, not the routine code-edit loop.
 
@@ -131,7 +128,7 @@ Planned sign-in design:
 
 ### Every normal application release
 
-Run **one command**, planned as `./scripts/deploy.sh`:
+For the current hello world app, run **`./scripts/deploy.py beta`**; see [the deployment guide](aws_deployment.md) for setup, rollback, and logs. The later React/authenticated release flow will extend it:
 
 ```text
 1. Build React + FastAPI images for the EC2 CPU architecture
@@ -143,7 +140,7 @@ Run **one command**, planned as `./scripts/deploy.sh`:
 7. Check /api/health through the authenticated site; report errors
 ```
 
-The deploy script can use Docker Buildx, ECR, and **SSM Run Command**. Its implementation is **not written yet**. Since the owner develops on a Mac, explicitly build for the instance's Linux architecture (for example `linux/amd64` if using x86 EC2) rather than accidentally publishing a Mac ARM image.
+The current deploy script uses Docker Buildx, ECR, and **SSM Run Command**. It builds explicitly for `linux/amd64`, matching the x86 EC2 host, rather than publishing the Mac's ARM architecture.
 
 **Rollback:** Keep prior SHA-tagged images and a small release record. Revert the Compose image tags to the previous known-good commit, then recreate containers. Avoid deploying new infrastructure during a simple application rollback.
 
@@ -174,7 +171,8 @@ One other thing: schema migrations should be explicit deployment steps, not some
 
 Bottom line: We should be able to deploy application changes fifty times a day without losing a single podcast, transcript, embedding, or graph relationship.
 
-Nothing has been provisioned yet, so we can establish this correctly from the beginning.
+The hello world EC2 host has no database yet. Establish retained storage before
+adding PostgreSQL or LadybugDB; its current root volume is disposable.
 
 ## 8. P−1: definition of done
 
