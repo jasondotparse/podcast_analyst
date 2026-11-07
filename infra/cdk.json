@@ -1,0 +1,8 @@
+{
+  "app": "node build/bin/app.js",
+  "context": {
+    "@aws-cdk/aws-ec2:uniqueImdsv2TemplateName": true,
+    "stage": "beta",
+    "domainName": "podcastanalystagent.com"
+  }
+}

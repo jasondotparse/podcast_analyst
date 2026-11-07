@@ -54,9 +54,10 @@ single-page boilerplate.
 
 ## Deployment status
 
-This step runs locally only. Docker packaging, AWS infrastructure, and deployment
-commands will be added next. The chosen AWS region is **us-east-1** and the CDK
-language is **TypeScript**. See [devops.md](devops.md) for the planned cloud setup.
+Docker packaging and a TypeScript CDK stack for **us-east-1** are now available.
+See [Docker and AWS deployment](aws_deployment.md) for container testing,
+infrastructure setup, and the one-command release flow. Stop the Docker app
+before using VS Code; both use local port 8000.
 
 ## References
 
