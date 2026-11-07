@@ -110,10 +110,13 @@ exit and release both local ports.
 
 ## Scope
 
-This phase is for **local use only**, bound to loopback. Shared-password login,
+This phase is for **local use only**, bound to loopback. Password login for
+pre-invited test users, server-side login sessions with opaque-ID cookies,
 browser/session ownership enforcement, interruption UI, session eviction, and
 automatic runtime recovery belong to Phase B. Dynamic research tools and data
 services remain later work. App-session IDs are not an authentication mechanism.
+See [the authentication plan](devops.md#5-shared-password-login-and-server-side-sessions)
+for the planned UI/API gate and session ownership checks.
 
 Do not deploy this branch with the existing Docker setup yet: the image does not
 package Codex or its persistent runtime storage/secrets. Deployment is a separate

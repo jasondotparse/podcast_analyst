@@ -52,7 +52,7 @@ We should verify the backing volume with findmnt -T /var/lib/podcast-analyst/cod
 | Server state | In-memory maps for RPC futures, session ownership, thread routing, turn state, and event subscribers |
 | Streaming | Server-Sent Events (SSE) from FastAPI to React |
 | Agent tools | **Codex dynamic tools**, implemented as normal Python handlers in the backend; **no MCP server** for v0 |
-| Authentication | Shared app password enforced by FastAPI/Starlette; signed browser session cookie; no Cognito |
+| Authentication | Password shared with test users ahead of time; FastAPI/Starlette keeps login state server-side; the browser cookie carries only an opaque session ID |
 | Codex credentials | Backend-only `OPENAI_API_KEY`, loaded from local `.env` in development and provided to subprocess environment |
 | Codex version | Use latest **stable** release when establishing the environment; pin the exact tested version for repeatable builds |
 | Persistence | No application-side conversation history or session restoration for v0; opening a new app session creates a new thread |
@@ -211,7 +211,8 @@ Most useful notifications include:
 
 | Endpoint | Purpose |
 | --- | --- |
-| `POST /api/login` | Check shared password and establish a secure signed/opaque browser session cookie |
+| `POST /api/login` | Check the pre-shared password, create a server-side login session, and set an opaque session-ID cookie |
+| `POST /api/logout` | Invalidate the server-side login session and clear its cookie |
 | `POST /api/sessions` | Start a new Codex thread and return an app session ID |
 | `POST /api/sessions/{id}/turns` | Submit prompt using `turn/start`; return accepted turn metadata |
 | `GET /api/sessions/{id}/events` | Stream session's agent notifications using SSE |
@@ -220,6 +221,13 @@ Most useful notifications include:
 | `GET /ready` | Harness initialized and ready to serve new requests |
 
 Every session-scoped endpoint checks **both** login authorization and session ownership. A shared login password authorizes access to the app, but does **not** authorize a browser to access another visitor's thread.
+
+For the single-worker demo, a small in-memory login-session store is sufficient;
+restarting the backend signs users out. The cookie is an opaque identifier, not
+the password or an authorization-claims payload. Validate the server-side record
+and expiry on every protected UI/API request. `SessionMiddleware` alone stores
+signed session data in the cookie; using it as a signing helper still requires
+our server-side store. This authentication work belongs to Phase B.
 
 ## 8. Dynamic tools (no MCP server)
 
