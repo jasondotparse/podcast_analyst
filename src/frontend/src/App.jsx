@@ -96,6 +96,7 @@ export default function App() {
     <main className="chat">
       <header>
         <h1>Podcast Analyst</h1>
+        <form action="/api/logout" method="post"><button type="submit">Sign out</button></form>
         <p role="status">{busy ? 'Codex is replying…' : connected ? 'Ready' : 'Connecting to Codex…'}</p>
       </header>
       <ol className="messages" aria-label="Conversation">

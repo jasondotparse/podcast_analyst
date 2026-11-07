@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from .chat import ChatHarness
 from .codex_client import CodexError
 from .codex_config import sync_codex_config
+from .auth import PasswordAuthMiddleware, router as auth_router, valid_login
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -22,6 +23,12 @@ FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     load_dotenv(ROOT / ".env")
+    app.state.app_password = os.environ.get("PODCAST_APP_PASSWORD")
+    app.state.public_origin = os.environ.get("PODCAST_PUBLIC_ORIGIN")
+    app.state.login_sessions = {}
+    if os.environ.get("PODCAST_REQUIRE_AUTH") == "1":
+        if not app.state.app_password or not app.state.public_origin:
+            raise RuntimeError("Deployment requires PODCAST_APP_PASSWORD and PODCAST_PUBLIC_ORIGIN.")
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("Set OPENAI_API_KEY in the repository's .env before starting the backend.")
@@ -38,6 +45,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(openapi_url=None, lifespan=lifespan)
+app.add_middleware(PasswordAuthMiddleware)
+app.include_router(auth_router)
 
 
 @app.exception_handler(CodexError)
@@ -51,7 +60,7 @@ class TurnInput(BaseModel):
 
 @app.post("/api/sessions", status_code=201)
 async def create_session(request: Request):
-    session_id = await request.app.state.harness.create_session()
+    session_id = await request.app.state.harness.create_session(request.state.login_id)
     return {"session_id": session_id}
 
 
@@ -59,12 +68,12 @@ async def create_session(request: Request):
 async def start_turn(session_id: str, body: TurnInput, request: Request):
     if not body.message.strip():
         raise HTTPException(422, "Message cannot be blank.")
-    return await request.app.state.harness.start_turn(session_id, body.message.strip())
+    return await request.app.state.harness.start_turn(session_id, body.message.strip(), request.state.login_id)
 
 
 @app.get("/api/sessions/{session_id}/events")
 async def events(session_id: str, request: Request):
-    session = request.app.state.harness.session(session_id)
+    session = request.app.state.harness.session(session_id, request.state.login_id)
     if session.streaming:
         raise HTTPException(409, "This chat already has an event stream.")
     try:
@@ -78,6 +87,9 @@ async def events(session_id: str, request: Request):
         try:
             yield 'event: ready\ndata: {}\n\n'
             while not await request.is_disconnected():
+                if request.app.state.app_password and not valid_login(request.app.state, request.state.login_id):
+                    yield 'event: fatal\ndata: {"message":"Session expired. Sign in again."}\n\n'
+                    return
                 if session.events and cursor < session.events[0][0] - 1:
                     yield 'event: fatal\ndata: {"message":"Stream history expired. Reload the page."}\n\n'
                     return

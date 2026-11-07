@@ -230,7 +230,7 @@ restarting the backend signs users out. The cookie is an opaque identifier, not
 the password or an authorization-claims payload. Validate the server-side record
 and expiry on every protected UI/API request. `SessionMiddleware` alone stores
 signed session data in the cookie; using it as a signing helper still requires
-our server-side store. This authentication work belongs to Phase B.
+our server-side store. Password login and ownership checks are included in the beta deployment.
 
 ## 8. Dynamic tools (no MCP server)
 

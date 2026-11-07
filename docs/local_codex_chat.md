@@ -1,4 +1,4 @@
-# Local Codex chat: Phase A
+# Codex chat: local development and beta
 
 This is the local message → Codex → streamed reply slice from
 [agent_harness_design.md](agent_harness_design.md). It uses one long-lived
@@ -26,8 +26,8 @@ OPENAI_API_KEY=<your-api-key>
 An already-exported environment variable takes precedence over `.env`. The key
 stays in the backend and is supplied to Codex through its environment and the
 `account/login/start` RPC. Real messages use the model API and incur normal usage.
-If you want to select a model, set `CODEX_MODEL` in `.env`; otherwise Codex selects
-its default. `CODEX_BIN` can specify the executable if it is not on VS Code's PATH.
+The Git-managed default is `gpt-6-luna` with high reasoning. Set `CODEX_MODEL`
+in `.env` only when you want a model override. `CODEX_BIN` can specify the executable if it is not on VS Code's PATH.
 
 The app sets the child's `CODEX_HOME` to `.local/codex/`, including its local
 API-key login and persisted Codex thread data. This directory is gitignored and
@@ -138,17 +138,20 @@ exit and release both local ports.
 
 ## Scope
 
-This phase is for **local use only**, bound to loopback. Password login for
-pre-invited test users, server-side login sessions with opaque-ID cookies,
-browser/session ownership enforcement, interruption UI, session eviction, and
-automatic runtime recovery belong to Phase B. Dynamic research tools and data
-services remain later work. App-session IDs are not an authentication mechanism.
-See [the authentication plan](devops.md#5-shared-password-login-and-server-side-sessions)
-for the planned UI/API gate and session ownership checks.
+Local development stays on loopback and does not require a password by default.
+Set `PODCAST_APP_PASSWORD` and `PODCAST_PUBLIC_ORIGIN=http://127.0.0.1:8000` to
+exercise login locally. Keep the beta password in `PODCAST_BETA_PASSWORD`, which
+is read only by the secret-setup script and does not enable local auth.
 
-Do not deploy the harness yet: configuration packaging and the persistent Codex
-home mount are in place, but the image still needs the Codex executable, runtime
-credentials, a writable agent workspace, and authentication. Deployment is a
-separate next step.
+Cloud Compose requires password login and an explicit public origin. UI and API
+requests use a server-side login session; chat IDs are checked against its owner.
+An expired or logged-out SSE stream closes on its next check (at most the
+15-second idle keepalive interval). Authentication state is in memory, so restarting
+FastAPI signs users out even though Codex's filesystem history is retained. The
+app still creates a fresh conversation after reload; there is no history UI.
+
+Deploy through [AWS deployment](aws_deployment.md), including the one-time
+runtime-secret setup. Dynamic research tools, databases, an interruption UI,
+conversation eviction, and automatic runtime recovery remain later work.
 
 Protocol reference: [Codex App Server](https://learn.chatgpt.com/docs/app-server).

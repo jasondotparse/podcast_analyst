@@ -64,8 +64,8 @@ PostgreSQL + pgvector  ──>  Structured claim extraction  ──>  LadybugDB
 
 The cookie carries only an opaque identifier; login state remains in the backend.
 Starlette's `SessionMiddleware` is cookie-based by default and does not replace
-our server-side store. Authentication is planned for Phase B; the current chat
-harness remains local-only.
+our server-side store. Beta uses password login and server-side sessions; local development on loopback
+can run without login.
 
 ```text
 React frontend

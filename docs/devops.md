@@ -1,12 +1,12 @@
 # Podcast Intelligence Agent: DevOps & Deployment
 
-**Status:** React + Vite provides the local UI with HMR; FastAPI serves `/api/*` and the compiled UI at `/app/`. Docker builds the UI and backend into one image for the existing ECR/SSM release flow. Follow [AWS deployment instructions](aws_deployment.md) and [VS Code local setup](local_development.md). The React build is deployed and verified on beta. The authentication topology below describes later work; no authentication or database is implemented yet.
+**Status:** React + Vite provides the local UI with HMR; FastAPI serves `/api/*` and the compiled UI at `/app/`. Docker builds the UI and backend into one image for the existing ECR/SSM release flow. Follow [AWS deployment instructions](aws_deployment.md) and [VS Code local setup](local_development.md). The React build is deployed and verified on beta. Beta deployment now includes password login and server-side sessions; databases remain later work.
 
-**Local agent work:** The Codex chat harness now streams replies locally; see
-[local_codex_chat.md](local_codex_chat.md). It is not packaged for deployment yet.
+**Local agent work:** The Codex chat harness streams replies locally and is packaged for beta; see
+[local_codex_chat.md](local_codex_chat.md).
 The accepted [agent harness design](agent_harness_design.md) uses a password
 distributed to test users ahead of time, server-side login sessions, and cookies.
-Authentication remains a planned Phase B change; it is not implemented in this PR.
+The beta runtime implements this password/session gate.
 
 **Decisions:** AWS region **us-east-1**; CDK language **TypeScript**. The domain `podcastanalystagent.com` is registered in Route 53.
 
@@ -49,7 +49,7 @@ EC2 instance — public ports 80/443 only
 
 AWS supporting services
   ├─ ECR               Docker image registries
-  ├─ Secrets Manager   OpenAI key, app password, session-signing secret
+  ├─ SSM SecureString  OpenAI key + app password (runtime-only)
   ├─ IAM + SSM         controlled EC2 management without public SSH
   └─ Route 53 / DNS    hostname → EC2 Elastic IP
 ```
@@ -67,7 +67,7 @@ Initial Compose services:
 | `edge` | Caddy: HTTPS → `app` | **Yes**, ports 80/443 |
 | `app` | Vite builds React; FastAPI serves it at `/app/`, handles `/api/*`, and enforces server-side session authentication | No |
 
-The *React build* and *FastAPI service* ship together in one application image in **Amazon ECR**, tagged by Git commit SHA plus a unique release suffix. Caddy's image is version-pinned. A single `compose.yaml` connects the services over a private Docker network. Browser requests use same-origin `/api/*`, avoiding unnecessary CORS configuration. The application image still needs Codex packaging and the planned login/session implementation before hosting the harness.
+The *React build* and *FastAPI service* ship together in one application image in **Amazon ECR**, tagged by Git commit SHA plus a unique release suffix. Caddy's image is version-pinned. A single `compose.yaml` connects the services over a private Docker network. Browser requests use same-origin `/api/*`, avoiding unnecessary CORS configuration. The image includes Codex 0.167.0 and the password/session implementation.
 
 When P0 starts, add persistent PostgreSQL/pgvector and the embedded Ladybug database. **Never store durable data solely inside a disposable container filesystem.** Use an EBS-backed volume or managed storage, with backup/snapshot planning. The Codex runtime is added only after the P−1 web stack is working.
 
@@ -81,14 +81,14 @@ Use **AWS CDK v2 with TypeScript** in `infra/`, targeting **us-east-1**. The sta
 - An **IAM instance role** with only required ECR pull, SSM management, and scoped secret-read permissions.
 - A **security group** allowing public **80/443 only**; no inbound SSH (`22`) or direct access to API/database/auth ports.
 - An **ECR repository** for the combined application image.
-- **Secrets Manager** secrets/placeholders for the OpenAI key, shared app password, and independent session-signing secret.
+- **SSM Parameter Store SecureString** runtime secrets for the OpenAI key and shared app password, configured separately from CloudFormation.
 - A **stable address** (Elastic IP + DNS A record) and useful CloudFormation outputs (instance ID, ECR URL, app URL).
 
 The account is the **owner's personal AWS account**, accessed with their existing AWS CLI credentials/profile. **Never commit local AWS credentials** or place AWS access keys inside containers. EC2 uses its **instance role**, not a copy of the developer's credentials.
 
 The implemented `PodcastAnalyst-beta` stack and exact first-time commands are in
-[aws_deployment.md](aws_deployment.md). The stack currently provisions the hello
-world host and HTTPS routing; authentication and secrets are later steps.
+[aws_deployment.md](aws_deployment.md). The stack provisions the host and HTTPS routing. Runtime secrets are configured
+separately in encrypted Parameter Store, then retrieved by the existing host role.
 
 CDK bootstrap is per AWS account/region. Use `cdk diff` before subsequent infrastructure changes. This path is for **infrastructure only**, not the routine code-edit loop.
 
@@ -96,10 +96,10 @@ CDK bootstrap is per AWS account/region. Use `cdk diff` before subsequent infras
 
 **Threat model:** If a public visitor can hit chat/ingestion endpoints, they can consume the owner's OpenAI credits. Protecting only the React login screen is **not enough**; the backend must also be inaccessible without authentication.
 
-Planned sign-in design (Phase B):
+Implemented beta sign-in design:
 
 1. Give invited test users the app URL and shared password ahead of time. A public login page submits the password to `POST /api/login`; FastAPI verifies it against a backend-only runtime secret. There is no public registration or separate user-account provisioning.
-2. On successful login, FastAPI generates an unpredictable login-session ID and stores the login state and expiry **server-side**. A small in-memory store is sufficient for the single-worker demo; restarting the backend signs users out.
+2. On successful login, FastAPI generates an unpredictable login-session ID and stores the login state and expiry **server-side**. The single-worker demo uses a small in-memory store; restarting the backend signs users out.
 3. Send only the opaque login-session ID in the browser cookie. Use `HttpOnly`, `Secure` in HTTPS deployments, `SameSite=Lax`, and a defined expiry. Any cookie-signing secret is independent of the shared password. Passwords, authentication claims, and model credentials stay out of the cookie and frontend bundle.
 4. For `/app/*` and protected `/api/*` requests, verify the cookie and look up its unexpired server-side session. Redirect unauthenticated UI requests to login; reject unauthenticated API/SSE requests with 401. Only login entry points and intentionally minimal liveness checks are public.
 5. Bind each Codex app-session ID to its owning login session. Check ownership on turn, events, and interrupt endpoints, so knowing the shared password does not grant access to another browser's conversation.
@@ -112,7 +112,7 @@ Anyone who finds the URL may see the login page, but the protected UI and paid A
 ## 6. Secrets, cost, and permissions
 
 - Owner's **OpenAI API key**: store as an AWS secret; retrieve on the server at runtime/startup. **Never** pass it to the browser, Docker build arguments, source control, or logs.
-- **Shared app password** and independent **session-signing secret**: store as protected runtime secrets alongside the OpenAI key. Do not put them in React build variables, images, CloudFormation outputs, or logs.
+- **Shared app password**: store as a protected runtime secret alongside the OpenAI key. The opaque random session ID needs no separate signing secret; authorization comes from the server-side lookup. Do not put them in React build variables, images, CloudFormation outputs, or logs.
 - Runtime secrets are mounted/read with restrictive permissions; avoid committing `.env`, tokens, credentials, or real hostnames containing sensitive identifiers.
 - Restrict EC2 IAM access to the specific secret ARNs; use AWS CLI/SSM under the developer's personal identity, not a long-lived instance access key.
 - Set AWS **Budget alerts** and OpenAI usage monitoring. Monitoring is not necessarily a hard spending cap; avoid unbounded ingestion or anonymous model calls.
@@ -125,12 +125,12 @@ Anyone who finds the URL may see the login page, but the protected UI and paid A
 1. Select AWS region/profile and a domain; verify domain DNS control.
 2. Scaffold CDK, Dockerfiles, `compose.yaml`, and a minimal React/FastAPI application.
 3. `cdk bootstrap` and `cdk deploy`: create AWS resources and configure the EC2 host.
-4. Set the OpenAI key, shared app password, and session-signing secret securely; give test users the password out of band.
+4. Set the OpenAI key and shared app password securely; give test users the password out of band.
 5. Run the first application release; verify HTTPS, sign-in, app page, and `/api/health`.
 
 ### Every normal application release
 
-For the current hello world app, run **`./scripts/deploy.py beta`**; see [the deployment guide](aws_deployment.md) for setup, rollback, and logs. The later React/authenticated release flow will extend it:
+For application releases, run **`./scripts/deploy.py beta`**; see [the deployment guide](aws_deployment.md) for setup, rollback, and logs. The authenticated release flow is:
 
 ```text
 1. Build React + FastAPI images for the EC2 CPU architecture
