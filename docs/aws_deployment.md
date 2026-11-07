@@ -236,6 +236,29 @@ If SSM is offline, check EC2 instance status, the instance role, and outbound
 internet access. For HTTPS failures, verify the A record points to `PublicIp`,
 then check Caddy logs. Port 8000 and SSH intentionally have no public ingress.
 
+### Codex tool failures
+
+Container logs cover startup, HTTP requests, and turn-level failures. A tool can
+fail while Codex still completes a normal assistant reply, so a successful HTTP
+response or `turn/completed` is not proof that the tool worked.
+
+For tool-level diagnostics, inspect Codex's persisted JSONL traces under
+`/var/lib/podcast-analyst/codex/sessions/` on the host (the same path inside the app
+container). Use SSM as above and `docker compose exec -T app python ...` to read a
+specific recent trace. Match `custom_tool_call` to `custom_tool_call_output` by
+`call_id`; older traces may use `function_call` / `function_call_output` instead.
+Web operations may appear inside the generic `exec` tool's input rather than as
+a top-level weather/search event. Inspect the matching **output**, not just the
+call or the assistant's summary. Traces contain conversation content; select only
+the affected turn and redact secrets rather than dumping entire files into logs.
+
+One beta failure returned `failed to spawn code-mode host
+/usr/local/bin/codex-code-mode-host: No such file or directory`. The runtime image
+must package both `codex` and its sibling `codex-code-mode-host` executable from
+the same pinned release. Configuration/readiness checks alone do not catch a
+missing tool-execution helper; verify a successful real tool result after a
+runtime packaging change.
+
 ## Infrastructure changes and cleanup
 
 For infrastructure changes, run `npm run cdk -- diff -c stage=beta` from `infra/`,
@@ -267,8 +290,9 @@ an infrastructure deployment:
 - Authenticated HTTPS checks verified progressive reply text (20 delta events),
   a same-thread follow-up retaining context, independent login-session isolation,
   and logout revocation. These checks used HTTP cookie jars, not browser automation.
-- The persisted Codex trace confirms two web searches via its generic `exec`
-  orchestration tool calling `web.run`; the resulting reply reached the client.
+- The initial web-tool check verified invocation and the assistant reply but
+  missed failed tool outputs. The missing code-mode helper was diagnosed from
+  the matching `custom_tool_call_output`; see the tool-failure procedure above.
 - Host inspection verified `gpt-6-luna`, high reasoning, live web search, and
   `/var/lib/podcast-analyst/codex` on the EBS-backed root filesystem, owned by
   `10001:10001` with mode `0700`. Runtime secrets have mode `0600`, owned by root.
