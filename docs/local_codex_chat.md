@@ -55,7 +55,7 @@ packaged at `/app/codex/` and state stored in the host bind mount described in
 [AWS deployment](aws_deployment.md#codex-home-and-configuration).
 
 The defaults are `sandbox_mode = "read-only"`, `approval_policy = "never"`, and
-`web_search = "disabled"`; see the [Codex configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference).
+`web_search = "live"`; see the [Codex configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference).
 Existing CLI flags and `chat.py` thread settings/developer instructions still
 apply and take precedence where they overlap. Configuration consolidation is
 separate work.
@@ -63,8 +63,9 @@ separate work.
 ## Runtime restrictions
 
 Codex's working directory is `.local/agent-workspace/`. Threads use read-only
-sandboxing and no approval prompts. Shell tools, multi-agent delegation, and web
-search are disabled for this text-chat slice. No podcast tools are advertised.
+sandboxing and no approval prompts. Shell tools and multi-agent delegation are
+disabled. Live web search is enabled through `codex/config.toml`; no podcast-specific
+tools are advertised.
 Unexpected server RPC requests receive an explicit error instead of hanging.
 
 ## Run on localhost:8000

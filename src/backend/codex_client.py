@@ -41,7 +41,6 @@ class CodexAppServerClient:
         self.process = await asyncio.create_subprocess_exec(
             os.environ.get("CODEX_BIN", "codex"), "app-server", "--stdio",
             "--disable", "shell_tool", "--disable", "multi_agent",
-            "-c", 'web_search="disabled"',
             cwd=workspace, env=environment,
             stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE, limit=4 * 1024 * 1024,
