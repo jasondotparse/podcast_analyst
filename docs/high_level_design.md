@@ -12,6 +12,9 @@ The immediate use case: monitor a defined set of podcast sources and investment 
 
 ## 2. How it works
 
+TLDR: AWS CDK → EC2 → Caddy → React + FastAPI → PostgreSQL + pgvector + LadybugDB.
+
+
 ```text
 Podcast sources / episode URL
           |
@@ -56,7 +59,23 @@ PostgreSQL + pgvector  ──>  Structured claim extraction  ──>  LadybugDB
 | **Ingestion pipeline** | Mechanically repeatable acquisition → validation → chunking → embedding → claim extraction → publication. An agent can initiate a run, but does not freely mutate pipeline state. |
 | **PostgreSQL + pgvector** | Source of truth for transcripts, episode/guest metadata, passage embeddings, provenance, and durable processing history. |
 | **LadybugDB** | Typed property graph for claims, entities, theses, and their relationships. Can be rebuilt from authoritative evidence and validated extractions. |
-| **AWS CDK + EC2** | Minimal infrastructure. Initially one EC2 host, Nginx for HTTPS/static React/reverse proxy, FastAPI service, and Cognito for user authentication. |
+| **AWS CDK + EC2** | Minimal infrastructure. Initially one EC2 host, Nginx for HTTPS/static React/reverse proxy, FastAPI service | 
+| **Auth** | Since this is a demo app with a small audience, we'll distribute a password to them ahead of time and they can use that to signin via a simple web UI. Then all auth is handled on the FastAPI side: we'll create a session and give the browser a cookie. Starlette's SessionMiddleware will handle this for us largely. We'll serve React and FastAPI under the same domain (e.g. myapp.com and myapp.com/api/*) using a reverse proxy
+
+React frontend
+     |
+     |  HTTPS + session cookie
+     v
+FastAPI
+     |
+     +-- Authentication middleware
+     |     Verify signed cookie
+     |
+     +-- Protected API routes
+     |
+     +-- OpenAI API
+     |
+     +-- PostgreSQL / LadybugDB
 
 **Operational rules:** Pipeline stages have explicit statuses, retry/failure handling, and deduplication by stable episode/source IDs. We'll be super basic - just a beta and prod env. No claim is published without a resolvable passage reference. Agent tools have bounded permissions; credentials remain server-side. The browser never accesses databases or the model API key directly.
 
@@ -101,3 +120,6 @@ Relationships are **typed and evidence-backed**. `CORROBORATES` and `CONTRADICTS
 - **Evidence first:** Timestamped, inspectable citations, transparent failures, and human-reviewed thesis changes are essential for investment workflows.
 
 **Design principle:** Ship the smallest coherent, maintainable system that demonstrates a complete evidence → knowledge → research workflow. Favor explicit contracts and verifiable outputs over unnecessary framework complexity.
+
+**DNS / Domain**
+Domain has been purchased and registered: podcastanalystagent.com (Route 53)
