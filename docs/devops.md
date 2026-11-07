@@ -1,6 +1,6 @@
 # Podcast Intelligence Agent: DevOps & Deployment
 
-**Status:** The hello world app now has Docker/Compose packaging, a TypeScript CDK stack, and an ECR/SSM application-release script. Follow [AWS deployment instructions](aws_deployment.md) for the current implementation and [local setup](local_development.md) for VS Code. Cloud deployment verification is recorded in the deployment guide. The React/authentication topology below describes later work; the current cloud stack is Caddy → FastAPI, with no authentication or database yet.
+**Status:** React + Vite provides the local UI with HMR; FastAPI serves `/api/*` and the compiled UI at `/app/`. Docker builds the UI and backend into one image for the existing ECR/SSM release flow. Follow [AWS deployment instructions](aws_deployment.md) and [VS Code local setup](local_development.md). The React build is deployed and verified on beta. The authentication topology below describes later work; no authentication or database is implemented yet.
 
 **Decisions:** AWS region **us-east-1**; CDK language **TypeScript**. The domain `podcastanalystagent.com` is registered in Route 53.
 
@@ -70,7 +70,7 @@ The *React build* and *FastAPI service* are our two application images in **Amaz
 
 When P0 starts, add persistent PostgreSQL/pgvector and the embedded Ladybug database. **Never store durable data solely inside a disposable container filesystem.** Use an EBS-backed volume or managed storage, with backup/snapshot planning. The Codex runtime is added only after the P−1 web stack is working.
 
-**Local development today:** FastAPI serves the hello world HTML directly; see [local_development.md](local_development.md). **Planned with React:** `npm run dev` (Vite) and `uvicorn ... --reload` (FastAPI) provide hot reload; Vite proxies `/api` to the local API. Docker Compose will be added for integration testing; developers should not need an AWS deploy to test every UI/API edit.
+**Local development:** Vite on port 5173 provides React HMR and proxies `/api` to FastAPI on port 8000. The VS Code **run full stack app** compound starts both; **serve front end** starts only Vite. FastAPI also serves a built React snapshot at `/app/`. See [local_development.md](local_development.md); Docker Compose remains available for checking the deployment image.
 
 ## 4. Infrastructure as code: AWS CDK
 
@@ -88,7 +88,7 @@ The account is the **owner's personal AWS account**, accessed with their existin
 
 The implemented `PodcastAnalyst-beta` stack and exact first-time commands are in
 [aws_deployment.md](aws_deployment.md). The stack currently provisions the hello
-world host and HTTPS routing; React, authentication, and secrets are later steps.
+world host and HTTPS routing; authentication and secrets are later steps.
 
 CDK bootstrap is per AWS account/region. Use `cdk diff` before subsequent infrastructure changes. This path is for **infrastructure only**, not the routine code-edit loop.
 
