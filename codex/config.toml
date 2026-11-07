@@ -1,0 +1,6 @@
+# Defaults for the app-owned Codex home. Existing CLI/thread overrides still apply.
+model = "gpt-6-luna"
+model_reasoning_effort = "high"
+sandbox_mode = "read-only"
+approval_policy = "never"
+web_search = "live"

@@ -4,6 +4,14 @@ services:
   app:
     image: ${APP_IMAGE:-podcast-analyst:local}
     build: .
+    environment:
+      PODCAST_CODEX_HOME: /var/lib/podcast-analyst/codex
+    volumes:
+      - type: bind
+        source: /var/lib/podcast-analyst/codex
+        target: /var/lib/podcast-analyst/codex
+        bind:
+          create_host_path: false
     ports:
       - "127.0.0.1:8000:8000"
     restart: unless-stopped
