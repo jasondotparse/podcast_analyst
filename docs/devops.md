@@ -1,6 +1,8 @@
 # Podcast Intelligence Agent: DevOps & Deployment
 
-**Status:** **Not started.** No CDK stack, EC2 instance, Docker image, Cognito pool, domain, or deployment pipeline has been created or verified yet. This document describes the **planned** approach, not an existing environment.
+**Status:** Local hello world boilerplate is implemented: FastAPI serves a single HTML file. Follow [local setup and VS Code instructions](local_development.md) to run it. No CDK stack, EC2 instance, Docker image, Cognito pool, or deployment pipeline has been created or verified yet. Cloud deployment below remains **planned**.
+
+**Decisions:** AWS region **us-east-1**; CDK language **TypeScript**. The domain `podcastanalystagent.com` is registered in Route 53, per the high-level design; DNS routing to an app instance is still pending.
 
 **Audience:** Engineer joining the project on day one.  
 **Immediate milestone:** **P−1: deploy a minimal React + FastAPI application to the owner's personal AWS account, securely accessible through a web browser, with fast repeatable deployments.**
@@ -47,7 +49,7 @@ AWS supporting services
 
 **Why Caddy and Nginx?** Caddy handles automatic HTTPS certificates with less certificate-management work. Nginx serves the built React files and forwards `/api/*` to FastAPI. `oauth2-proxy` sits between them so authentication is enforced for the *entire site*. These are internal Compose services; only Caddy binds public ports. We can simplify the proxy setup later if it becomes unnecessary overhead.
 
-**Domain prerequisite:** Automatic public HTTPS and the Cognito OAuth callback need a stable hostname (e.g. `app.example.com`) with DNS pointed at the instance. The actual domain has **not** been chosen. Use a Cognito-provided domain for its login pages; no Cognito custom-login domain is necessary for P−1. If no domain is already available, acquiring/configuring one is part of P−1.
+**Domain prerequisite:** Automatic public HTTPS and the Cognito OAuth callback need a stable hostname with DNS pointed at the instance. The registered domain is `podcastanalystagent.com`; choose the application hostname when configuring deployment. Use a Cognito-provided domain for its login pages; no Cognito custom-login domain is necessary for P−1.
 
 ## 3. Container packaging
 
@@ -64,11 +66,11 @@ The *React build* and *FastAPI service* are our two application images in **Amaz
 
 When P0 starts, add persistent PostgreSQL/pgvector and the embedded Ladybug database. **Never store durable data solely inside a disposable container filesystem.** Use an EBS-backed volume or managed storage, with backup/snapshot planning. The Codex runtime is added only after the P−1 web stack is working.
 
-**Local development:** `npm run dev` (Vite) and `uvicorn ... --reload` (FastAPI) provide hot reload; Vite proxies `/api` to the local API. Docker Compose is available for integration testing; developers should not need an AWS deploy to test every UI/API edit.
+**Local development today:** FastAPI serves the hello world HTML directly; see [local_development.md](local_development.md). **Planned with React:** `npm run dev` (Vite) and `uvicorn ... --reload` (FastAPI) provide hot reload; Vite proxies `/api` to the local API. Docker Compose will be added for integration testing; developers should not need an AWS deploy to test every UI/API edit.
 
 ## 4. Infrastructure as code: AWS CDK
 
-Use **AWS CDK v2** (TypeScript or Python; choose once when scaffolding) in `infra/`. The stack will provision:
+Use **AWS CDK v2 with TypeScript** in `infra/`, targeting **us-east-1**. The stack will provision:
 
 - One appropriately sized **EC2** instance with Docker + Compose and SSM Agent configured via user data/bootstrap; EBS storage.
 - An **IAM instance role** with only required ECR pull, SSM management, and scoped secret-read permissions.
@@ -80,12 +82,13 @@ Use **AWS CDK v2** (TypeScript or Python; choose once when scaffolding) in `infr
 
 The account is the **owner's personal AWS account**, accessed with their existing AWS CLI credentials/profile. **Never commit local AWS credentials** or place AWS access keys inside containers. EC2 uses its **instance role**, not a copy of the developer's credentials.
 
-Expected first-time commands (illustrative; profile, region, and stack name are not chosen yet):
+Expected first-time commands (illustrative; profile and stack name are not chosen yet, and `infra/` has not been scaffolded):
 
 ```bash
 aws sts get-caller-identity --profile <personal-profile>
+export AWS_REGION=us-east-1
 cd infra
-npm install                      # if CDK is TypeScript
+npm install
 npx cdk bootstrap --profile <personal-profile>
 npx cdk deploy --profile <personal-profile>
 ```
