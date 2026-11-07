@@ -278,6 +278,14 @@ provision retained database storage and backups as described in [devops.md](devo
 
 ## Validation
 
+The tool-runtime fix was deployed on **November 7, 2026** as
+`8abc73fd9016-20261107T220255-tools`. The image includes both pinned executables.
+An isolated native x86 container on EC2 returned actual Chicago weather data;
+the deployed public HTTPS chat then streamed a weather reply in 30 text chunks.
+The local Docker Desktop amd64-emulation test killed the helper with SIGKILL,
+so the native EC2 test is the runtime validation for this fix.
+
+
 The **Codex chat release** was deployed to beta on **November 7, 2026**, without
 an infrastructure deployment:
 
