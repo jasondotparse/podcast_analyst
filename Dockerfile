@@ -16,6 +16,7 @@ RUN pip install --no-cache-dir -r src/backend/requirements.txt \
     && useradd --uid 10001 --create-home app
 
 COPY --chown=app:app src/backend/ src/backend/
+COPY --chown=app:app codex/ codex/
 COPY --from=frontend-build --chown=app:app /frontend/dist/ src/frontend/dist/
 USER app
 

@@ -28,13 +28,16 @@ flowchart TD
 
 Codex persists threads to the EC2 instance's local filesystem, which means they'll live on our EBS volume if that filesystem is backed by EBS.
 
-note: open question - where does codex persist its state on our instance? 
-I'd explicitly configure Codex's storage directory rather than rely on whichever Linux user's home directory runs FastAPI: CODEX_HOME=/var/lib/podcast-analyst/codex
+The app explicitly sets the child's `CODEX_HOME`: locally it defaults to
+`.local/codex/`; Compose sets `PODCAST_CODEX_HOME=/var/lib/podcast-analyst/codex`
+and bind-mounts that host path. Repository-managed configuration is installed
+before Codex starts; see [configuration management](local_codex_chat.md#git-managed-codex-configuration).
 
 Assuming /var/lib is on our EBS-backed filesystem, this gives us:
 - Persistence across FastAPI and Codex process restarts.
 - Persistence across EC2 stop/start cycles.
-- Persistence across instance replacement if we reattach the same EBS volume.
+- Persistence across instance replacement only if we reattach retained storage;
+  the current root EBS volume is deleted on termination.
 We should verify the backing volume with findmnt -T /var/lib/podcast-analyst/codex.
 
 **Principle:** One **Codex process** per FastAPI worker, **one Codex thread** per browser/app session, **one active turn** per thread. Different users' threads may run concurrently.

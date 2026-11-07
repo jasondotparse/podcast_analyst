@@ -2,8 +2,10 @@
 
 **Local harness work in progress:** Codex chat currently runs locally only.
 The Docker/runtime setup below still describes the deployed React hello world
-release. Codex packaging, API-key configuration, state storage, and authentication
+release. Codex executable packaging, API-key configuration, and authentication
 must be added before deploying the harness; see [local_codex_chat.md](local_codex_chat.md).
+Git-managed configuration and the Codex home bind mount are now prepared below;
+this change does not deploy the harness or complete its container runtime setup.
 
 The planned authentication uses a password supplied to test users ahead of time.
 FastAPI will keep login sessions server-side and issue opaque session-ID cookies
@@ -67,6 +69,10 @@ checked against the AWS pricing API on November 7, 2026; see
 
 ## Run the container locally
 
+The following hello world commands describe the previously deployed release.
+The current harness image is not runnable end-to-end until the remaining runtime
+work above is completed. VS Code/local Python development continues to work.
+
 From the repository root:
 
 ```bash
@@ -76,8 +82,9 @@ curl -i http://127.0.0.1:8000/api/health
 docker compose --env-file /dev/null logs -f app
 ```
 
-Use `--env-file /dev/null` so Compose does not load the existing local `.env`;
-this app requires no secrets. Stop a VS Code/terminal server on port 8000 first.
+Use `--env-file /dev/null` so Compose does not load the existing local `.env`.
+The hello world release required no secrets; the harness needs backend-only
+credentials supplied at runtime. Stop a VS Code/terminal server on port 8000 first.
 The Docker build compiles React in a Node stage and copies only the generated
 `dist/` into the non-root Python runtime. The container checks `/api/health`.
 Source edits require rebuilding the image; use the VS Code Vite/HMR flow in
@@ -90,8 +97,34 @@ docker compose --env-file /dev/null down
 ```
 
 The `cloud` Compose profile adds Caddy. It is enabled by the deploy script on EC2;
-it is not needed for local development. `.dockerignore` allows only app source
-into the build context and excludes `.env` files and Python caches.
+it is not needed for local development. `.dockerignore` allows app source and
+the managed `codex/` configuration into the build context and excludes `.env`
+files and Python caches.
+
+## Codex home and configuration
+
+The image packages `codex/config.toml`, `codex/AGENTS.md`, and `codex/skills/` at
+`/app/codex/`. FastAPI installs them at startup, before launching Codex; see
+[the local configuration workflow](local_codex_chat.md#git-managed-codex-configuration).
+These files contain no credentials. The build excludes runtime homes and `.env`.
+
+Compose sets `PODCAST_CODEX_HOME=/var/lib/podcast-analyst/codex` and bind-mounts
+the same EC2 host path into the container. The existing SSM deploy command creates
+that directory with mode `0700` and owner/group `10001:10001` before Compose
+starts, so the existing non-root app user can write configuration and state.
+No directory is created implicitly by Compose. When running Compose manually on
+Linux, first run:
+
+```bash
+sudo install -d -m 700 -o 10001 -g 10001 /var/lib/podcast-analyst/codex
+findmnt -T /var/lib/podcast-analyst/codex
+```
+
+Confirm the path is backed by EBS. The current EC2 root filesystem is EBS-backed;
+no new volume is provisioned. State survives process restarts and container
+replacements/application releases. The root volume is deleted on instance
+termination, so this does **not** preserve state across EC2 replacement. Do not
+delete the host directory to update configuration; restart with the new image.
 
 ## One-time AWS setup
 

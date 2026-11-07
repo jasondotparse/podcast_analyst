@@ -1,0 +1,4 @@
+# Defaults for the app-owned Codex home. Existing CLI/thread overrides still apply.
+sandbox_mode = "read-only"
+approval_policy = "never"
+web_search = "disabled"

@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from .chat import ChatHarness
 from .codex_client import CodexError
+from .codex_config import sync_codex_config
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -25,6 +26,7 @@ async def lifespan(app: FastAPI):
     if not api_key:
         raise RuntimeError("Set OPENAI_API_KEY in the repository's .env before starting the backend.")
     home = Path(os.environ.get("PODCAST_CODEX_HOME", ROOT / ".local" / "codex")).expanduser().resolve()
+    sync_codex_config(ROOT / "codex", home)
     workspace = (ROOT / ".local" / "agent-workspace").resolve()
     harness = ChatHarness(workspace, model=os.environ.get("CODEX_MODEL"))
     app.state.harness = harness

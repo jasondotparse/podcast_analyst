@@ -35,6 +35,33 @@ created with owner-only access. It does not reuse your personal `~/.codex`
 configuration or ChatGPT login. To relocate this app's state, set
 `PODCAST_CODEX_HOME`; do not point it at your personal Codex home.
 
+## Git-managed Codex configuration
+
+Edit `codex/config.toml` for defaults and `codex/AGENTS.md` for the agent's global
+instructions. Future skills belong in `codex/skills/<skill-name>/SKILL.md`;
+the directory is initially empty apart from its Git placeholder.
+
+Each FastAPI startup copies those two files into the selected Codex home,
+overwriting the installed versions, and replaces its entire `skills/` directory.
+The app exclusively owns that skills directory, so removing a skill from Git
+also removes it from the home on the next startup. All other files, including
+authentication, session history, and SQLite databases, are left untouched.
+Keep secrets and runtime state out of the repository's `codex/` directory.
+
+Restart FastAPI after editing configuration or adding/removing skills; the
+Python reloader does not watch these files. Edit the Git-managed sources rather
+than the installed copies. The same startup sync runs in Docker, with sources
+packaged at `/app/codex/` and state stored in the host bind mount described in
+[AWS deployment](aws_deployment.md#codex-home-and-configuration).
+
+The defaults are `sandbox_mode = "read-only"`, `approval_policy = "never"`, and
+`web_search = "disabled"`; see the [Codex configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference).
+Existing CLI flags and `chat.py` thread settings/developer instructions still
+apply and take precedence where they overlap. Configuration consolidation is
+separate work.
+
+## Runtime restrictions
+
 Codex's working directory is `.local/agent-workspace/`. Threads use read-only
 sandboxing and no approval prompts. Shell tools, multi-agent delegation, and web
 search are disabled for this text-chat slice. No podcast tools are advertised.
@@ -118,8 +145,9 @@ services remain later work. App-session IDs are not an authentication mechanism.
 See [the authentication plan](devops.md#5-shared-password-login-and-server-side-sessions)
 for the planned UI/API gate and session ownership checks.
 
-Do not deploy this branch with the existing Docker setup yet: the image does not
-package Codex or its persistent runtime storage/secrets. Deployment is a separate
-next step after the local happy path is accepted.
+Do not deploy the harness yet: configuration packaging and the persistent Codex
+home mount are in place, but the image still needs the Codex executable, runtime
+credentials, a writable agent workspace, and authentication. Deployment is a
+separate next step.
 
 Protocol reference: [Codex App Server](https://learn.chatgpt.com/docs/app-server).

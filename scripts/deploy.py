@@ -56,6 +56,8 @@ cd /opt/podcast-analyst
 # Prevent two local deploy commands from updating the same host simultaneously.
 exec 9>.deploy.lock
 flock -n 9
+# Keep Codex state on the host's EBS filesystem, writable by the app user.
+install -d -m 700 -o 10001 -g 10001 /var/lib/podcast-analyst/codex
 printf %s {shlex.quote(release_archive())} | base64 --decode | tar -xz
 printf %s {shlex.quote(environment64)} | base64 --decode > .env.next
 aws ecr get-login-password --region {REGION} | docker login --username AWS --password-stdin {shlex.quote(registry)}
