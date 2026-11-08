@@ -1,0 +1,19 @@
+.pipeline-status {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding-bottom: 14px;
+}
+.pipeline-track { height: 8px; border-radius: 4px; background: #dfe9e2; overflow: hidden; }
+.pipeline-fill { height: 100%; background: #1f9d55; transition: width .6s ease; }
+.pipeline-status p {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 6px 0 0;
+  color: #596779;
+  font-size: 13px;
+}
+.pipeline-status.problem .pipeline-fill { background: #a62330; }
+.pipeline-status.problem p { color: #a62330; }
+.pipeline-status button { padding: 4px 10px; font-size: 13px; border-radius: 8px; }

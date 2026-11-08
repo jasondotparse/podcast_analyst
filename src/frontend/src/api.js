@@ -13,6 +13,10 @@ export function post(path, body) {
   })
 }
 
+export function getIngestion(jobId) {
+  return request(`/api/ingestions/${jobId}`)
+}
+
 // Queues a transcript for ingestion and resolves with its job once the server accepts it.
 export async function uploadTranscript(metadata, file) {
   const form = new FormData()
