@@ -16,9 +16,11 @@ class CodexError(RuntimeError):
 
 
 class CodexAppServerClient:
-    def __init__(self, on_notification: Callable, on_disconnect: Callable):
+    def __init__(self, on_notification: Callable, on_disconnect: Callable, on_request: Callable | None = None):
         self.on_notification = on_notification
         self.on_disconnect = on_disconnect
+        # Returns an awaitable result for server requests we handle, or None to decline.
+        self.on_request = on_request
         self.process = None
         self.pending = {}
         self.write_lock = asyncio.Lock()
@@ -89,7 +91,7 @@ class CodexAppServerClient:
                 message = json.loads(line)
                 if "method" in message:
                     if "id" in message:
-                        self.spawn_task(self.decline_request(message))
+                        self.spawn_task(self.answer_request(message))
                     else:
                         self.on_notification(message["method"], message.get("params", {}))
                 else:
@@ -112,12 +114,16 @@ class CodexAppServerClient:
                     future.set_exception(error)
             self.on_disconnect(str(error))
 
-    async def decline_request(self, message):
-        # Dynamic tools and approvals are not part of this local chat slice.
+    async def answer_request(self, message):
+        handler = self.on_request and self.on_request(message["method"], message.get("params", {}))
         try:
-            await self.write({"id": message["id"], "error": {
-                "code": -32601, "message": "This chat client does not support server requests.",
-            }})
+            if handler is None:
+                # Approvals and other server requests are unsupported; never leave them hanging.
+                await self.write({"id": message["id"], "error": {
+                    "code": -32601, "message": "This client does not support this server request.",
+                }})
+            else:
+                await self.write({"id": message["id"], "result": await handler})
         except CodexError:
             pass
 

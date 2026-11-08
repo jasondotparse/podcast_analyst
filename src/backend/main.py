@@ -8,12 +8,14 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
 from .chat import ChatHarness
 from .codex_client import CodexError
 from .codex_config import sync_codex_config
 from .db import migrate_postgres, open_graph
+from .ingestion import router as ingestion_router, worker as ingestion_worker
 from .auth import PasswordAuthMiddleware, router as auth_router, valid_login
 
 
@@ -41,13 +43,18 @@ async def lifespan(app: FastAPI):
         "PODCAST_LADYBUG_PATH", ROOT / ".local" / "ladybug" / "graph.lbug")))
     home = Path(os.environ.get("PODCAST_CODEX_HOME", ROOT / ".local" / "codex")).expanduser().resolve()
     sync_codex_config(ROOT / "codex", home)
+    app.state.codex_home = home
+    app.state.openai = AsyncOpenAI(api_key=api_key)
     workspace = (ROOT / ".local" / "agent-workspace").resolve()
     harness = ChatHarness(workspace, model=os.environ.get("CODEX_MODEL"))
     app.state.harness = harness
     await harness.client.start(api_key, home, workspace)
+    worker = asyncio.create_task(ingestion_worker(app.state))
     try:
         yield
     finally:
+        worker.cancel()
+        await asyncio.gather(worker, return_exceptions=True)
         await harness.client.close()
         app.state.graph.close()
 
@@ -55,6 +62,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(openapi_url=None, lifespan=lifespan)
 app.add_middleware(PasswordAuthMiddleware)
 app.include_router(auth_router)
+app.include_router(ingestion_router)
 
 
 @app.exception_handler(CodexError)

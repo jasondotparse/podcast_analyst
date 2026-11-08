@@ -82,7 +82,7 @@ class StartupConfigTests(unittest.IsolatedAsyncioTestCase):
                 "DATABASE_URL": "postgresql://unused",
             }), patch("src.backend.main.load_dotenv"), patch(
                 "src.backend.main.migrate_postgres", AsyncMock()
-            ), patch("src.backend.main.open_graph"), patch(
+            ), patch("src.backend.main.open_graph"), patch("src.backend.main.ingestion_worker", AsyncMock()), patch(
                 "src.backend.main.ChatHarness"
             ) as harness_type:
                 client = harness_type.return_value.client

@@ -39,7 +39,9 @@ class ChatHarness:
         self.model = model
         self.sessions: dict[str, ChatSession] = {}
         self.by_thread: dict[str, ChatSession] = {}
-        self.client = CodexAppServerClient(self.notification, self.disconnected)
+        # Background (pipeline) threads: thread ID -> (turn-completed future, tool handler).
+        self.background: dict[str, tuple[asyncio.Future, object]] = {}
+        self.client = CodexAppServerClient(self.notification, self.disconnected, self.server_request)
 
     def require_ready(self):
         if not self.client.ready:
@@ -92,7 +94,51 @@ class ChatHarness:
             session.emit("fatal", {"message": "The Codex request failed. Reload the page to start a new chat."})
             raise
 
+    async def run_task(self, text: str, skill: Path, tools: list, call_tool, timeout: float) -> str:
+        """Run one turn on a fresh thread with its own dynamic tools; return the thread ID."""
+        self.require_ready()
+        params = {
+            "cwd": str(self.workspace), "approvalPolicy": "never", "sandbox": "read-only",
+            "dynamicTools": tools, "config": {"features": {"memories": False}},
+        }
+        if self.model:
+            params["model"] = self.model
+        thread_id = (await self.client.request("thread/start", params))["thread"]["id"]
+        done = asyncio.get_running_loop().create_future()
+        self.background[thread_id] = (done, call_tool)
+        try:
+            turn = await self.client.request("turn/start", {"threadId": thread_id, "input": [
+                {"type": "skill", "name": skill.parent.name, "path": str(skill)},
+                {"type": "text", "text": text},
+            ]})
+            try:
+                result = await asyncio.wait_for(done, timeout)
+            except TimeoutError:
+                await self.client.request("turn/interrupt", {"threadId": thread_id, "turnId": turn["turn"]["id"]})
+                raise TimeoutError(f"Codex thread {thread_id} timed out after {timeout:.0f}s")
+        finally:
+            self.background.pop(thread_id, None)
+        if result["status"] != "completed":
+            raise CodexError(f"Codex thread {thread_id} ended {result['status']}: {result.get('error')}")
+        return thread_id
+
+    def server_request(self, method: str, params: dict):
+        task = self.background.get(params.get("threadId"))
+        if method == "item/tool/call" and task:
+            return self.call_tool(task[1], params)
+        return None
+
+    async def call_tool(self, handler, params: dict) -> dict:
+        try:
+            text, success = await handler(params["tool"], params["arguments"]), True
+        except Exception as error:  # The model sees the error and can correct itself.
+            text, success = f"Error: {error}", False
+        return {"contentItems": [{"type": "inputText", "text": text}], "success": success}
+
     def notification(self, method: str, params: dict):
+        task = self.background.get(params.get("threadId"))
+        if task and method == "turn/completed" and not task[0].done():
+            task[0].set_result(params["turn"])
         session = self.by_thread.get(params.get("threadId"))
         if session is None:
             return
@@ -117,6 +163,9 @@ class ChatHarness:
             })
 
     def disconnected(self, message: str):
+        for done, _ in self.background.values():
+            if not done.done():
+                done.set_exception(CodexError(message))
         for session in self.sessions.values():
             session.invalid = True
             session.busy = False

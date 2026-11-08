@@ -40,6 +40,17 @@ with `docker exec -it podcast-postgres psql -U podcast`. To reset local data, st
 the backend, then `docker rm -f podcast-postgres && docker volume rm podcast-postgres`
 and delete `.local/ladybug/`. See [the database design](database_design.md#implementation).
 
+### Ingest a transcript
+
+With the backend running, upload a `.txt` transcript and poll its job; see the
+[ingestion design](etl_design.md#api). Extraction uses real OpenAI calls and takes a few minutes.
+
+```bash
+curl -s -F 'metadata={"podcast_name":"Chip Talk","title":"Optical interconnects"}' \
+     -F transcript=@episode.txt http://127.0.0.1:8000/api/ingestions
+curl -s http://127.0.0.1:8000/api/ingestions/<job_id>
+```
+
 Run tests with `.venv/bin/python -m unittest discover -s tests -v`. The Postgres
 test creates and drops a temporary database through `DATABASE_URL`; without it
 set, that test is skipped.

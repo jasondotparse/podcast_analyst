@@ -38,8 +38,8 @@ configuration or ChatGPT login. To relocate this app's state, set
 ## Git-managed Codex configuration
 
 Edit `codex/config.toml` for defaults and `codex/AGENTS.md` for the agent's global
-instructions. Future skills belong in `codex/skills/<skill-name>/SKILL.md`;
-the directory is initially empty apart from its Git placeholder.
+instructions. Skills belong in `codex/skills/<skill-name>/SKILL.md`; the first is
+`extract-claims`, used by the ingestion pipeline.
 
 Each FastAPI startup copies those two files into the selected Codex home,
 overwriting the installed versions, and replaces its entire `skills/` directory.
@@ -63,10 +63,14 @@ separate work.
 ## Runtime restrictions
 
 Codex's working directory is `.local/agent-workspace/`. Threads use read-only
-sandboxing and no approval prompts. Shell tools and multi-agent delegation are
-disabled. Live web search is enabled through `codex/config.toml`; no podcast-specific
+sandboxing and no approval prompts. The legacy shell tool and multi-agent delegation are
+disabled. Codex's code-mode `exec` tool (`unified_exec`) is still enabled and can run
+read-only commands anywhere the sandbox allows reading; see
+[etl_design.md](etl_design.md#verification). Live web search is enabled through `codex/config.toml`; no podcast-specific
 tools are advertised.
-Unexpected server RPC requests receive an explicit error instead of hanging.
+Ingestion extraction threads get two dynamic tools (`postgres_database_query`,
+`write_claim`) and the `extract-claims` skill; chat threads get no dynamic tools.
+Other server RPC requests receive an explicit error instead of hanging.
 
 ## Run on localhost:8000
 

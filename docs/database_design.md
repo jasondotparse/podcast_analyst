@@ -82,7 +82,9 @@ One FastAPI process / one Uvicorn worker owns the embedded, disk-backed Ladybug 
 - **Graph schema:** [`src/backend/graph_schema.cypher`](../src/backend/graph_schema.cypher) is the DDL above with `IF NOT EXISTS`, applied at every startup (`real_ladybug` 0.15.3). FastAPI holds Ladybug's exclusive file lock, so no other process, including `docker compose exec`, can open the graph while the app runs. The buffer pool is capped at 256 MiB for the shared 4 GiB host.
 - **Configuration:** `DATABASE_URL` (required) and `PODCAST_LADYBUG_PATH` (default `.local/ladybug/graph.lbug`). Local setup: [local_development.md](local_development.md).
 - **Storage:** Compose runs `pgvector/pgvector:0.8.7-pg18-bookworm` on the private Compose network (no published port) and bind-mounts `/var/lib/podcast-analyst/postgres` and `/var/lib/podcast-analyst/ladybug` from the host. Data survives releases, container restarts, and Compose down/up, **but not EC2 instance replacement**; see [devops.md](devops.md#preserving-the-data-layer).
-- **Not yet built:** the read-only PostgreSQL role and the Codex database tools; they ship together with those tools.
+- **Ingestion additions (`002_ingestion.sql`):** `entities(id, name, kind, UNIQUE(kind, name))` and `claim_entities(claim_id, entity_id)` keep extracted entities in Postgres so the graph can be rebuilt from it; `episodes.claims_extracted_at` marks finished claim extraction. See [etl_design.md](etl_design.md).
+- **Read-only SQL:** `postgres_database_query` runs each query as the `NOLOGIN` SELECT-only role `podcast_reader` (`SET LOCAL ROLE` inside a `READ ONLY` transaction), one statement at a time, with a 10 s statement timeout and capped output. For now only the ingestion extraction thread receives it; chat threads get it with the research skill.
+- **Not yet built:** `vector_search`, `graph_query`, and the chat-side database tools.
 
 ## End product example:
 Our data layer is designed to support a system that will work roughly like so:

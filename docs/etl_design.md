@@ -1,6 +1,6 @@
 # Podcast Analyst — Ingestion Pipeline Design
 
-**Status:** Agreed design for the first slice · **Audience:** the engineer building ingestion
+**Status:** `.txt` slice implemented and verified locally (see [Verification](#verification)) · **Audience:** the engineer building ingestion
 
 Read first: [database_design.md](database_design.md) (schema, contracts, Codex tools),
 [agent_harness_design.md](agent_harness_design.md) (the Codex app-server harness),
@@ -225,6 +225,24 @@ curl -s http://127.0.0.1:8000/api/ingestions/<job_id>
   - Rerun the job to prove idempotence.
 
   Then deploy to beta and repeat.
+
+## Verification
+
+Local runs (`curl` against the backend on port 8000), November 2026:
+
+- **EE Times, "Enabling AI at the Speed of Light"** (4,520 words): 9 passages, 82 claims
+  (all with speakers, longest quote 85 words), 90 entities, completed in about 3.5 minutes.
+  Retrying the completed job re-projected the graph in seconds and changed nothing else.
+- **FT, "How AI is really changing jobs"** (6,359 words): 13 passages, 74 claims, completed.
+- A short cooking-show transcript ended `skipped` with `Rejected by screen: on_topic`.
+- The graph matched Postgres exactly: 2 episodes, 22 passages, 156 claims, 148 entities,
+  533 `ABOUT` and 260 `MENTIONS` edges.
+- A duplicate upload returned `409` with the original job; missing metadata returned `422`.
+- **Open question:** the Codex extraction thread also has Codex's built-in code-mode
+  `exec` tool (`unified_exec`, on by default; `--disable shell_tool` does not remove it).
+  In the first run it listed the repository and read `docs/` before querying the
+  transcript. The read-only sandbox still allows reading files. We have not decided
+  whether to disable it.
 
 ## Later, without restructuring
 

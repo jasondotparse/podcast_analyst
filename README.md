@@ -23,7 +23,7 @@ app** for HMR development, or **serve front end** when the backend is already ru
 - [x] Beta deployed over HTTPS with password login, server-side sessions, persistent Codex state, and the ECR/SSM deploy workflow.
 - [x] PostgreSQL + pgvector and LadybugDB schemas on beta, with host-persisted storage and forward-only migrations ([database design](docs/database_design.md)).
 - [ ] **Next:** build the ingestion pipeline that can ingest one episode end-to-end: transcript → passages/embeddings → grounded claims → graph projection. (docs/diagrams/etl_pipeline.png)
-  - [ ] handle .txt file transcript + podcast metadata
+  - [x] handle .txt file transcript + podcast metadata ([ingestion design](docs/etl_design.md))
   - [ ] handle .mp3 file + podcast metadata
   - [ ] handle a youtube link + podcast metadata
   - [ ] update the UI with fields where the above 3 can be provided by the user
