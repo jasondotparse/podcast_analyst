@@ -271,6 +271,11 @@ Local runs (`curl` against the backend on port 8000), November 2026:
 - The first beta run surfaced `deadlock detected` from `write_claim`: Codex saves claims in
   parallel, and claims sharing entities upserted them in different orders. `save_claim` now
   upserts entities in sorted order; a concurrency test covers it, and the re-run had no deadlocks.
+- **Upload form** (release `d07820a980b9-20261108T214740-677d73`): driven in Chrome
+  (Playwright) locally and on beta through the login page. A `.json` file was rejected,
+  the Bill Gates FT transcript was dropped in and submitted (`202`, modal closed) and then
+  completed the pipeline (35 claims locally); re-submitting it showed the `409` message in
+  the open modal; Escape closed it.
 - Codex sometimes `cat`s `SKILL.md` through `exec` even though the skill body is already
   attached to the turn.
 
