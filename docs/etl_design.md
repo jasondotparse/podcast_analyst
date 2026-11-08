@@ -262,6 +262,17 @@ Local runs (`curl` against the backend on port 8000), November 2026:
   overlapping claims, a clean re-run of EE Times gave 31 denser claims (down from 82),
   45 entities, and a graph matching Postgres. The `202`/`409`/`404`/`422` responses, the
   screen rejection, and the idempotent retry were re-checked.
+**Beta** (release `3e0d37683c2e-20261108T211604-a65dcd`, public HTTPS API with login):
+
+- EE Times: 9 passages, 41 claims; FT: 13 passages, 35 claims; the cooking transcript was
+  skipped by `on_topic`. `202`/`409`/`404`/`422` and `401` without login behaved as locally;
+  a retry changed nothing. The graph matched Postgres (76 claims, 103 entities, 249 `ABOUT`).
+- The first beta run surfaced `deadlock detected` from `write_claim`: Codex saves claims in
+  parallel, and claims sharing entities upserted them in different orders. `save_claim` now
+  upserts entities in sorted order; a concurrency test covers it, and the re-run had no deadlocks.
+- Codex sometimes `cat`s `SKILL.md` through `exec` even though the skill body is already
+  attached to the turn.
+
 - **Open question:** the Codex extraction thread also has Codex's built-in code-mode
   `exec` tool (`unified_exec`, on by default; `--disable shell_tool` does not remove it).
   In the first run it listed the repository and read `docs/` before querying the
