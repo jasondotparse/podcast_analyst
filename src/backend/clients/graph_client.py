@@ -27,6 +27,15 @@ class GraphClient:
                          {"c": str(link.claim_id), "p": str(link.passage_id), "n": str(link.entity_id),
                           "name": link.name, "kind": link.kind})
 
+    def project_thesis(self, thesis_id, entities: list[tuple]) -> None:
+        """Mirror a thesis and its (id, name, kind) entities as (Thesis)-[:ABOUT]->(Entity)."""
+        conn = ladybug.Connection(self.database)
+        conn.execute("MERGE (:Thesis {id: $id})", {"id": str(thesis_id)})
+        for entity_id, name, kind in entities:
+            conn.execute("MATCH (t:Thesis {id: $t}) MERGE (n:Entity {id: $n}) ON CREATE SET n.name = $name, "
+                         "n.kind = $kind MERGE (t)-[:ABOUT]->(n)",
+                         {"t": str(thesis_id), "n": str(entity_id), "name": name, "kind": kind})
+
     def read_only_query(self, cypher: str, max_rows: int) -> list[dict]:
         """Run one statement in a read-only transaction. Preparing it rejects multi-statement
         input, which could otherwise COMMIT out of the read-only transaction."""
