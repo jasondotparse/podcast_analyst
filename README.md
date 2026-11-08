@@ -37,3 +37,5 @@ app** for HMR development, or **serve front end** when the backend is already ru
 - [Docker and AWS deployment](docs/aws_deployment.md)
 - [Longer-term deployment plan](docs/devops.md)
 - [High-level design](docs/high_level_design.md)
+- [Database design](docs/database_design.md)
+- [Ingestion pipeline design](docs/etl_design.md)
