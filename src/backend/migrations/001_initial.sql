@@ -26,7 +26,8 @@ CREATE TABLE episodes (
     UNIQUE (podcast_id, external_episode_id)
 );
 
--- embedding dimension matches OpenAI text-embedding-3-small.
+-- Embeddings come from OpenAI text-embedding-3-large, shortened to 1536
+-- dimensions with the API's `dimensions` parameter. Query embeddings must use the same.
 CREATE TABLE passages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     episode_id UUID NOT NULL REFERENCES episodes ON DELETE CASCADE,
