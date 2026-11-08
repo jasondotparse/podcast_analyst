@@ -18,7 +18,7 @@ from .clients.codex_client import CodexError
 from .clients.graph_client import GraphClient
 from .clients.postgres_client import PostgresClient
 from .codex_config import sync_codex_config
-from .db import migrate_postgres, open_graph
+from .db.db import migrate_postgres, open_graph
 from .ingestion.claim_extractor import ClaimExtractor
 from .ingestion.ingestion_service import IngestionService
 from .ingestion.models import EpisodeMetadata

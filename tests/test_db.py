@@ -9,7 +9,7 @@ import psycopg
 from psycopg.conninfo import make_conninfo
 import real_ladybug as ladybug
 
-from src.backend.db import migrate_postgres, open_graph
+from src.backend.db.db import migrate_postgres, open_graph
 
 
 ROOT = Path(__file__).resolve().parents[1]

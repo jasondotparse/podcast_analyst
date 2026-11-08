@@ -234,7 +234,7 @@ ingestion/models.py              EpisodeMetadata, IngestionJob, Episode, Episode
 
 - `src/backend/clients/codex_client.py`, `src/backend/chat.py`: the small harness changes above.
 - `codex/skills/extract-claims/SKILL.md`: the extraction instructions.
-- `src/backend/migrations/002_ingestion.sql`: the entity tables,
+- `src/backend/db/migrations/002_ingestion.sql`: the entity tables,
   `episodes.claims_extracted_at`, and the SELECT-only role.
 - **Tests:** unit-test the pure parts (chunker, fingerprint, hash, and finding a quote's
   passage). Add a check that `postgres_database_query` rejects writes. Run end to end on
