@@ -149,6 +149,18 @@ class PostgresClient:
 
     # ---- Agent tools -----------------------------------------------------
 
+    async def vector_search(self, embedding: list[float], limit: int) -> list[dict]:
+        """Passages closest to the embedding (cosine), with their episode's citation details."""
+        async with await self.connect() as conn:
+            cursor = await conn.execute(
+                "SELECT pod.name AS podcast, e.title AS episode, e.published_at, e.source_url, p.id AS passage_id, "
+                "p.text, round((1 - (p.embedding <=> %(v)s::vector))::numeric, 3) AS similarity "
+                "FROM passages p JOIN episodes e ON e.id = p.episode_id JOIN podcasts pod ON pod.id = e.podcast_id "
+                "WHERE p.embedding IS NOT NULL ORDER BY p.embedding <=> %(v)s::vector LIMIT %(limit)s",
+                {"v": str(embedding), "limit": limit})
+            columns = [column.name for column in cursor.description]
+            return [dict(zip(columns, row)) for row in await cursor.fetchall()]
+
     async def read_only_query(self, sql: str, max_rows: int) -> list[dict] | str:
         """Run one statement as the SELECT-only role in a READ ONLY transaction (migration 002)."""
         async with await self.connect() as conn:

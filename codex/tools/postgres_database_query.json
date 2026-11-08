@@ -1,0 +1,11 @@
+{
+  "type": "function",
+  "name": "postgres_database_query",
+  "description": "Run one read-only PostgreSQL query against the podcast database and get JSON rows back (at most 200 rows / 40,000 characters; longer output is cut off). Tables: podcasts(id, name, description); episodes(id, podcast_id, title, description, published_at, guests, source_url, transcript_text); passages(id, episode_id, ordinal, text, embedding) - never select embedding; claims(id, passage_id, text, evidence_quote, speaker); entities(id, name, kind: company|person|technology|concept); claim_entities(claim_id, entity_id); theses(id, description, is_active); ingestion_jobs(id, episode_id, status, current_step, error). IDs are UUIDs shared with the knowledge graph.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {"sql": {"type": "string", "description": "A single SELECT statement."}},
+    "required": ["sql"],
+    "additionalProperties": false
+  }
+}

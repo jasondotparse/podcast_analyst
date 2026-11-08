@@ -1,0 +1,57 @@
+{
+  "type": "function",
+  "name": "write_claim",
+  "description": "Save one claim from the episode you are extracting. evidence_quote must be copied verbatim from the transcript.",
+  "inputSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "text",
+      "evidence_quote",
+      "speaker",
+      "entities"
+    ],
+    "properties": {
+      "text": {
+        "type": "string",
+        "description": "The claim, self-contained."
+      },
+      "evidence_quote": {
+        "type": "string",
+        "description": "Verbatim transcript text, at most 250 words."
+      },
+      "speaker": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Who made the claim, if the transcript shows it."
+      },
+      "entities": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "kind"
+          ],
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "company",
+                "person",
+                "technology",
+                "concept"
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

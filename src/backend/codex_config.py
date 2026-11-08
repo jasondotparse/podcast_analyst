@@ -1,7 +1,11 @@
 """Install repository-owned files without disturbing Codex runtime state."""
 
+import json
 from pathlib import Path
 import shutil
+
+
+CODEX_SOURCE = Path(__file__).resolve().parents[2] / "codex"
 
 
 def sync_codex_config(source: Path, home: Path) -> None:
@@ -14,3 +18,8 @@ def sync_codex_config(source: Path, home: Path) -> None:
     if skills.exists():
         shutil.rmtree(skills)
     shutil.copytree(source / "skills", skills)
+
+
+def tool_specs(*names: str) -> list[dict]:
+    """Dynamic-tool definitions from codex/tools/<name>.json, for a thread's `dynamicTools`."""
+    return [json.loads((CODEX_SOURCE / "tools" / f"{name}.json").read_text()) for name in names]

@@ -1,10 +1,14 @@
 import asyncio
+import json
 import secrets
+from types import SimpleNamespace
 import unittest
+from unittest.mock import AsyncMock
 
 import psycopg
 from psycopg.conninfo import make_conninfo
 
+from src.backend.agent_tools import AgentTools
 from src.backend.clients.postgres_client import PostgresClient
 from src.backend.db.db import migrate_postgres
 from src.backend.ingestion.claim_extractor import ClaimExtractor
@@ -31,7 +35,8 @@ class PostgresBackedTests(unittest.IsolatedAsyncioTestCase):
         async with await psycopg.AsyncConnection.connect(DATABASE_URL, autocommit=True) as conn:
             await conn.execute(f"CREATE DATABASE {self.name}")
         self.db = PostgresClient(make_conninfo(DATABASE_URL, dbname=self.name))
-        self.extractor = ClaimExtractor(self.db, harness=None, skill=None)
+        self.tools = AgentTools(self.db, graph=None, embedder=None)
+        self.extractor = ClaimExtractor(self.db, harness=None, tools=self.tools, skill=None)
         await migrate_postgres(self.db.url)
         async with await self.db.connect() as conn:
             (podcast,) = await (await conn.execute("INSERT INTO podcasts (name) VALUES ('Chips') RETURNING id")).fetchone()
@@ -45,12 +50,28 @@ class PostgresBackedTests(unittest.IsolatedAsyncioTestCase):
         async with await psycopg.AsyncConnection.connect(DATABASE_URL, autocommit=True) as conn:
             await conn.execute(f"DROP DATABASE {self.name} WITH (FORCE)")
 
+    async def query(self, sql):
+        return await self.tools.call("postgres_database_query", {"sql": sql})
+
     async def test_query_tool_is_read_only_and_single_statement(self):
-        self.assertIn('"title": "Optics"', await self.extractor.query("SELECT title FROM episodes"))
+        self.assertIn('"title": "Optics"', await self.query("SELECT title FROM episodes"))
         for sql in ("DELETE FROM passages", "SELECT 1; DELETE FROM passages"):
             with self.assertRaises(psycopg.Error):
-                await self.extractor.query(sql)
-        self.assertIn('"ordinal": 0', await self.extractor.query("SELECT ordinal FROM passages"))
+                await self.query(sql)
+        self.assertIn('"ordinal": 0', await self.query("SELECT ordinal FROM passages"))
+
+    async def test_vector_search_returns_the_nearest_passages_with_citation_details(self):
+        def one_hot(index):
+            return [1.0 if position == index else 0.0 for position in range(1536)]
+        async with await self.db.connect() as conn:
+            await conn.execute("UPDATE passages SET embedding = %s::vector", (str(one_hot(0)),))
+            await conn.execute("INSERT INTO passages (episode_id, ordinal, text, embedding) "
+                               "VALUES (%s, 1, 'Copper is cheap.', %s::vector)", (self.episode, str(one_hot(1))))
+        self.tools.embedder = SimpleNamespace(embed=AsyncMock(return_value=[one_hot(1)]))
+        rows = json.loads(await self.tools.call("vector_search", {"query": "copper costs", "limit": 1}))
+        self.assertEqual([(row["text"], row["podcast"], row["episode"], float(row["similarity"])) for row in rows],
+                         [("Copper is cheap.", "Chips", "Optics", 1.0)])
+        self.tools.embedder.embed.assert_awaited_once_with(["copper costs"])
 
     async def test_write_claim_requires_a_verbatim_quote_and_is_idempotent(self):
         claim = {"text": "Lasers ship next year.", "evidence_quote": "Lasers  ship\nnext year.",
@@ -74,7 +95,7 @@ class PostgresBackedTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(results, ["Saved."] * 12)
 
     async def test_submit_queues_once_and_returns_the_existing_job_for_a_duplicate(self):
-        service = IngestionService(self.db, graph=None, openai=None, extractor=None)
+        service = IngestionService(self.db, graph=None, openai=None, embedder=None, extractor=None)
         metadata = EpisodeMetadata(podcast_name="Chips", podcast_description="Semiconductor news", title="Packaging")
         job, created = await service.submit(metadata, "Advanced packaging is the bottleneck.")
         self.assertTrue(created)

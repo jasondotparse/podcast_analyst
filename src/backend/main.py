@@ -13,11 +13,13 @@ from fastapi.staticfiles import StaticFiles
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field, Json
 
+from .agent_tools import RESEARCH_TOOLS, AgentTools
 from .chat import ChatHarness
 from .clients.codex_client import CodexError
+from .clients.embedding_client import EmbeddingClient
 from .clients.graph_client import GraphClient
 from .clients.postgres_client import PostgresClient
-from .codex_config import sync_codex_config
+from .codex_config import sync_codex_config, tool_specs
 from .db.db import migrate_postgres, open_graph
 from .ingestion.claim_extractor import ClaimExtractor
 from .ingestion.ingestion_service import IngestionService
@@ -47,17 +49,23 @@ async def lifespan(app: FastAPI):
     await migrate_postgres(database_url)
     graph = GraphClient(open_graph(Path(os.environ.get(
         "PODCAST_LADYBUG_PATH", ROOT / ".local" / "ladybug" / "graph.lbug"))))
+    db = PostgresClient(database_url)
+    openai = AsyncOpenAI(api_key=api_key)
+    embedder = EmbeddingClient(openai)
+    tools = AgentTools(db, graph, embedder)
+
     home = Path(os.environ.get("PODCAST_CODEX_HOME", ROOT / ".local" / "codex")).expanduser().resolve()
     sync_codex_config(ROOT / "codex", home)
     workspace = (ROOT / ".local" / "agent-workspace").resolve()
-    harness = ChatHarness(workspace, model=os.environ.get("CODEX_MODEL"))
+    # Chat threads get the read-only research tools.
+    harness = ChatHarness(workspace, model=os.environ.get("CODEX_MODEL"),
+                          tools=tool_specs(*RESEARCH_TOOLS), call_tool=tools.call)
     app.state.harness = harness
     await harness.client.start(api_key, home, workspace)
 
     # Compose the ingestion pipeline from its components.
-    db = PostgresClient(database_url)
-    extractor = ClaimExtractor(db, harness, home / "skills" / "extract-claims" / "SKILL.md")
-    app.state.ingestion = IngestionService(db, graph, AsyncOpenAI(api_key=api_key), extractor)
+    extractor = ClaimExtractor(db, harness, tools, home / "skills" / "extract-claims" / "SKILL.md")
+    app.state.ingestion = IngestionService(db, graph, openai, embedder, extractor)
     worker = asyncio.create_task(app.state.ingestion.run_worker())
     try:
         yield

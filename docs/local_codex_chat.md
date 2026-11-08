@@ -68,8 +68,9 @@ disabled. Codex's code-mode `exec` tool (`unified_exec`) is still enabled and ca
 read-only commands anywhere the sandbox allows reading; see
 [etl_design.md](etl_design.md#verification). Live web search is enabled through `codex/config.toml`; no podcast-specific
 tools are advertised.
-Ingestion extraction threads get two dynamic tools (`postgres_database_query`,
-`write_claim`) and the `extract-claims` skill; chat threads get no dynamic tools.
+Chat threads get three read-only research tools (`vector_search`, `graph_query`,
+`postgres_database_query`); ingestion extraction threads get `postgres_database_query`,
+`write_claim`, and the `extract-claims` skill. Tool definitions live in `codex/tools/`.
 Other server RPC requests receive an explicit error instead of hanging.
 
 ## Run on localhost:8000

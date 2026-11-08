@@ -83,8 +83,9 @@ One FastAPI process / one Uvicorn worker owns the embedded, disk-backed Ladybug 
 - **Configuration:** `DATABASE_URL` (required) and `PODCAST_LADYBUG_PATH` (default `.local/ladybug/graph.lbug`). Local setup: [local_development.md](local_development.md).
 - **Storage:** Compose runs `pgvector/pgvector:0.8.7-pg18-bookworm` on the private Compose network (no published port) and bind-mounts `/var/lib/podcast-analyst/postgres` and `/var/lib/podcast-analyst/ladybug` from the host. Data survives releases, container restarts, and Compose down/up, **but not EC2 instance replacement**; see [devops.md](devops.md#preserving-the-data-layer).
 - **Ingestion additions (`002_ingestion.sql`):** `entities(id, name, kind, UNIQUE(kind, name))` and `claim_entities(claim_id, entity_id)` keep extracted entities in Postgres so the graph can be rebuilt from it; `episodes.claims_extracted_at` marks finished claim extraction. See [etl_design.md](etl_design.md).
-- **Read-only SQL:** `postgres_database_query` runs each query as the `NOLOGIN` SELECT-only role `podcast_reader` (`SET LOCAL ROLE` inside a `READ ONLY` transaction), one statement at a time, with a 10 s statement timeout and capped output. For now only the ingestion extraction thread receives it; chat threads get it with the research skill.
-- **Not yet built:** `vector_search`, `graph_query`, and the chat-side database tools.
+- **Read-only SQL:** `postgres_database_query` runs each query as the `NOLOGIN` SELECT-only role `podcast_reader` (`SET LOCAL ROLE` inside a `READ ONLY` transaction), one statement at a time, with a 10 s statement timeout and capped output. Chat threads and the ingestion extraction thread receive it.
+- **Read-only Cypher:** `graph_query` prepares the query (Ladybug rejects multi-statement input when preparing, so `COMMIT; CREATE …` cannot escape) and runs it inside `BEGIN TRANSACTION READ ONLY`.
+- **Vector search:** `vector_search` embeds the query with the same `EmbeddingClient` used for passages and orders by `embedding <=> query` (cosine distance). Tool wiring: [agent_harness_design.md](agent_harness_design.md#8-dynamic-tools-no-mcp-server).
 
 ## End product example:
 Our data layer is designed to support a system that will work roughly like so:

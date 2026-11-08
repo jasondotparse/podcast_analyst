@@ -225,8 +225,9 @@ main.py                          HTTP: endpoints, request parsing, status codes;
   ▼
 ingestion/ingestion_service.py   IngestionService: submit/get/retry, the worker, the steps,
   │                              screening and embedding calls (OpenAI client injected)
-  ├─▶ ingestion/claim_extractor.py  ClaimExtractor: the Codex thread and its two tools
-  │                                 (ChatHarness and PostgresClient injected)
+  ├─▶ ingestion/claim_extractor.py  ClaimExtractor: the Codex thread and write_claim
+  │                                 (ChatHarness, PostgresClient, AgentTools injected)
+  ├─▶ clients/embedding_client.py EmbeddingClient: the one embedding model + dimensions
   ├─▶ clients/postgres_client.py PostgresClient: every SQL statement; returns domain values
   └─▶ clients/graph_client.py    GraphClient: every Cypher statement (MERGE projection)
 
@@ -234,7 +235,7 @@ ingestion/models.py              EpisodeMetadata, IngestionJob, Episode, Episode
 ```
 
 - `src/backend/clients/codex_client.py`, `src/backend/chat.py`: the small harness changes above.
-- `codex/skills/extract-claims/SKILL.md`: the extraction instructions.
+- `codex/skills/extract-claims/SKILL.md`: the extraction instructions; tool definitions are in `codex/tools/`.
 - `src/backend/db/migrations/002_ingestion.sql`: the entity tables,
   `episodes.claims_extracted_at`, and the SELECT-only role.
 - **Tests:** unit-test the pure parts (chunker, fingerprint, hash, and finding a quote's
