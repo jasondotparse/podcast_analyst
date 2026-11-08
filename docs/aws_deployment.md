@@ -295,6 +295,13 @@ then `docker compose up -d --wait app`.
 
 ## Validation
 
+The **thesis tool release** (`9790002924ed-20261108T235251-8032a9`) was deployed to beta on
+**November 8, 2026**; startup applied `003_thesis_entities`. In Chrome via the login page,
+"I'm bullish on AMZN." drew a follow-up question and saved nothing; the follow-up answer was
+saved with `add_thesis` (tagged AWS and Amazon); a detailed Nvidia thesis in a new chat was
+saved immediately. Both theses appeared as `(Thesis)-[:ABOUT]->(Entity)` in the graph, with no
+tool errors in the Codex traces.
+
 The **research tools release** (`dc14b25120ab-20261108T224728-0cbe50`) was deployed to beta
 on **November 8, 2026** with `./scripts/deploy.py beta` only. In Chrome (Playwright, via the
 login page), three chat questions were answered from beta's four ingested episodes with
