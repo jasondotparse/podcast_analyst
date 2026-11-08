@@ -1,3 +1,4 @@
+import asyncio
 import secrets
 import unittest
 
@@ -63,6 +64,14 @@ class PostgresBackedTests(unittest.IsolatedAsyncioTestCase):
                 "SELECT c.evidence_quote, e.name FROM claims c JOIN claim_entities ce ON ce.claim_id = c.id "
                 "JOIN entities e ON e.id = ce.entity_id")).fetchall()
         self.assertEqual(rows, [("Lasers ship next year.", "Sivers")])
+
+    async def test_concurrent_claims_sharing_entities_do_not_deadlock(self):
+        names = [f"Company {i}" for i in range(6)]
+        claims = [{"text": f"Claim {i}.", "evidence_quote": "Lasers ship next year.", "speaker": None,
+                   "entities": [{"name": name, "kind": "company"} for name in (names if i % 2 else names[::-1])]}
+                  for i in range(12)]
+        results = await asyncio.gather(*(self.extractor.write_claim(self.episode, claim) for claim in claims))
+        self.assertEqual(results, ["Saved."] * 12)
 
     async def test_submit_queues_once_and_returns_the_existing_job_for_a_duplicate(self):
         service = IngestionService(self.db, graph=None, openai=None, extractor=None)

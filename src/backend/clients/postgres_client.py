@@ -118,7 +118,9 @@ class PostgresClient:
                 (passage_id, text, evidence_quote, speaker, fingerprint))).fetchone()
             if claim is None:
                 return False
-            for name, kind in entities:
+            # Upsert in one global order: concurrent claims sharing entities would otherwise
+            # lock the same entity rows in different orders and deadlock.
+            for name, kind in sorted(set(entities)):
                 (entity_id,) = await (await conn.execute(
                     "INSERT INTO entities (name, kind) VALUES (%s, %s) "
                     "ON CONFLICT (kind, name) DO UPDATE SET name = EXCLUDED.name RETURNING id", (name, kind))).fetchone()
