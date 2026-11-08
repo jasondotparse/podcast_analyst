@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { post } from './api.js'
+import PipelineStatus from './components/PipelineStatus.jsx'
 import UploadPodcastButton from './components/UploadPodcastButton.jsx'
 
 export default function App() {
@@ -9,6 +10,9 @@ export default function App() {
   const [draft, setDraft] = useState('')
   const [messages, setMessages] = useState([])
   const [error, setError] = useState('')
+  const [ingestionJobId, setIngestionJobId] = useState(null)
+  // Stable, so PipelineStatus's hide timer is not reset by chat re-renders.
+  const clearIngestion = useCallback(() => setIngestionJobId(null), [])
   const sessionRequest = useRef(null)
   const bottom = useRef(null)
 
@@ -85,10 +89,11 @@ export default function App() {
 
   return (
     <main className="chat">
+      {ingestionJobId && <PipelineStatus key={ingestionJobId} jobId={ingestionJobId} onDismiss={clearIngestion} />}
       <header>
         <h1>Podcast Analyst</h1>
         <div className="header-actions">
-          <UploadPodcastButton />
+          <UploadPodcastButton onUploaded={(job) => setIngestionJobId(job.job_id)} />
           <form action="/api/logout" method="post"><button type="submit" className="secondary">Sign out</button></form>
         </div>
         <p role="status">{busy ? 'Codex is replying…' : connected ? 'Ready' : 'Connecting to Codex…'}</p>
