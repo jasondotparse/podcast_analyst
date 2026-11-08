@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 class EpisodeMetadata(BaseModel):
     podcast_name: str
+    podcast_description: str | None = None
     title: str
     description: str | None = None
     published_at: date | None = None

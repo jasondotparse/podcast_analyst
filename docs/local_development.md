@@ -42,7 +42,12 @@ and delete `.local/ladybug/`. See [the database design](database_design.md#imple
 
 ### Ingest a transcript
 
-With the backend running, upload a `.txt` transcript and poll its job; see the
+In the UI, **Upload podcast** opens a form: drop (or choose) a `.txt` transcript, fill in
+the podcast and episode fields, and submit. The form closes once the server accepts the
+upload (`202`) and shows the server's error otherwise, for example a duplicate (`409`).
+Components live in `src/frontend/src/components/`; API calls in `src/frontend/src/api.js`.
+
+With curl, upload a `.txt` transcript and poll its job; see the
 [ingestion design](etl_design.md#api). Extraction uses real OpenAI calls and takes a few minutes.
 
 ```bash

@@ -1,15 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-
-async function post(path, body) {
-  const response = await fetch(path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body ?? {}),
-  })
-  const data = await response.json()
-  if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Request failed.')
-  return data
-}
+import { post } from './api.js'
+import UploadPodcastButton from './components/UploadPodcastButton.jsx'
 
 export default function App() {
   const [sessionId, setSessionId] = useState(null)
@@ -96,7 +87,10 @@ export default function App() {
     <main className="chat">
       <header>
         <h1>Podcast Analyst</h1>
-        <form action="/api/logout" method="post"><button type="submit">Sign out</button></form>
+        <div className="header-actions">
+          <UploadPodcastButton />
+          <form action="/api/logout" method="post"><button type="submit" className="secondary">Sign out</button></form>
+        </div>
         <p role="status">{busy ? 'Codex is replying…' : connected ? 'Ready' : 'Connecting to Codex…'}</p>
       </header>
       <ol className="messages" aria-label="Conversation">

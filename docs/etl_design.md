@@ -196,8 +196,9 @@ turn/completed  status completed → set claims_extracted_at; anything else or >
 ## API
 
 `POST /api/ingestions` takes `multipart/form-data` with two fields:
-- `metadata` (JSON): `podcast_name` and `title` are required; `description`,
-  `published_at` (date), `guests` (list), and `source_url` are optional.
+- `metadata` (JSON): `podcast_name` and `title` are required; `podcast_description`,
+  `description` (the episode's), `published_at` (date), `guests` (list), and `source_url`
+  are optional. A provided `podcast_description` replaces the podcast's stored description.
 - `transcript`: a UTF-8 `.txt` file.
 
 Every ingestion endpoint returns the job as

@@ -46,12 +46,14 @@ class PostgresClient:
             content_hash, source_url))
 
     async def create_episode_job(self, metadata: EpisodeMetadata, transcript: str, content_hash: str) -> IngestionJob:
-        """Find or create the podcast by name, then insert the episode and its pending job."""
+        """Find (updating a provided description) or create the podcast by name, then insert
+        the episode and its pending job."""
         async with await self.connect() as conn:
-            podcast = await (await conn.execute("SELECT id FROM podcasts WHERE name = %s",
-                                                (metadata.podcast_name,))).fetchone() \
-                or await (await conn.execute("INSERT INTO podcasts (name) VALUES (%s) RETURNING id",
-                                             (metadata.podcast_name,))).fetchone()
+            podcast = await (await conn.execute(
+                "UPDATE podcasts SET description = COALESCE(%s, description) WHERE name = %s RETURNING id",
+                (metadata.podcast_description, metadata.podcast_name))).fetchone() \
+                or await (await conn.execute("INSERT INTO podcasts (name, description) VALUES (%s, %s) RETURNING id",
+                                             (metadata.podcast_name, metadata.podcast_description))).fetchone()
             (episode_id,) = await (await conn.execute(
                 "INSERT INTO episodes (podcast_id, title, description, published_at, guests, source_type, source_url, "
                 "content_hash, transcript_text) VALUES (%s, %s, %s, %s, %s, 'txt', %s, %s, %s) RETURNING id",
