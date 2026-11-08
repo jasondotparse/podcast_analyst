@@ -27,8 +27,8 @@ designed to slot in without restructuring.
 ```text
 POST /api/ingestions   (multipart: metadata JSON + transcript .txt)
   ├─ sha256 of the whitespace-normalized transcript → episodes.content_hash
-  ├─ already exists? → 409 {job_id, status} of the existing job
-  └─ insert podcast (find-or-create by name), episode, ingestion_job(pending) → 202 {job_id}
+  ├─ already exists? → 409 with the existing job
+  └─ insert podcast (find-or-create by name), episode, ingestion_job(pending) → 202 with the job
 
 Background worker: one in-process asyncio task, one job at a time (oldest pending first)
   screen → chunk → embed → extract_claims → project_graph
@@ -197,8 +197,11 @@ turn/completed  status completed → set claims_extracted_at; anything else or >
   `published_at` (date), `guests` (list), and `source_url` are optional.
 - `transcript`: a UTF-8 `.txt` file.
 
-It returns `202 {job_id, episode_id}`, `409 {job_id, status}`, or `422` for invalid
-input. It uses the same login session as the rest of `/api` (local loopback runs
+Every ingestion endpoint returns the job as
+`{job_id, episode_id, status, current_step, error}`. Uploads return `202` (new job), `409`
+(the episode already exists; the body is its existing job), or `422` (invalid input).
+`GET /api/ingestions/{job_id}` and `POST /api/ingestions/{job_id}/retry` return `404` for
+an unknown job. It uses the same login session as the rest of `/api` (local loopback runs
 without login).
 
 ```bash
@@ -207,15 +210,29 @@ curl -s -F 'metadata={"podcast_name":"Chip Talk","title":"Optical interconnects"
 curl -s http://127.0.0.1:8000/api/ingestions/<job_id>
 ```
 
-## Proposed layout and testing
+## Code layout and testing
 
-- `src/backend/ingestion.py`: routes, the worker loop, `STEPS`, the steps, and the
-  two tool handlers.
+Each layer only talks to the one below it, and dependencies are passed in through
+constructors (`main.py` wires them together at startup):
+
+```text
+main.py                          HTTP: endpoints, request parsing, status codes; gets the
+  │                              IngestionService through FastAPI Depends
+  ▼
+ingestion/ingestion_service.py   IngestionService: submit/get/retry, the worker, the steps,
+  │                              screening and embedding calls (OpenAI client injected)
+  ├─▶ ingestion/claim_extractor.py  ClaimExtractor: the Codex thread and its two tools
+  │                                 (ChatHarness and PostgresClient injected)
+  ├─▶ postgres_client.py         PostgresClient: every SQL statement; returns domain values
+  └─▶ graph_client.py            GraphClient: every Cypher statement (MERGE projection)
+
+ingestion/models.py              EpisodeMetadata, IngestionJob, Episode, EpisodeGraph
+```
+
 - `src/backend/codex_client.py`, `src/backend/chat.py`: the small harness changes above.
 - `codex/skills/extract-claims/SKILL.md`: the extraction instructions.
 - `src/backend/migrations/002_ingestion.sql`: the entity tables,
-  `episodes.claims_extracted_at`, and the SELECT-only role. Update
-  [database_design.md](database_design.md) to match.
+  `episodes.claims_extracted_at`, and the SELECT-only role.
 - **Tests:** unit-test the pure parts (chunker, fingerprint, hash, and finding a quote's
   passage). Add a check that `postgres_database_query` rejects writes. Run end to end on
   localhost with a real short transcript:
@@ -238,6 +255,10 @@ Local runs (`curl` against the backend on port 8000), November 2026:
 - The graph matched Postgres exactly: 2 episodes, 22 passages, 156 claims, 148 entities,
   533 `ABOUT` and 260 `MENTIONS` edges.
 - A duplicate upload returned `409` with the original job; missing metadata returned `422`.
+- After splitting the code into service and client layers, and tightening the skill to avoid
+  overlapping claims, a clean re-run of EE Times gave 31 denser claims (down from 82),
+  45 entities, and a graph matching Postgres. The `202`/`409`/`404`/`422` responses, the
+  screen rejection, and the idempotent retry were re-checked.
 - **Open question:** the Codex extraction thread also has Codex's built-in code-mode
   `exec` tool (`unified_exec`, on by default; `--disable shell_tool` does not remove it).
   In the first run it listed the repository and read `docs/` before querying the
