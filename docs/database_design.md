@@ -75,6 +75,15 @@ Use a **read-only PostgreSQL role** for SQL exploration and enforce read-only gr
 
 One FastAPI process / one Uvicorn worker owns the embedded, disk-backed Ladybug database and orchestrates a single ingestion at a time. Postgres is a normal Compose container; persist **both databases** on EC2-backed storage. Use a small in-process job loop and the `ingestion_jobs` table—**no Celery, Redis, SQS, separate graph service, or Lambda**. Codex may retain conversation memory for a coworker-like experience, but **database records determine operational truth** (what was ingested, which theses exist, and who should be alerted).
 
+## Implementation
+
+- **PostgreSQL schema:** [`src/backend/migrations/`](../src/backend/migrations/) holds numbered, forward-only SQL files. At startup FastAPI applies pending files, each in one transaction, and records them in `schema_migrations`. To change the schema, add `002_*.sql`; never edit an applied migration. `D = 1536` (OpenAI `text-embedding-3-small`).
+- **Choices the logical schema left open:** FK, status, and `created_at` columns are `NOT NULL`; enumerated `TEXT` fields have `CHECK` constraints; child rows are `ON DELETE CASCADE`. Episode dedupe is enforced by `UNIQUE(source_url)`, `UNIQUE(content_hash)`, and `UNIQUE(podcast_id, external_episode_id)`; NULLs never collide. Each joined FK is the leading column of a unique index, plus `alerts(thesis_id)`.
+- **Graph schema:** [`src/backend/graph_schema.cypher`](../src/backend/graph_schema.cypher) is the DDL above with `IF NOT EXISTS`, applied at every startup (`real_ladybug` 0.15.3). FastAPI holds Ladybug's exclusive file lock, so no other process, including `docker compose exec`, can open the graph while the app runs. The buffer pool is capped at 256 MiB for the shared 4 GiB host.
+- **Configuration:** `DATABASE_URL` (required) and `PODCAST_LADYBUG_PATH` (default `.local/ladybug/graph.lbug`). Local setup: [local_development.md](local_development.md).
+- **Storage:** Compose runs `pgvector/pgvector:0.8.7-pg18-bookworm` on the private Compose network (no published port) and bind-mounts `/var/lib/podcast-analyst/postgres` and `/var/lib/podcast-analyst/ladybug` from the host. Data survives releases, container restarts, and Compose down/up, **but not EC2 instance replacement**; see [devops.md](devops.md#preserving-the-data-layer).
+- **Not yet built:** the read-only PostgreSQL role and the Codex database tools; they ship together with those tools.
+
 ## End product example:
 Our data layer is designed to support a system that will work roughly like so:
 

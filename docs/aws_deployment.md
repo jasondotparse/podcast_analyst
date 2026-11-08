@@ -267,16 +267,49 @@ the release script. To create prod, deploy with `-c stage=prod`, configure its r
 `./scripts/deploy.py prod` from the repository root.
 
 To remove an environment, run `npm run cdk -- destroy -c stage=beta` from `infra/`.
-This terminates its instance, deletes its root disk and Docker volumes, releases
-the Elastic IP, and removes its A record. The existing hosted zone/domain and the
-ECR repository remain; retained ECR images can continue to incur storage charges.
-The shared CDK bootstrap stack also remains.
+This terminates its instance, deletes its root disk (**including both databases**)
+and Docker volumes, releases the Elastic IP, and removes its A record. The existing
+hosted zone/domain and the ECR repository remain; retained ECR images can continue
+to incur storage charges. The shared CDK bootstrap stack also remains.
 
-No database exists yet. Application releases never delete Docker volumes, but
-instance replacement/deletion loses the root disk. Before adding durable data,
-provision retained database storage and backups as described in [devops.md](devops.md).
+## Databases
+
+Compose runs PostgreSQL + pgvector as the private `db` service; the app container
+owns the embedded LadybugDB graph. Every release ensures these host directories exist:
+`/var/lib/podcast-analyst/postgres` (uid 999, the image's `postgres` user) and
+`/var/lib/podcast-analyst/ladybug` (uid 10001), both mode `0700`. The first
+release also writes `/opt/podcast-analyst/db.env` (mode `0600`) with a random
+`POSTGRES_PASSWORD` and the app's `DATABASE_URL`; the password never leaves the
+host. Postgres reads it only when initializing an empty data directory, so **never
+delete `db.env` while data exists**. App startup applies pending migrations; see
+[the database design](database_design.md#implementation).
+
+Releases, restarts, and Compose down/up preserve both databases. EC2 replacement
+or termination does not; see [devops.md](devops.md#preserving-the-data-layer).
+
+Inspect Postgres through SSM with
+`cd /opt/podcast-analyst && docker compose exec -T db psql -U podcast -c '\dt'`.
+The running app holds Ladybug's exclusive lock. To inspect the graph, run
+`docker compose stop app`, then `docker compose run --rm --no-deps -T app python -c '...'`,
+then `docker compose up -d --wait app`.
 
 ## Validation
+
+The **data layer release** was deployed to beta on **November 8, 2026**, without
+an infrastructure deployment:
+
+- Release tag: `ebd3e0e41108-20261108T160238-31f39b`.
+- All 17 local tests pass, including a migration test against a real throwaway
+  Postgres database and a Ladybug reopen/persistence test.
+- Before beta, the deploy flow was rehearsed on a Docker-in-Docker Linux host
+  (Compose v2.40.3) using the exact storage and `db.env` lines from `deploy.py`.
+- On beta: `001_initial` applied once; pgvector 0.8.7; all nine design tables plus
+  `schema_migrations`; `passages.embedding` is `vector(1536)`; 11 graph tables.
+  Data directories are owned by 999 and 10001 with mode `0700` on the root EBS (xfs)
+  volume; `db.env` is `0600`, owned by root.
+- A Postgres row and a graph node survived an app container recreate and were then
+  deleted. A second `deploy.py` run left `db.env` and migration history unchanged.
+- After startup, the host used 425 of 3839 MiB (app 95 MiB, db 41 MiB).
 
 The tool-runtime fix was deployed on **November 7, 2026** as
 `8abc73fd9016-20261107T220255-tools`. The image includes both pinned executables.

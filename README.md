@@ -21,8 +21,8 @@ app** for HMR development, or **serve front end** when the backend is already ru
 - [x] Local React/FastAPI app with VS Code launch configurations and frontend HMR.
 - [x] Codex chat streams replies and uses live web search; config and agent instructions live in Git, with an app-owned `CODEX_HOME`.
 - [x] Beta deployed over HTTPS with password login, server-side sessions, persistent Codex state, and the ECR/SSM deploy workflow.
-- [ ] **Next:** implement PostgreSQL + pgvector and LadybugDB, with persistent storage and migrations ([database design](docs/database_design.md)).
-- [ ] Build the ingestion pipeline that can ingest one episode end-to-end: transcript → passages/embeddings → grounded claims → graph projection. (docs/diagrams/etl_pipeline.png)
+- [x] PostgreSQL + pgvector and LadybugDB schemas on beta, with host-persisted storage and forward-only migrations ([database design](docs/database_design.md)).
+- [ ] **Next:** build the ingestion pipeline that can ingest one episode end-to-end: transcript → passages/embeddings → grounded claims → graph projection. (docs/diagrams/etl_pipeline.png)
   - [ ] handle .txt file transcript + podcast metadata
   - [ ] handle .mp3 file + podcast metadata
   - [ ] handle a youtube link + podcast metadata

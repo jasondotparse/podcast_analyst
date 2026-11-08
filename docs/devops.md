@@ -1,6 +1,6 @@
 # Podcast Intelligence Agent: DevOps & Deployment
 
-**Status:** React + Vite provides the local UI with HMR; FastAPI serves `/api/*` and the compiled UI at `/app/`. Docker builds the UI and backend into one image for the existing ECR/SSM release flow. Follow [AWS deployment instructions](aws_deployment.md) and [VS Code local setup](local_development.md). The React build is deployed and verified on beta. Beta deployment now includes password login and server-side sessions; databases remain later work.
+**Status:** React + Vite provides the local UI with HMR; FastAPI serves `/api/*` and the compiled UI at `/app/`. Docker builds the UI and backend into one image for the existing ECR/SSM release flow. Follow [AWS deployment instructions](aws_deployment.md) and [VS Code local setup](local_development.md). The React build is deployed and verified on beta. Beta deployment now includes password login and server-side sessions, plus PostgreSQL + pgvector and LadybugDB with empty schemas ([database design](database_design.md#implementation)).
 
 **Local agent work:** The Codex chat harness streams replies locally and is packaged for beta; see
 [local_codex_chat.md](local_codex_chat.md).
@@ -45,7 +45,8 @@ EC2 instance — public ports 80/443 only
        ├─ server-side login sessions ← opaque session-ID cookie
        ├─ protected React /app/* + /api/*, including SSE
        ├─ Codex App Server subprocess
-       └─ later: PostgreSQL + pgvector, LadybugDB
+       ├─ LadybugDB          embedded graph file, owned by this process
+       └─ PostgreSQL + pgvector (`db` container, private network)
 
 AWS supporting services
   ├─ ECR               Docker image registries
@@ -66,10 +67,11 @@ Initial Compose services:
 |---|---|---|
 | `edge` | Caddy: HTTPS → `app` | **Yes**, ports 80/443 |
 | `app` | Vite builds React; FastAPI serves it at `/app/`, handles `/api/*`, and enforces server-side session authentication | No |
+| `db` | PostgreSQL 18 + pgvector, version- and digest-pinned | No |
 
 The *React build* and *FastAPI service* ship together in one application image in **Amazon ECR**, tagged by Git commit SHA plus a unique release suffix. Caddy's image is version-pinned. A single `compose.yaml` connects the services over a private Docker network. Browser requests use same-origin `/api/*`, avoiding unnecessary CORS configuration. The image includes Codex 0.167.0 and the password/session implementation.
 
-When P0 starts, add persistent PostgreSQL/pgvector and the embedded Ladybug database. **Never store durable data solely inside a disposable container filesystem.** Use an EBS-backed volume or managed storage, with backup/snapshot planning. The Codex runtime is added only after the P−1 web stack is working.
+PostgreSQL/pgvector and the embedded Ladybug database store data in host bind mounts, never only inside a disposable container filesystem; see [Preserving the data layer](#preserving-the-data-layer).
 
 **Local development:** Vite on port 5173 provides React HMR and proxies `/api` to FastAPI on port 8000. The VS Code **run full stack app** compound starts both; **serve front end** starts only Vite. FastAPI also serves a built React snapshot at `/app/`. See [local_development.md](local_development.md); Docker Compose remains available for checking the deployment image.
 
@@ -173,8 +175,15 @@ One other thing: schema migrations should be explicit deployment steps, not some
 
 Bottom line: We should be able to deploy application changes fifty times a day without losing a single podcast, transcript, embedding, or graph relationship.
 
-The hello world EC2 host has no database yet. Establish retained storage before
-adding PostgreSQL or LadybugDB; its current root volume is disposable.
+**Current state (demo trade-off):** items 3 and 4 are implemented and migrations
+are forward-only, applied once each at app startup. Items 1 and 2 are deferred:
+both databases live under `/var/lib/podcast-analyst/{postgres,ladybug}` on the
+root EBS volume, alongside the host-generated `db.env` password file. Releases,
+restarts, and Compose down/up preserve them; **EC2 replacement or termination
+deletes them.** CDK replaces the instance when `infra/bootstrap.sh` or the AMI
+context changes, so check `cdk diff` for instance replacement before deploying
+infrastructure. The ~15–20 demo episodes can be re-ingested. Add the retained volume
+before the data is expensive to recreate.
 
 ## 8. P−1: definition of done
 
