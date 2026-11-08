@@ -136,7 +136,7 @@ Example `thread/start` (future dynamic-tool definitions will be added to `dynami
 {"id":2,"method":"thread/start","params":{"cwd":"/srv/podcast-analyst/agent-workspace","approvalPolicy":"never","sandbox":"read-only","dynamicTools":[]}}
 ```
 
-The filesystem path is illustrative and must exist on the deployment host. The tool list is empty until we build our first research tools. The `dynamicTools` field requires experimental API opt-in.
+The filesystem path is illustrative and must exist on the deployment host. Chat threads now advertise the research tools described in [section 8](#8-dynamic-tools-no-mcp-server). The `dynamicTools` field requires experimental API opt-in.
 
 ### Asking a question
 
@@ -266,7 +266,18 @@ FastAPI validates the requested tool, validates arguments, runs the Python handl
 
 Do not confuse Codex's `callId` with the JSON-RPC `id` used to answer the request. For execution failures, follow the generated schema's error/success conventions and provide a short safe error result without leaking secrets.
 
-The tool layer will eventually query PostgreSQL/pgvector evidence and LadybugDB relationships. **Tool implementation is explicitly deferred**; this design only specifies the integration boundary.
+**Implemented tools.** Definitions live in Git as `codex/tools/<name>.json` and are loaded with
+`codex_config.tool_specs()`. Handlers are thin pass-throughs to the database clients:
+
+| Tool | Threads | Handler |
+| --- | --- | --- |
+| `vector_search(query, limit=5)` | chat | `AgentTools` → `EmbeddingClient.embed` → `PostgresClient.vector_search` (pgvector cosine; returns passage text plus podcast, episode, date, URL) |
+| `graph_query(cypher)` | chat | `AgentTools` → `GraphClient.read_only_query` (one prepared statement in a read-only Ladybug transaction) |
+| `postgres_database_query(sql)` | chat, claim extraction | `AgentTools` → `PostgresClient.read_only_query` (SELECT-only role, `READ ONLY` transaction, one statement) |
+| `write_claim(...)` | claim extraction only | `ClaimExtractor.write_claim` (see [etl_design.md](etl_design.md)) |
+
+`AgentTools.call` serializes results to JSON and caps them at 200 rows / 40,000 characters.
+A handler exception is returned to the model as a failed tool result so it can correct itself.
 
 Dynamic tools are **experimental**, even when Codex itself is a stable release. We accept that tradeoff to avoid a separate MCP service for a small demonstration app.
 

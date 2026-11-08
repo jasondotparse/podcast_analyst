@@ -27,5 +27,18 @@ class GraphClient:
                          {"c": str(link.claim_id), "p": str(link.passage_id), "n": str(link.entity_id),
                           "name": link.name, "kind": link.kind})
 
+    def read_only_query(self, cypher: str, max_rows: int) -> list[dict]:
+        """Run one statement in a read-only transaction. Preparing it rejects multi-statement
+        input, which could otherwise COMMIT out of the read-only transaction."""
+        conn = ladybug.Connection(self.database)
+        conn.execute("BEGIN TRANSACTION READ ONLY")
+        result = conn.execute(conn.prepare(cypher))  # A failing query ends the transaction itself.
+        columns = result.get_column_names()
+        rows = []
+        while result.has_next() and len(rows) < max_rows:
+            rows.append(dict(zip(columns, result.get_next())))
+        conn.execute("ROLLBACK")
+        return rows
+
     def close(self) -> None:
         self.database.close()

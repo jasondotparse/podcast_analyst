@@ -295,6 +295,12 @@ then `docker compose up -d --wait app`.
 
 ## Validation
 
+The **research tools release** (`dc14b25120ab-20261108T224728-0cbe50`) was deployed to beta
+on **November 8, 2026** with `./scripts/deploy.py beta` only. In Chrome (Playwright, via the
+login page), three chat questions were answered from beta's four ingested episodes with
+verbatim, attributed quotes. Codex traces showed `vector_search`, `graph_query`, and
+`postgres_database_query` calls and no tool errors.
+
 The **`.txt` ingestion release** (`3e0d37683c2e-20261108T211604-a65dcd`) was deployed
 to beta on **November 8, 2026** with `./scripts/deploy.py beta` only. Startup applied
 `002_ingestion`. Through the public HTTPS API with a password login, the same `curl`

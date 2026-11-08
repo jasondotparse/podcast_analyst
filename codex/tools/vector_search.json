@@ -1,0 +1,14 @@
+{
+  "type": "function",
+  "name": "vector_search",
+  "description": "Semantic search over transcript passages. Returns the most similar passages with their verbatim text, podcast, episode title, published date, source URL, and similarity score (1 is identical).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "query": {"type": "string", "description": "What to look for, in natural language."},
+      "limit": {"type": "integer", "description": "Number of passages to return (1-20, default 5)."}
+    },
+    "required": ["query"],
+    "additionalProperties": false
+  }
+}

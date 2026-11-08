@@ -27,7 +27,8 @@ app** for HMR development, or **serve front end** when the backend is already ru
   - [ ] handle .mp3 file + podcast metadata
   - [ ] handle a youtube link + podcast metadata
   - [ ] update the UI with fields where the above 3 can be provided by the user (.txt upload form done)
-- [ ] Connect Codex database tools and a research skill; verify cited answers across the initial episode set.
+- [x] Connect Codex database tools (`vector_search`, `graph_query`, `postgres_database_query`); cited answers verified locally.
+- [ ] A research skill; verify cited answers across the initial episode set.
 - [ ] watched sources / scheduled discovery & ingestion
 - [ ] email alerts. 
 - [ ] Prod env deployment.

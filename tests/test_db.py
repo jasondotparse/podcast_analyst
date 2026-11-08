@@ -9,6 +9,7 @@ import psycopg
 from psycopg.conninfo import make_conninfo
 import real_ladybug as ladybug
 
+from src.backend.clients.graph_client import GraphClient
 from src.backend.db.db import migrate_postgres, open_graph
 
 
@@ -33,6 +34,22 @@ class GraphSchemaTests(unittest.TestCase):
             rows = connection.execute("MATCH (:Claim {id: 'c1'})-[:EVIDENCED_BY]->(p) RETURN p.id").get_all()
             self.assertEqual(rows, [["p1"]])
             database.close()
+
+
+    def test_read_only_query_reads_and_refuses_writes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            graph = GraphClient(open_graph(Path(directory) / "graph.lbug"))
+            ladybug.Connection(graph.database).execute(
+                "CREATE (:Claim {id: 'c1'})-[:ABOUT]->(:Entity {id: 'e1', name: 'Amazon', kind: 'company'})")
+            self.assertEqual(graph.read_only_query(
+                "MATCH (c:Claim)-[:ABOUT]->(e:Entity) RETURN c.id AS claim, e.name AS entity", 10),
+                [{"claim": "c1", "entity": "Amazon"}])
+            for cypher in ("CREATE (:Entity {id: 'e2'})", "COMMIT; CREATE (:Entity {id: 'e3'})",
+                           "MATCH (n:Missing) RETURN n"):
+                with self.assertRaises(RuntimeError):
+                    graph.read_only_query(cypher, 10)
+            self.assertEqual(graph.read_only_query("MATCH (e:Entity) RETURN count(e) AS n", 10), [{"n": 1}])
+            graph.close()
 
 
 @unittest.skipUnless(DATABASE_URL, "DATABASE_URL is not set")

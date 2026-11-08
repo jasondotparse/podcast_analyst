@@ -33,10 +33,23 @@ class ChatSession:
         self.changed.set()
 
 
+CHAT_INSTRUCTIONS = (
+    "You are the Podcast Analyst research assistant. Answer from the ingested podcast data using your tools: "
+    "vector_search finds relevant transcript passages; postgres_database_query reads claims, episodes, and "
+    "metadata; graph_query follows links between episodes, passages, claims, and entities. Back each finding "
+    "with the podcast, episode, speaker, and a verbatim quote, plus the episode URL when there is one. If the "
+    "data holds no evidence, say so. Do not inspect local files or run commands."
+)
+
+
 class ChatHarness:
-    def __init__(self, workspace: Path, model: str | None = None):
+    def __init__(self, workspace: Path, model: str | None = None, tools: list[dict] | None = None,
+                 call_tool=None):
         self.workspace = workspace
         self.model = model
+        # Dynamic tools advertised to every chat thread, and the handler that runs them.
+        self.tools = tools or []
+        self.chat_tool_handler = call_tool
         self.sessions: dict[str, ChatSession] = {}
         self.by_thread: dict[str, ChatSession] = {}
         # Background (pipeline) threads: thread ID -> (turn-completed future, tool handler).
@@ -60,8 +73,8 @@ class ChatHarness:
         self.require_ready()
         params = {
             "cwd": str(self.workspace), "approvalPolicy": "never", "sandbox": "read-only",
-            "dynamicTools": [],
-            "developerInstructions": "You are the Podcast Analyst chat assistant. Respond to the user's messages. No podcast data or research tools are connected yet. Do not inspect local files or run commands.",
+            "dynamicTools": self.tools,
+            "developerInstructions": CHAT_INSTRUCTIONS,
         }
         if self.model:
             params["model"] = self.model
@@ -123,9 +136,13 @@ class ChatHarness:
         return thread_id
 
     def server_request(self, method: str, params: dict):
+        if method != "item/tool/call":
+            return None
         task = self.background.get(params.get("threadId"))
-        if method == "item/tool/call" and task:
+        if task:
             return self.call_tool(task[1], params)
+        if params.get("threadId") in self.by_thread and self.chat_tool_handler:
+            return self.call_tool(self.chat_tool_handler, params)
         return None
 
     async def call_tool(self, handler, params: dict) -> dict:

@@ -11,6 +11,7 @@ from uuid import UUID
 
 from openai import AsyncOpenAI
 
+from ..clients.embedding_client import EmbeddingClient
 from ..clients.graph_client import GraphClient
 from ..clients.postgres_client import PostgresClient
 from .claim_extractor import ClaimExtractor
@@ -20,7 +21,7 @@ from .models import EpisodeMetadata, IngestionJob
 log = logging.getLogger(__name__)
 
 MODEL = "gpt-6-luna"
-EMBEDDING_MODEL, EMBEDDING_DIMENSIONS, EMBEDDING_BATCH = "text-embedding-3-large", 1536, 64
+EMBEDDING_BATCH = 64
 PASSAGE_WORDS, OVERLAP_WORDS = 750, 250
 
 
@@ -54,10 +55,12 @@ def split_passages(text: str) -> list[str]:
 
 
 class IngestionService:
-    def __init__(self, db: PostgresClient, graph: GraphClient, openai: AsyncOpenAI, extractor: ClaimExtractor):
+    def __init__(self, db: PostgresClient, graph: GraphClient, openai: AsyncOpenAI, embedder: EmbeddingClient,
+                 extractor: ClaimExtractor):
         self.db = db
         self.graph = graph
         self.openai = openai
+        self.embedder = embedder
         self.extractor = extractor
         self.steps = [self.screen, self.chunk, self.embed, self.extract_claims, self.project_graph]
 
@@ -128,10 +131,8 @@ class IngestionService:
         passages = await self.db.passages_without_embeddings(episode_id)
         for start in range(0, len(passages), EMBEDDING_BATCH):
             batch = passages[start:start + EMBEDDING_BATCH]
-            response = await self.openai.embeddings.create(
-                model=EMBEDDING_MODEL, dimensions=EMBEDDING_DIMENSIONS, input=[text for _, text in batch])
-            await self.db.set_embeddings([(passage_id, item.embedding)
-                                          for (passage_id, _), item in zip(batch, response.data)])
+            vectors = await self.embedder.embed([text for _, text in batch])
+            await self.db.set_embeddings([(passage_id, vector) for (passage_id, _), vector in zip(batch, vectors)])
 
     async def extract_claims(self, episode_id: UUID) -> None:
         if (await self.db.get_episode(episode_id)).claims_extracted_at:
