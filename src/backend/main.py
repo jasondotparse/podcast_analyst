@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from .chat import ChatHarness
 from .codex_client import CodexError
 from .codex_config import sync_codex_config
+from .db import migrate_postgres, open_graph
 from .auth import PasswordAuthMiddleware, router as auth_router, valid_login
 
 
@@ -32,6 +33,12 @@ async def lifespan(app: FastAPI):
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("Set OPENAI_API_KEY in the repository's .env before starting the backend.")
+    app.state.database_url = os.environ.get("DATABASE_URL")
+    if not app.state.database_url:
+        raise RuntimeError("Set DATABASE_URL; see docs/local_development.md.")
+    await migrate_postgres(app.state.database_url)
+    app.state.graph = open_graph(Path(os.environ.get(
+        "PODCAST_LADYBUG_PATH", ROOT / ".local" / "ladybug" / "graph.lbug")))
     home = Path(os.environ.get("PODCAST_CODEX_HOME", ROOT / ".local" / "codex")).expanduser().resolve()
     sync_codex_config(ROOT / "codex", home)
     workspace = (ROOT / ".local" / "agent-workspace").resolve()
@@ -42,6 +49,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         await harness.client.close()
+        app.state.graph.close()
 
 
 app = FastAPI(openapi_url=None, lifespan=lifespan)

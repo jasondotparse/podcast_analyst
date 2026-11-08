@@ -57,8 +57,16 @@ cd /opt/podcast-analyst
 # Prevent two local deploy commands from updating the same host simultaneously.
 exec 9>.deploy.lock
 flock -n 9
-# Keep Codex state on the host's EBS filesystem, writable by the app user.
-install -d -m 700 -o 10001 -g 10001 /var/lib/podcast-analyst/codex
+# Keep Codex and graph state on the host's EBS filesystem, writable by the app user.
+install -d -m 700 -o 10001 -g 10001 /var/lib/podcast-analyst/codex /var/lib/podcast-analyst/ladybug
+# Postgres data belongs to the image's postgres user (uid 999).
+install -d -m 700 -o 999 -g 999 /var/lib/podcast-analyst/postgres
+# Generate the database password once; it never leaves the host. Postgres only
+# reads it at first initialization, so never delete db.env while data exists.
+if ! test -s db.env; then
+    password=$(python3 -c 'import secrets; print(secrets.token_hex(32))')
+    printf 'POSTGRES_PASSWORD=%s\\nDATABASE_URL=postgresql://podcast:%s@db:5432/podcast\\n' "$password" "$password" > db.env
+fi
 printf %s {shlex.quote(release_archive())} | base64 --decode | tar -xz
 printf %s {shlex.quote(environment64)} | base64 --decode > .env.next
 # Retrieve secrets using the host role; never include them in command payloads/logs.

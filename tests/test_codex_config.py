@@ -79,7 +79,10 @@ class StartupConfigTests(unittest.IsolatedAsyncioTestCase):
                 "OPENAI_API_KEY": "test-api-key",
                 "PODCAST_CODEX_HOME": str(home),
                 "CODEX_HOME": str(Path(temporary) / "personal-home"),
+                "DATABASE_URL": "postgresql://unused",
             }), patch("src.backend.main.load_dotenv"), patch(
+                "src.backend.main.migrate_postgres", AsyncMock()
+            ), patch("src.backend.main.open_graph"), patch(
                 "src.backend.main.ChatHarness"
             ) as harness_type:
                 client = harness_type.return_value.client
