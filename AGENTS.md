@@ -6,3 +6,4 @@
 * gh cli is available in your session. Upstream repo: https://github.com/jasondotparse/podcast_analyst 
 * always make a new branch for new features - main is branh to submit PRs against when a feature is complete. Keep PR descriptions short & sweet.
 * aws region = us-east-1
+* Make sure to keep any /docs/*.md files up to date. 

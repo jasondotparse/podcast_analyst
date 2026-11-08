@@ -21,6 +21,29 @@ for setup and runtime details. No AWS credentials are needed. Install Microsoft'
 VS Code. The frontend configuration reads only its optional
 `src/frontend/.env.local`, rather than the backend's root `.env`.
 
+### Local databases
+
+The backend requires PostgreSQL + pgvector. Start a loopback-only dev container
+once; it restarts with Docker Desktop and keeps data in the `podcast-postgres` volume:
+
+```bash
+docker run -d --name podcast-postgres --restart unless-stopped -p 127.0.0.1:5432:5432 \
+  -e POSTGRES_USER=podcast -e POSTGRES_PASSWORD=podcast -e POSTGRES_DB=podcast \
+  -v podcast-postgres:/var/lib/postgresql pgvector/pgvector:0.8.7-pg18-bookworm
+echo 'DATABASE_URL=postgresql://podcast:podcast@127.0.0.1:5432/podcast' >> .env
+```
+
+On startup FastAPI applies pending migrations and opens the embedded LadybugDB
+graph at `.local/ladybug/graph.lbug`. The backend process holds the graph's file
+lock, so stop it before opening the graph from another script. Inspect Postgres
+with `docker exec -it podcast-postgres psql -U podcast`. To reset local data, stop
+the backend, then `docker rm -f podcast-postgres && docker volume rm podcast-postgres`
+and delete `.local/ladybug/`. See [the database design](database_design.md#implementation).
+
+Run tests with `.venv/bin/python -m unittest discover -s tests -v`. The Postgres
+test creates and drops a temporary database through `DATABASE_URL`; without it
+set, that test is skipped.
+
 ## VS Code run configurations
 
 Open **Run and Debug**, choose a configuration, and press **F5**:

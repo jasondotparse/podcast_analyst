@@ -6,10 +6,14 @@ services:
     build: .
     environment:
       PODCAST_CODEX_HOME: /var/lib/podcast-analyst/codex
+      PODCAST_LADYBUG_PATH: /var/lib/podcast-analyst/ladybug/graph.lbug
       PODCAST_REQUIRE_AUTH: "1"
       PODCAST_PUBLIC_ORIGIN: https://${APP_DOMAIN:-localhost}
     env_file:
       - path: ./runtime.env
+        format: raw
+      # Host-generated POSTGRES_PASSWORD and DATABASE_URL; see scripts/deploy.py.
+      - path: ./db.env
         format: raw
     volumes:
       - type: bind
@@ -17,8 +21,42 @@ services:
         target: /var/lib/podcast-analyst/codex
         bind:
           create_host_path: false
+      - type: bind
+        source: /var/lib/podcast-analyst/ladybug
+        target: /var/lib/podcast-analyst/ladybug
+        bind:
+          create_host_path: false
     ports:
       - "127.0.0.1:8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  db:
+    image: pgvector/pgvector:0.8.7-pg18-bookworm@sha256:c29f30688a9ad961691bdf0ec1650717cc132a5814619d80f80463d6e4c42e47
+    environment:
+      POSTGRES_USER: podcast
+      POSTGRES_DB: podcast
+    env_file:
+      - path: ./db.env
+        format: raw
+    volumes:
+      - type: bind
+        source: /var/lib/podcast-analyst/postgres
+        target: /var/lib/postgresql
+        bind:
+          create_host_path: false
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "podcast", "-d", "podcast"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
     restart: unless-stopped
     logging:
       driver: json-file
