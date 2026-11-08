@@ -54,7 +54,7 @@ async def run_job(job):
 | Step | Does | Skips its work when |
 |---|---|---|
 | `screen` | One Decisions API call on the metadata and transcript with two `choice` questions, each answered `accept` or `reject`: `on_topic` (relevant to public-equities research: companies, markets, tech, macro?) and `prompt_injection` (does it try to instruct an AI system?). Any `reject` skips the job. No reason is returned. | passages already exist |
-| `chunk` | ~500-word passages with ~100 words of overlap, zero-based `ordinal`; timestamps stay NULL for `.txt`. Insert all passages in one transaction. | passages already exist |
+| `chunk` | ~750-word passages with ~250 words of overlap, zero-based `ordinal`; timestamps stay NULL for `.txt`. Insert all passages in one transaction. | passages already exist |
 | `embed` | Embed passages `WHERE embedding IS NULL`, in batches. | none are NULL |
 | `extract_claims` | One Codex thread for the whole episode (below). It reads the transcript with SQL and writes claims one at a time with `write_claim`. When its turn completes, set `episodes.claims_extracted_at`. | `claims_extracted_at` is set; otherwise first delete claims left by an interrupted run |
 | `project_graph` | Deterministic `MERGE`s from Postgres: Episode, Passage, `CONTAINS`, Claim, `EVIDENCED_BY`, Entity, `ABOUT` (Claim→Entity), and `MENTIONS` (Passage→Entity, derived from that passage's claim entities). | never; `MERGE` makes it a safe full rerun |
@@ -101,7 +101,7 @@ turn/completed  status completed → set claims_extracted_at; anything else or >
   - What counts as a claim: an attributable assertion relevant to equities research, such as
     a forecast, a figure, or a causal or competitive statement.
   - One atomic, self-contained claim per call, with pronouns resolved and timeframes kept.
-  - A short verbatim quote, under 100 words.
+  - A verbatim quote of up to 250 words.
   - The speaker only when the transcript supports it.
   - Entity kinds `company`, `person`, `technology`, and `concept`, with no alias merging.
   - Web search is for context only, never a claim source.
@@ -168,8 +168,8 @@ turn/completed  status completed → set claims_extracted_at; anything else or >
 
     At worst, an injected transcript writes bad claims for its own episode, or steers a web
     search or a read query.
-11. **Chunk by words, not tokens.** That avoids a tokenizer dependency. With 100 words
-    of overlap, any quote of up to 100 words fits inside some passage; a quote found in
+11. **Chunk by words, not tokens.** That avoids a tokenizer dependency. With 250 words
+    of overlap, any quote of up to 250 words fits inside some passage; a quote found in
     two passages attaches to the first.
 12. **Claim `fingerprint`** = sha256 of the lowercased, whitespace-collapsed claim text
     plus evidence quote. With `UNIQUE(passage_id, fingerprint)` and `ON CONFLICT DO
