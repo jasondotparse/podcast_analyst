@@ -295,6 +295,13 @@ then `docker compose up -d --wait app`.
 
 ## Validation
 
+The **`.txt` ingestion release** (`3e0d37683c2e-20261108T211604-a65dcd`) was deployed
+to beta on **November 8, 2026** with `./scripts/deploy.py beta` only. Startup applied
+`002_ingestion`. Through the public HTTPS API with a password login, the same `curl`
+cases as local development completed; results are in
+[etl_design.md](etl_design.md#verification). Inspecting the graph on beta requires
+stopping the app container, as described under [Databases](#databases).
+
 The **data layer release** was deployed to beta on **November 8, 2026**, without
 an infrastructure deployment:
 

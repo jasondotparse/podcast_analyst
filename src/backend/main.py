@@ -3,17 +3,25 @@ from contextlib import asynccontextmanager
 import json
 import os
 from pathlib import Path
+from typing import Annotated
+from uuid import UUID
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from openai import AsyncOpenAI
+from pydantic import BaseModel, Field, Json
 
 from .chat import ChatHarness
-from .codex_client import CodexError
+from .clients.codex_client import CodexError
+from .clients.graph_client import GraphClient
+from .clients.postgres_client import PostgresClient
 from .codex_config import sync_codex_config
-from .db import migrate_postgres, open_graph
+from .db.db import migrate_postgres, open_graph
+from .ingestion.claim_extractor import ClaimExtractor
+from .ingestion.ingestion_service import IngestionService
+from .ingestion.models import EpisodeMetadata
 from .auth import PasswordAuthMiddleware, router as auth_router, valid_login
 
 
@@ -33,23 +41,31 @@ async def lifespan(app: FastAPI):
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("Set OPENAI_API_KEY in the repository's .env before starting the backend.")
-    app.state.database_url = os.environ.get("DATABASE_URL")
-    if not app.state.database_url:
+    database_url = os.environ.get("DATABASE_URL")
+    if not database_url:
         raise RuntimeError("Set DATABASE_URL; see docs/local_development.md.")
-    await migrate_postgres(app.state.database_url)
-    app.state.graph = open_graph(Path(os.environ.get(
-        "PODCAST_LADYBUG_PATH", ROOT / ".local" / "ladybug" / "graph.lbug")))
+    await migrate_postgres(database_url)
+    graph = GraphClient(open_graph(Path(os.environ.get(
+        "PODCAST_LADYBUG_PATH", ROOT / ".local" / "ladybug" / "graph.lbug"))))
     home = Path(os.environ.get("PODCAST_CODEX_HOME", ROOT / ".local" / "codex")).expanduser().resolve()
     sync_codex_config(ROOT / "codex", home)
     workspace = (ROOT / ".local" / "agent-workspace").resolve()
     harness = ChatHarness(workspace, model=os.environ.get("CODEX_MODEL"))
     app.state.harness = harness
     await harness.client.start(api_key, home, workspace)
+
+    # Compose the ingestion pipeline from its components.
+    db = PostgresClient(database_url)
+    extractor = ClaimExtractor(db, harness, home / "skills" / "extract-claims" / "SKILL.md")
+    app.state.ingestion = IngestionService(db, graph, AsyncOpenAI(api_key=api_key), extractor)
+    worker = asyncio.create_task(app.state.ingestion.run_worker())
     try:
         yield
     finally:
+        worker.cancel()
+        await asyncio.gather(worker, return_exceptions=True)
         await harness.client.close()
-        app.state.graph.close()
+        graph.close()
 
 
 app = FastAPI(openapi_url=None, lifespan=lifespan)
@@ -120,6 +136,36 @@ async def events(session_id: str, request: Request):
     return StreamingResponse(stream(), media_type="text/event-stream", headers={
         "Cache-Control": "no-cache", "X-Accel-Buffering": "no",
     })
+
+
+def ingestion_service(request: Request) -> IngestionService:
+    return request.app.state.ingestion
+
+
+Ingestion = Annotated[IngestionService, Depends(ingestion_service)]
+
+
+@app.post("/api/ingestions", status_code=202)
+async def create_ingestion(metadata: Annotated[Json[EpisodeMetadata], Form()], transcript: UploadFile,
+                           ingestion: Ingestion):
+    job, created = await ingestion.submit(metadata, (await transcript.read()).decode())
+    return job if created else JSONResponse(job.model_dump(mode="json"), status_code=409)
+
+
+@app.get("/api/ingestions/{job_id}")
+async def get_ingestion(job_id: UUID, ingestion: Ingestion):
+    job = await ingestion.get_job(job_id)
+    if job is None:
+        raise HTTPException(404, "Unknown ingestion job.")
+    return job
+
+
+@app.post("/api/ingestions/{job_id}/retry", status_code=202)
+async def retry_ingestion(job_id: UUID, ingestion: Ingestion):
+    job = await ingestion.retry(job_id)
+    if job is None:
+        raise HTTPException(404, "Unknown ingestion job.")
+    return job
 
 
 @app.get("/ready")
