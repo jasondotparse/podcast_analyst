@@ -11,8 +11,8 @@ from uuid import UUID
 
 from openai import AsyncOpenAI
 
-from ..graph_client import GraphClient
-from ..postgres_client import PostgresClient
+from ..clients.graph_client import GraphClient
+from ..clients.postgres_client import PostgresClient
 from .claim_extractor import ClaimExtractor
 from .models import EpisodeMetadata, IngestionJob
 

@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 
-from .codex_client import CodexAppServerClient, CodexError
+from .clients.codex_client import CodexAppServerClient, CodexError
 
 
 log = logging.getLogger(__name__)

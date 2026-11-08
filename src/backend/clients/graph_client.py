@@ -2,7 +2,7 @@
 
 import real_ladybug as ladybug
 
-from .ingestion.models import EpisodeGraph
+from ..ingestion.models import EpisodeGraph
 
 
 class GraphClient:

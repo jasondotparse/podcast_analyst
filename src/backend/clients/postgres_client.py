@@ -4,7 +4,7 @@ from uuid import UUID
 
 import psycopg
 
-from .ingestion.models import EntityLink, Episode, EpisodeGraph, EpisodeMetadata, IngestionJob
+from ..ingestion.models import EntityLink, Episode, EpisodeGraph, EpisodeMetadata, IngestionJob
 
 
 JOB_COLUMNS = "id, episode_id, status, current_step, error"

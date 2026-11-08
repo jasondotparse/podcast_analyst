@@ -4,11 +4,11 @@ import unittest
 import psycopg
 from psycopg.conninfo import make_conninfo
 
+from src.backend.clients.postgres_client import PostgresClient
 from src.backend.db import migrate_postgres
 from src.backend.ingestion.claim_extractor import ClaimExtractor
 from src.backend.ingestion.ingestion_service import OVERLAP_WORDS, IngestionService, split_passages
 from src.backend.ingestion.models import EpisodeMetadata
-from src.backend.postgres_client import PostgresClient
 from tests.test_db import DATABASE_URL
 
 

@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 from fastapi import HTTPException
 
 from src.backend.chat import ChatHarness, ChatSession
-from src.backend.codex_client import CodexAppServerClient, CodexError
+from src.backend.clients.codex_client import CodexAppServerClient, CodexError
 
 
 class RpcTests(unittest.IsolatedAsyncioTestCase):

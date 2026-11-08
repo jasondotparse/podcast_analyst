@@ -7,7 +7,7 @@ from pathlib import Path
 from uuid import UUID
 
 from ..chat import ChatHarness
-from ..postgres_client import PostgresClient
+from ..clients.postgres_client import PostgresClient
 
 
 QUERY_ROWS, QUERY_CHARS = 200, 40_000
