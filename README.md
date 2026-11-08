@@ -26,7 +26,7 @@ app** for HMR development, or **serve front end** when the backend is already ru
   - [x] handle .txt file transcript + podcast metadata ([ingestion design](docs/etl_design.md))
   - [ ] handle .mp3 file + podcast metadata
   - [ ] handle a youtube link + podcast metadata
-  - [ ] update the UI with fields where the above 3 can be provided by the user
+  - [ ] update the UI with fields where the above 3 can be provided by the user (.txt upload form done)
 - [ ] Connect Codex database tools and a research skill; verify cited answers across the initial episode set.
 - [ ] watched sources / scheduled discovery & ingestion
 - [ ] email alerts. 

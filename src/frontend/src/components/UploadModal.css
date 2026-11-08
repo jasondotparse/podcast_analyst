@@ -1,0 +1,27 @@
+.upload-modal {
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 24px;
+  border: 0;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgb(23 33 46 / 25%);
+  color: inherit;
+}
+.upload-modal::backdrop { background: rgb(23 33 46 / 45%); }
+
+/* Override the chat's global form layout. */
+.upload-modal form { display: grid; gap: 14px; padding: 0; border: 0; }
+.upload-modal h2 { margin: 0; font-size: 20px; }
+.upload-modal label:not(.dropzone) { display: grid; gap: 6px; font-size: 14px; font-weight: 600; }
+.upload-modal input:not([type="file"]), .upload-modal textarea {
+  padding: 10px 12px;
+  border: 1px solid #bdc7d4;
+  border-radius: 10px;
+  font: inherit;
+  font-weight: 400;
+}
+.upload-modal input:focus, .upload-modal textarea:focus { outline: 2px solid #1767d4; outline-offset: 1px; }
+.upload-modal textarea { resize: vertical; max-height: 200px; }
+.upload-modal .error { margin: 0; }
+.upload-modal .actions { display: flex; justify-content: flex-end; gap: 12px; }
+button.secondary { background: #e7ecf3; color: #17212e; }

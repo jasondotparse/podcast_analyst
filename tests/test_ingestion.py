@@ -75,7 +75,7 @@ class PostgresBackedTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_submit_queues_once_and_returns_the_existing_job_for_a_duplicate(self):
         service = IngestionService(self.db, graph=None, openai=None, extractor=None)
-        metadata = EpisodeMetadata(podcast_name="Chips", title="Packaging")
+        metadata = EpisodeMetadata(podcast_name="Chips", podcast_description="Semiconductor news", title="Packaging")
         job, created = await service.submit(metadata, "Advanced packaging is the bottleneck.")
         self.assertTrue(created)
         self.assertEqual(job.status, "pending")
@@ -83,3 +83,4 @@ class PostgresBackedTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(created)
         self.assertEqual(duplicate, job)
         self.assertEqual(await service.get_job(job.job_id), job)
+        self.assertEqual(await self.db.all("SELECT name, description FROM podcasts"), [("Chips", "Semiconductor news")])

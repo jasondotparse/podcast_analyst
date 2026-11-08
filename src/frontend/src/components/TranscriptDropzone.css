@@ -1,0 +1,17 @@
+.dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 28px 16px;
+  border: 2px dashed #bdc7d4;
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #596779;
+  text-align: center;
+  cursor: pointer;
+}
+.dropzone.dragging, .dropzone:hover { border-color: #1767d4; background: #eef4fd; }
+.dropzone:focus-within { outline: 2px solid #1767d4; outline-offset: 1px; }
+.dropzone strong { color: #17212e; }
+.dropzone .error { margin: 0; }
