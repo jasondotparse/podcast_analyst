@@ -29,9 +29,24 @@ app** for HMR development, or **serve front end** when the backend is already ru
   - [ ] update the UI with fields where the above 3 can be provided by the user (.txt upload form done)
 - [x] Connect Codex database tools (`vector_search`, `graph_query`, `postgres_database_query`); cited answers verified locally.
 - [x] Conversational thesis capture: Codex helps the user sharpen a thesis, then saves it with `add_thesis` (Postgres + graph).
-- [ ] A research skill; verify cited answers across the initial episode set.
+- [ ] add a new, final step to the current ingestion pipeline: "reflect". reflect() would:
+    1. Retrieve active theses from Postgres.
+    2. Compare newly extracted claims against those theses using an LLM.
+    3. Identify claims that meaningfully support or challenge each thesis.
+    4. Persist the assessments in Postgres and create corresponding SUPPORTS or CHALLENGES relationships in Ladybug.
+    5. Trigger an SES notification when sufficiently strong contradictory evidence is found.
+      * this requires new tool add_subscription() which codex can use to update its subscriptions table. That way, it'll know who to email post-reflect stage when a thesis contradiction is detected.
 - [ ] watched sources / scheduled discovery & ingestion
-- [ ] email alerts. 
+- [ ] build "suggested prompts" new users can use these UI elements to auto-populate a prompt into the chat box. The same as 'suggested prompts' in ChatGPT, but hardcoded.
+- [ ] build a "architecture overview" tool to allow the agent to read its own code on GitHub - this will be the best way to explain to folks how it works under the hood. Literally just ask it! One of the suggested prompts can just be a 'Explain how you work at a high level'. Will require the creation of a github service account / API key. Readonly, scoped to the podcast_analyst repo. 
+- [ ] UI nice-to-haves
+	 - in the chat history, it should show more than just user input and agent final_response. It should also display thinking / using tools events as UI elements so the user isn't just sitting there waiting for the agent to reply
+	 - graph visualization - ladybugDB already has a graph visualizer tool. We should just deploy and iframe this within our web app. 
+	 - onboarding modal when a new browser is detected that explains how the app works
+   - clean up the UI to make it more polished. The buttons on the top of the view should go on a sidebar on the left. 
+- [ ] support reflection in both directions, not just ingestion:
+  	- New podcast ingested: Evaluate its claims against existing theses. (Done) 
+  	- New thesis created: Evaluate existing claims against the new thesis.
 - [ ] Prod env deployment.
 
 - [Local setup and VS Code run configuration](docs/local_development.md)
