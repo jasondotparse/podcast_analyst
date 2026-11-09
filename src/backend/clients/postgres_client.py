@@ -17,6 +17,18 @@ def to_job(row) -> IngestionJob | None:
     return IngestionJob(job_id=job_id, episode_id=episode_id, status=status, current_step=current_step, error=error)
 
 
+async def upsert_entities(conn, entities: list[tuple[str, str]]) -> list[tuple[UUID, str, str]]:
+    """Find or create (name, kind) entities; returns (id, name, kind). Upserts run in one global
+    order: concurrent writers sharing entities would otherwise lock them in different orders and deadlock."""
+    rows = []
+    for name, kind in sorted(set(entities)):
+        (entity_id,) = await (await conn.execute(
+            "INSERT INTO entities (name, kind) VALUES (%s, %s) "
+            "ON CONFLICT (kind, name) DO UPDATE SET name = EXCLUDED.name RETURNING id", (name, kind))).fetchone()
+        rows.append((entity_id, name, kind))
+    return rows
+
+
 class PostgresClient:
     def __init__(self, url: str):
         self.url = url
@@ -120,15 +132,22 @@ class PostgresClient:
                 (passage_id, text, evidence_quote, speaker, fingerprint))).fetchone()
             if claim is None:
                 return False
-            # Upsert in one global order: concurrent claims sharing entities would otherwise
-            # lock the same entity rows in different orders and deadlock.
-            for name, kind in sorted(set(entities)):
-                (entity_id,) = await (await conn.execute(
-                    "INSERT INTO entities (name, kind) VALUES (%s, %s) "
-                    "ON CONFLICT (kind, name) DO UPDATE SET name = EXCLUDED.name RETURNING id", (name, kind))).fetchone()
+            for entity_id, _, _ in await upsert_entities(conn, entities):
                 await conn.execute("INSERT INTO claim_entities VALUES (%s, %s) ON CONFLICT DO NOTHING",
                                    (claim[0], entity_id))
             return True
+
+    # ---- Theses ------------------------------------------------------------
+
+    async def add_thesis(self, description: str, entities: list[tuple[str, str]]) -> tuple[UUID, list]:
+        """Insert a thesis linked to its (name, kind) entities; returns its ID and (id, name, kind) entities."""
+        async with await self.connect() as conn:
+            (thesis_id,) = await (await conn.execute(
+                "INSERT INTO theses (description) VALUES (%s) RETURNING id", (description,))).fetchone()
+            linked = await upsert_entities(conn, entities)
+            for entity_id, _, _ in linked:
+                await conn.execute("INSERT INTO thesis_entities VALUES (%s, %s)", (thesis_id, entity_id))
+            return thesis_id, linked
 
     async def delete_claims(self, episode_id: UUID) -> None:
         await self.execute("DELETE FROM claims WHERE passage_id IN (SELECT id FROM passages WHERE episode_id = %s)",

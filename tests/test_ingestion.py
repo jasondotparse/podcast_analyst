@@ -1,6 +1,8 @@
 import asyncio
 import json
+from pathlib import Path
 import secrets
+import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock
@@ -9,8 +11,9 @@ import psycopg
 from psycopg.conninfo import make_conninfo
 
 from src.backend.agent_tools import AgentTools
+from src.backend.clients.graph_client import GraphClient
 from src.backend.clients.postgres_client import PostgresClient
-from src.backend.db.db import migrate_postgres
+from src.backend.db.db import migrate_postgres, open_graph
 from src.backend.ingestion.claim_extractor import ClaimExtractor
 from src.backend.ingestion.ingestion_service import OVERLAP_WORDS, IngestionService, split_passages
 from src.backend.ingestion.models import EpisodeMetadata
@@ -105,3 +108,30 @@ class PostgresBackedTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(duplicate, job)
         self.assertEqual(await service.get_job(job.job_id), job)
         self.assertEqual(await self.db.all("SELECT name, description FROM podcasts"), [("Chips", "Semiconductor news")])
+
+    async def test_add_thesis_links_existing_and_new_entities_in_postgres_and_the_graph(self):
+        await self.extractor.write_claim(self.episode, {
+            "text": "Lasers ship next year.", "evidence_quote": "Lasers ship next year.", "speaker": None,
+            "entities": [{"name": "Amazon", "kind": "company"}]})
+        with tempfile.TemporaryDirectory() as directory:
+            self.tools.graph = GraphClient(open_graph(Path(directory) / "graph.lbug"))
+            result = json.loads(await self.tools.call("add_thesis", {
+                "description": " AWS data center capex will keep accelerating through 2028. ",
+                "entities": [{"name": "Amazon", "kind": "company"}, {"name": "AWS", "kind": "company"},
+                             {"name": "AWS ", "kind": "company"}]}))
+            self.assertEqual(result["saved"], "AWS data center capex will keep accelerating through 2028.")
+            self.assertEqual(result["about"], ["AWS (company)", "Amazon (company)"])
+            linked = json.loads(await self.query(
+                "SELECT t.description, e.name FROM theses t JOIN thesis_entities te ON te.thesis_id = t.id "
+                "JOIN entities e ON e.id = te.entity_id ORDER BY e.name"))
+            self.assertEqual(sorted(row["name"] for row in linked), ["AWS", "Amazon"])
+            self.assertEqual(await self.db.all("SELECT count(*) FROM entities"), [(2,)])  # Amazon was reused.
+            graph_rows = self.tools.graph.read_only_query(
+                f"MATCH (t:Thesis {{id: '{result['thesis_id']}'}})-[:ABOUT]->(e:Entity) RETURN e.name AS name", 10)
+            self.assertEqual(sorted(row["name"] for row in graph_rows), ["AWS", "Amazon"])
+            for empty in ({"description": " ", "entities": [{"name": "AWS", "kind": "company"}]},
+                          {"description": "AWS grows.", "entities": []}):
+                with self.assertRaises(ValueError):
+                    await self.tools.call("add_thesis", empty)
+            self.assertEqual(await self.db.all("SELECT count(*) FROM theses"), [(1,)])
+            self.tools.graph.close()

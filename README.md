@@ -28,6 +28,7 @@ app** for HMR development, or **serve front end** when the backend is already ru
   - [ ] handle a youtube link + podcast metadata
   - [ ] update the UI with fields where the above 3 can be provided by the user (.txt upload form done)
 - [x] Connect Codex database tools (`vector_search`, `graph_query`, `postgres_database_query`); cited answers verified locally.
+- [x] Conversational thesis capture: Codex helps the user sharpen a thesis, then saves it with `add_thesis` (Postgres + graph).
 - [ ] A research skill; verify cited answers across the initial episode set.
 - [ ] watched sources / scheduled discovery & ingestion
 - [ ] email alerts. 

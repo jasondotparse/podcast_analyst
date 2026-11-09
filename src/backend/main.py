@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field, Json
 
-from .agent_tools import RESEARCH_TOOLS, AgentTools
+from .agent_tools import CHAT_TOOLS, AgentTools
 from .chat import ChatHarness
 from .clients.codex_client import CodexError
 from .clients.embedding_client import EmbeddingClient
@@ -57,9 +57,9 @@ async def lifespan(app: FastAPI):
     home = Path(os.environ.get("PODCAST_CODEX_HOME", ROOT / ".local" / "codex")).expanduser().resolve()
     sync_codex_config(ROOT / "codex", home)
     workspace = (ROOT / ".local" / "agent-workspace").resolve()
-    # Chat threads get the read-only research tools.
+    # Chat threads get the research tools and add_thesis.
     harness = ChatHarness(workspace, model=os.environ.get("CODEX_MODEL"),
-                          tools=tool_specs(*RESEARCH_TOOLS), call_tool=tools.call)
+                          tools=tool_specs(*CHAT_TOOLS), call_tool=tools.call)
     app.state.harness = harness
     await harness.client.start(api_key, home, workspace)
 
