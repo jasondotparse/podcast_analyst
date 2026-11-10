@@ -19,6 +19,7 @@ from .clients.codex_client import CodexError
 from .clients.embedding_client import EmbeddingClient
 from .clients.graph_client import GraphClient
 from .clients.postgres_client import PostgresClient
+from .clients.transcription_client import TranscriptionClient
 from .codex_config import sync_codex_config, tool_specs
 from .db.db import migrate_postgres, open_graph
 from .ingestion.claim_extractor import ClaimExtractor
@@ -65,7 +66,8 @@ async def lifespan(app: FastAPI):
 
     # Compose the ingestion pipeline from its components.
     extractor = ClaimExtractor(db, harness, tools, home / "skills" / "extract-claims" / "SKILL.md")
-    app.state.ingestion = IngestionService(db, graph, openai, embedder, extractor)
+    transcriber = TranscriptionClient(openai)
+    app.state.ingestion = IngestionService(db, graph, openai, embedder, extractor, transcriber)
     worker = asyncio.create_task(app.state.ingestion.run_worker())
     try:
         yield
@@ -152,11 +154,24 @@ def ingestion_service(request: Request) -> IngestionService:
 
 Ingestion = Annotated[IngestionService, Depends(ingestion_service)]
 
+# An hour at 320 kbps is about 145 MB. The audio is read into memory and stored in
+# Postgres on a 4 GiB host, so cap it.
+MAX_AUDIO_BYTES = 300 * 1024 * 1024
+
 
 @app.post("/api/ingestions", status_code=202)
-async def create_ingestion(metadata: Annotated[Json[EpisodeMetadata], Form()], transcript: UploadFile,
-                           ingestion: Ingestion):
-    job, created = await ingestion.submit(metadata, (await transcript.read()).decode())
+async def create_ingestion(metadata: Annotated[Json[EpisodeMetadata], Form()], ingestion: Ingestion,
+                           transcript: UploadFile | None = None, audio: UploadFile | None = None):
+    if (transcript is None) == (audio is None):
+        raise HTTPException(422, "Send exactly one file: a .txt transcript or .mp3 audio.")
+    if transcript is not None:
+        job, created = await ingestion.submit(metadata, transcript=(await transcript.read()).decode())
+    else:
+        if not audio.filename.lower().endswith(".mp3"):
+            raise HTTPException(422, "Audio must be an .mp3 file.")
+        if audio.size > MAX_AUDIO_BYTES:
+            raise HTTPException(413, f"Audio files are limited to {MAX_AUDIO_BYTES // (1024 * 1024)} MB.")
+        job, created = await ingestion.submit(metadata, audio=await audio.read())
     return job if created else JSONResponse(job.model_dump(mode="json"), status_code=409)
 
 
