@@ -14,6 +14,7 @@ from openai import AsyncOpenAI
 from ..clients.embedding_client import EmbeddingClient
 from ..clients.graph_client import GraphClient
 from ..clients.postgres_client import PostgresClient
+from ..clients.transcription_client import TranscriptionClient
 from .claim_extractor import ClaimExtractor
 from .models import EpisodeMetadata, IngestionJob
 
@@ -56,23 +57,31 @@ def split_passages(text: str) -> list[str]:
 
 class IngestionService:
     def __init__(self, db: PostgresClient, graph: GraphClient, openai: AsyncOpenAI, embedder: EmbeddingClient,
-                 extractor: ClaimExtractor):
+                 extractor: ClaimExtractor, transcriber: TranscriptionClient):
         self.db = db
         self.graph = graph
         self.openai = openai
         self.embedder = embedder
         self.extractor = extractor
-        self.steps = [self.screen, self.chunk, self.embed, self.extract_claims, self.project_graph]
+        self.transcriber = transcriber
+        self.steps = [self.transcribe, self.screen, self.chunk, self.embed, self.extract_claims, self.project_graph]
 
     # ---- Requests ---------------------------------------------------------
 
-    async def submit(self, metadata: EpisodeMetadata, transcript: str) -> tuple[IngestionJob, bool]:
-        """Queue a new episode. Returns (job, created); an already-ingested episode returns its existing job."""
-        content_hash = hashlib.sha256(" ".join(transcript.split()).encode()).hexdigest()
+    async def submit(self, metadata: EpisodeMetadata, transcript: str | None = None,
+                     audio: bytes | None = None) -> tuple[IngestionJob, bool]:
+        """Queue a new episode from a transcript or from MP3 audio (exactly one). Returns (job, created);
+        an already-ingested episode returns its existing job."""
+        if audio is not None:
+            source_type = "mp3"
+            content_hash = hashlib.sha256(audio).hexdigest()  # The raw bytes: the same file again is a duplicate.
+        else:
+            source_type = "txt"
+            content_hash = hashlib.sha256(" ".join(transcript.split()).encode()).hexdigest()
         existing = await self.db.find_job_by_source(content_hash, metadata.source_url)
         if existing:
             return existing, False
-        return await self.db.create_episode_job(metadata, transcript, content_hash), True
+        return await self.db.create_episode_job(metadata, source_type, transcript, content_hash, audio), True
 
     async def get_job(self, job_id: UUID) -> IngestionJob | None:
         return await self.db.get_job(job_id)
@@ -106,6 +115,14 @@ class IngestionService:
             await self.db.update_job(job.job_id, "failed", error=str(error) or type(error).__name__)
 
     # ---- Steps ------------------------------------------------------------
+
+    async def transcribe(self, episode_id: UUID) -> None:
+        if (await self.db.get_episode(episode_id)).transcript_text is not None:
+            return  # A .txt upload, or already transcribed.
+        text = await self.transcriber.transcribe(await self.db.get_audio(episode_id))
+        if not text.strip():
+            raise ValueError("Transcription produced no text.")
+        await self.db.save_transcript(episode_id, text)
 
     async def screen(self, episode_id: UUID) -> None:
         if await self.db.has_passages(episode_id):

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { getIngestion } from '../api.js'
 
 // The backend's pipeline steps, in order (IngestionService.steps).
-export const PIPELINE_STEPS = ['screen', 'chunk', 'embed', 'extract_claims', 'project_graph']
+export const PIPELINE_STEPS = ['transcribe', 'screen','chunk', 'embed', 'extract_claims', 'project_graph']
 const FINISHED = new Set(['completed', 'failed', 'skipped'])
 
 // Polls an ingestion job until it finishes. progress runs 0 → 1: each step reached

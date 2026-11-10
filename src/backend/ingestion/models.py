@@ -30,7 +30,7 @@ class Episode:
     podcast_name: str
     title: str
     description: str | None
-    transcript_text: str
+    transcript_text: str | None  # NULL for an MP3 until the transcribe step fills it.
     claims_extracted_at: datetime | None
 
 

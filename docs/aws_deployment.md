@@ -1,6 +1,7 @@
 # Docker and AWS deployment
 
-The beta image contains React, FastAPI, and **Codex 0.167.0**. FastAPI serves
+The beta image contains React, FastAPI, **Codex 0.167.0**, and ffmpeg (Debian's 5.1, used to
+split uploaded MP3s for transcription). FastAPI serves
 `/app/` and streams replies over `/api/*`. The Git-managed defaults select
 `gpt-6-luna`, high reasoning, read-only sandboxing, and live web search.
 
@@ -294,6 +295,16 @@ The running app holds Ladybug's exclusive lock. To inspect the graph, run
 then `docker compose up -d --wait app`.
 
 ## Validation
+
+The **MP3 ingestion release** (`c1ff8643ecda-20261110T020829-0310e6`) was deployed to beta on
+**November 9, 2026** with `./scripts/deploy.py beta` only; startup applied `004_episode_audio`.
+ffmpeg roughly doubled the image (612 MB to 1.07 GB); the root volume stayed at 38% used. In
+Chrome (Playwright, via the login page), a 42-minute, 101 MB EE Times MP3 was dropped into the
+upload modal. The bar showed "Transcribing audio…", and the job completed in about 4 minutes
+with 45 claims. Re-submitting it showed the `409` message. With `curl`, a retry finished in
+3 s without transcribing again; an off-topic `.txt` was screened out as before; and the
+`401`/`409`/`422` cases matched local results. The graph was not inspected on beta, which
+would mean stopping the app. Details: [etl_design.md](etl_design.md#verification).
 
 The **thesis tool release** (`9790002924ed-20261108T235251-8032a9`) was deployed to beta on
 **November 8, 2026**; startup applied `003_thesis_entities`. In Chrome via the login page,

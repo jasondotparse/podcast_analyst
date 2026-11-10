@@ -18,6 +18,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 WORKDIR /app
 
+# The transcribe step splits uploaded MP3s with ffmpeg.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY src/backend/requirements.txt src/backend/requirements.txt
 RUN pip install --no-cache-dir -r src/backend/requirements.txt \
     && useradd --uid 10001 --create-home app \
