@@ -12,6 +12,7 @@ From the repository root, using Python 3.11+ and Node.js 22.12+:
 python3 -m venv .venv
 .venv/bin/python -m pip install -r src/backend/requirements.txt
 npm --prefix src/frontend ci
+brew install ffmpeg   # MP3 ingestion splits audio with it; any ffmpeg on PATH works
 ```
 
 The chat harness now also needs Codex **0.167.0** and a backend-only
@@ -40,12 +41,14 @@ with `docker exec -it podcast-postgres psql -U podcast`. To reset local data, st
 the backend, then `docker rm -f podcast-postgres && docker volume rm podcast-postgres`
 and delete `.local/ladybug/`. See [the database design](database_design.md#implementation).
 
-### Ingest a transcript
+### Ingest a transcript or MP3
 
-In the UI, **Upload podcast** opens a form: drop (or choose) a `.txt` transcript, fill in
-the podcast and episode fields, and submit. Optional fields include the episode's original
-URL (`source_url`, which gives claims a linkable source and also dedupes re-uploads) and
-comma-separated guests. The form closes once the server accepts the
+In the UI, **Upload podcast** opens a form: drop (or choose) a `.txt` transcript or an
+`.mp3` recording (up to 300 MB), fill in the podcast and episode fields, and submit. An
+MP3 is first transcribed with OpenAI `gpt-transcribe` (about a minute for a 42-minute
+episode), and the status bar shows "Transcribing audio…" meanwhile. Optional fields include
+the episode's original URL (`source_url`, which gives claims a linkable source and also
+dedupes re-uploads) and comma-separated guests. The form closes once the server accepts the
 upload (`202`) and shows the server's error otherwise, for example a duplicate (`409`).
 A green bar at the top of the page then tracks that upload: the `usePipelineStatus` hook
 (`src/frontend/src/hooks/`) polls `GET /api/ingestions/{job_id}` every 2 s and fills one
@@ -54,18 +57,21 @@ stays visible, in red with its reason, until dismissed. It tracks only the lates
 and is not restored after a page reload.
 Components live in `src/frontend/src/components/`; API calls in `src/frontend/src/api.js`.
 
-With curl, upload a `.txt` transcript and poll its job; see the
-[ingestion design](etl_design.md#api). Extraction uses real OpenAI calls and takes a few minutes.
+With curl, upload a `.txt` transcript (field `transcript`) or an `.mp3` (field `audio`) and
+poll its job; see the [ingestion design](etl_design.md#api). Extraction uses real OpenAI
+calls and takes a few minutes.
 
 ```bash
 curl -s -F 'metadata={"podcast_name":"Chip Talk","title":"Optical interconnects"}' \
      -F transcript=@episode.txt http://127.0.0.1:8000/api/ingestions
+curl -s -F 'metadata={"podcast_name":"Chip Talk","title":"Memristors"}' \
+     -F audio=@episode.mp3 http://127.0.0.1:8000/api/ingestions
 curl -s http://127.0.0.1:8000/api/ingestions/<job_id>
 ```
 
 Run tests with `.venv/bin/python -m unittest discover -s tests -v`. The Postgres
 test creates and drops a temporary database through `DATABASE_URL`; without it
-set, that test is skipped.
+set, that test is skipped. The `TranscriptionClient` tests are skipped without ffmpeg.
 
 ## VS Code run configurations
 

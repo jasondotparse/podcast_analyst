@@ -24,9 +24,9 @@ app** for HMR development, or **serve front end** when the backend is already ru
 - [x] PostgreSQL + pgvector and LadybugDB schemas on beta, with host-persisted storage and forward-only migrations ([database design](docs/database_design.md)).
 - [ ] **Next:** build the ingestion pipeline that can ingest one episode end-to-end: transcript → passages/embeddings → grounded claims → graph projection. (docs/diagrams/etl_pipeline.png)
   - [x] handle .txt file transcript + podcast metadata ([ingestion design](docs/etl_design.md))
-  - [ ] handle .mp3 file + podcast metadata (will require a new ingestion step: OpenAI whisper API integration)
+  - [x] handle .mp3 file + podcast metadata (a `transcribe` step: ffmpeg segments → OpenAI `gpt-transcribe`)
   - [ ] handle a youtube link + podcast metadata (will require a new step: use the yt-dlp package to create a .mp3 from the link, and then let it flow through the pipeline as normal)
-  - [ ] update the UI with fields where the above 3 can be provided by the user (.txt upload form done)
+  - [ ] update the UI with fields where the above 3 can be provided by the user (.txt and .mp3 upload form done)
 - [ ] Discovery/ranking, guest relevance, evaluation
   - it's important that we don't confuse extracting lots of claims with extracting useful investment signals. The next step should be a new 'ranking' pipeline stage between claim extraction and graph projection - it can be a simplel system that ranks the claims based upon: attributable, genuinely material, verifiable, guest credibility. This will probably require a few new attribtues on the claims table. It can be implemented cheaply using the Decisions API - just one call per claim prior to postgres write. Now when Codex is researching a question, it can retrieve claims using graph/vector search and prioritize those with higher materiality, stronger source evidence, and more relevant speakers. We should use the combination of the attributes we extract from the ranking stage to create a 'signal_score'. This formula could start as a very basic average of all the 0-100 scores it got on all the attributes mentioned above. See "signal score design" chatGPT thread.
 - [ ] Process 10 real episodes

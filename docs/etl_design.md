@@ -1,6 +1,6 @@
 # Podcast Analyst — Ingestion Pipeline Design
 
-**Status:** `.txt` slice implemented and verified locally (see [Verification](#verification)) · **Audience:** the engineer building ingestion
+**Status:** `.txt` and `.mp3` ingestion implemented and verified locally and on beta (see [Verification](#verification)) · **Audience:** the engineer building ingestion
 
 Read first: [database_design.md](database_design.md) (schema, contracts, Codex tools),
 [agent_harness_design.md](agent_harness_design.md) (the Codex app-server harness),
@@ -25,13 +25,14 @@ designed to slot in without restructuring.
 ## How it works
 
 ```text
-POST /api/ingestions   (multipart: metadata JSON + transcript .txt)
-  ├─ sha256 of the whitespace-normalized transcript → episodes.content_hash
+POST /api/ingestions   (multipart: metadata JSON + transcript .txt or audio .mp3)
+  ├─ sha256 of the whitespace-normalized transcript, or of the raw MP3 bytes → episodes.content_hash
   ├─ already exists? → 409 with the existing job
-  └─ insert podcast (find-or-create by name), episode, ingestion_job(pending) → 202 with the job
+  └─ insert podcast (find-or-create by name), episode, episode_audio (MP3 only),
+     ingestion_job(pending) in one transaction → 202 with the job
 
 Background worker: one in-process asyncio task, one job at a time (oldest pending first)
-  screen → chunk → embed → extract_claims → project_graph
+  transcribe → screen → chunk → embed → extract_claims → project_graph
      │ the screen rejects → job 'skipped', error names the failed question
      │ any exception      → job 'failed',  error = message
   each step: read input from Postgres → write output to Postgres (or Ladybug)
@@ -42,7 +43,7 @@ GET /api/ingestions/{job_id} → {status, current_step, error}   (the client pol
 The runner is a plain list of async functions:
 
 ```python
-STEPS = [screen, chunk, embed, extract_claims, project_graph]
+STEPS = [transcribe, screen, chunk, embed, extract_claims, project_graph]
 
 async def run_job(job):
     for step in STEPS:
@@ -53,6 +54,7 @@ async def run_job(job):
 
 | Step | Does | Skips its work when |
 |---|---|---|
+| `transcribe` | For an MP3: ffmpeg re-encodes the stored audio to mono 64 kbps and cuts 20-minute segments (~10 MB; the API rejects files over 25 MB). Each segment goes to `gpt-transcribe` in order, with the last ~200 words of the previous segment's text as `prompt`. The texts are joined with newlines and saved to `episodes.transcript_text`; every later step reads that column, so none of them changed. All or nothing: an ffmpeg error (its stderr tail becomes the job error), a failed segment, or empty output fails the job and saves nothing. No timestamps: MP3 passages keep NULL `start_seconds`/`end_seconds`. | `transcript_text` is set (every `.txt` upload, or an MP3 already transcribed) |
 | `screen` | One Decisions API call on the metadata and transcript with two `choice` questions, each answered `accept` or `reject`: `on_topic` (relevant to public-equities research: companies, markets, tech, macro?) and `prompt_injection` (does it try to instruct an AI system?). Any `reject` skips the job. No reason is returned. | passages already exist |
 | `chunk` | ~750-word passages with ~250 words of overlap, zero-based `ordinal`; timestamps stay NULL for `.txt`. Insert all passages in one transaction. | passages already exist |
 | `embed` | Embed passages `WHERE embedding IS NULL`, in batches. | none are NULL |
@@ -127,8 +129,10 @@ turn/completed  status completed → set claims_extracted_at; anything else or >
 3. **Postgres, not memory, carries data between steps.** Every step is idempotent
    against database state, so a crash rarely repeats expensive work.
 4. **Dedupe happens in the request, not in the pipeline.** The unique `content_hash`
-   gives an immediate `409`. MP3/YouTube will dedupe on `source_url` or
-   `external_episode_id` instead, the same way.
+   (or a matching `source_url`) gives an immediate `409`. For an MP3 the hash is the sha256
+   of the raw file bytes: re-uploading the same file is caught, but the same episode in a
+   different encoding is caught only by `source_url`. YouTube will dedupe on `source_url` or
+   `external_episode_id`, the same way.
 5. **Screening runs in the pipeline, not in the request.** A rejection surfaces only
    through polling (status `skipped`), not as a `400`. This keeps all model work in one
    place and works the same for MP3/YouTube, whose transcript exists only after
@@ -177,9 +181,20 @@ turn/completed  status completed → set claims_extracted_at; anything else or >
 12. **Claim `fingerprint`** = sha256 of the lowercased, whitespace-collapsed claim text
     plus evidence quote. With `UNIQUE(passage_id, fingerprint)` and `ON CONFLICT DO
     NOTHING`, a repeated `write_claim` is a no-op; paraphrases are not caught.
+13. **Uploaded audio is stored in Postgres** (`episode_audio`, a `BYTEA` row written in the
+    same transaction as the episode and job), following decision 3: the worker reads it
+    later, including after a restart, with no file storage to manage. It is kept after
+    transcription. `podcast_reader` cannot select it, so Codex's SQL tool never reads audio.
+    Cost: a 100 MB upload is held in memory in the request and again in the step, which is why
+    uploads are capped at 300 MB.
 
 ## Models and APIs
 
+- **Transcription:** [`gpt-transcribe`](https://developers.openai.com/api/docs/guides/speech-to-text)
+  through `client.audio.transcriptions.create` (`model`, `file`, `prompt`; default JSON
+  response, read as `.text`). Not `whisper-1`: it is deprecated and shuts down 2027-02-26. The
+  pinned `openai` 3.46.0 already lists `gpt-transcribe`. The API takes files up to 25 MB.
+  `ffmpeg` must be on the backend's `PATH` (installed in the Docker image).
 - **Screen:** OpenAI [Decisions API](https://developers.openai.com/api/docs/guides/decisions)
   (`client.decisions.create`), model `gpt-6-luna` (its only model), with the existing
   `OPENAI_API_KEY`. Input-size limits aren't documented; test with the longest transcript we have.
@@ -195,15 +210,17 @@ turn/completed  status completed → set claims_extracted_at; anything else or >
 
 ## API
 
-`POST /api/ingestions` takes `multipart/form-data` with two fields:
+`POST /api/ingestions` takes `multipart/form-data` with `metadata` and exactly one file:
 - `metadata` (JSON): `podcast_name` and `title` are required; `podcast_description`,
   `description` (the episode's), `published_at` (date), `guests` (list), and `source_url`
   are optional. A provided `podcast_description` replaces the podcast's stored description.
-- `transcript`: a UTF-8 `.txt` file.
+- `transcript`: a UTF-8 `.txt` file, **or**
+- `audio`: an `.mp3` file of up to 300 MB (`MAX_AUDIO_BYTES` in `main.py`).
 
 Every ingestion endpoint returns the job as
 `{job_id, episode_id, status, current_step, error}`. Uploads return `202` (new job), `409`
-(the episode already exists; the body is its existing job), or `422` (invalid input).
+(the episode already exists; the body is its existing job), `413` (audio over the limit), or
+`422` (invalid input: missing metadata, both or neither file, or audio not named `.mp3`).
 `GET /api/ingestions/{job_id}` and `POST /api/ingestions/{job_id}/retry` return `404` for
 an unknown job. It uses the same login session as the rest of `/api` (local loopback runs
 without login).
@@ -211,6 +228,8 @@ without login).
 ```bash
 curl -s -F 'metadata={"podcast_name":"Chip Talk","title":"Optical interconnects"}' \
      -F transcript=@episode.txt http://127.0.0.1:8000/api/ingestions
+curl -s -F 'metadata={"podcast_name":"Chip Talk","title":"Memristors"}' \
+     -F audio=@episode.mp3 http://127.0.0.1:8000/api/ingestions
 curl -s http://127.0.0.1:8000/api/ingestions/<job_id>
 ```
 
@@ -228,6 +247,7 @@ ingestion/ingestion_service.py   IngestionService: submit/get/retry, the worker,
   ├─▶ ingestion/claim_extractor.py  ClaimExtractor: the Codex thread and write_claim
   │                                 (ChatHarness, PostgresClient, AgentTools injected)
   ├─▶ clients/embedding_client.py EmbeddingClient: the one embedding model + dimensions
+  ├─▶ clients/transcription_client.py  TranscriptionClient: ffmpeg segments → gpt-transcribe
   ├─▶ clients/postgres_client.py PostgresClient: every SQL statement; returns domain values
   └─▶ clients/graph_client.py    GraphClient: every Cypher statement (MERGE projection)
 
@@ -280,6 +300,37 @@ Local runs (`curl` against the backend on port 8000), November 2026:
 - Codex sometimes `cat`s `SKILL.md` through `exec` even though the skill body is already
   attached to the turn.
 
+**MP3** (November 9, 2026), with EE Times Current, "Integrating Interface Memristors in the
+Back End of Line": a 42-minute, 101 MB, 320 kbps stereo MP3, so 3 segments (20 + 20 + 2.3 min).
+
+- **Locally:** the first 6 minutes (14 MB, cut with `ffmpeg -c copy`) became 768 words,
+  2 passages, and 6 sensible claims with verbatim quotes, completing in about a minute.
+  The full file uploaded in 4 s; transcription took about a minute (ffmpeg about 14 s), and
+  the job completed in under 5 minutes: 6,885 words, 14 passages, 39 claims (36 with speakers,
+  thanks to the `guests` metadata), 60 entities, all quotes verbatim, and a graph matching
+  Postgres (14 passages, 39 claims, 130 `ABOUT`). The screen accepted the 6,885-word transcript.
+- **Beta** (release `c1ff8643ecda-20261110T020829-0310e6`): the full file was dropped into the
+  upload modal through the login page (Playwright). The bar showed "Transcribing audio…", and
+  the job completed in about 4 minutes: 6,878 words, 14 passages, 45 claims (44 with speakers),
+  70 entities, all quotes verbatim.
+- **Cut points:** each 20-minute cut can fall mid-sentence; the next segment then starts
+  with a capital ("…the kind of question I could send them a follow-up. || Or something for a
+  later episode"). At the first cut, the local run dropped one word ("by the— || Of two years"
+  for "by the end of two years"); beta's run kept it. No repeated or invented text at either cut.
+- **Dedupe and retry:** re-uploading the file returned `409` with the original job: locally
+  both with the same `source_url` and with none (hash only); on beta by re-submitting it in the
+  modal without a `source_url`, which showed the "already uploaded" message. Retrying the completed job finished in 3–4 s with the transcript
+  hash and claims unchanged, so nothing was transcribed again.
+- **`.txt` unchanged:** locally, a 768-word `.txt` completed (2 passages, 9 claims, no
+  `episode_audio` row) and its re-upload returned `409`; on beta, a cooking transcript passed
+  `transcribe` at once and was skipped by `screen` (`on_topic`), and its re-upload returned `409`.
+- **Errors:** a text file named `.mp3` failed at `transcribe` with ffmpeg's message ("Invalid
+  data found when processing input"). On beta, both files, neither file, and a `.wav` name
+  returned `422`; no login returned `401`.
+- **Transcripts have no speaker labels**, so Codex attributes speakers only from context and
+  metadata. Proper names can come out phonetically: the intro has "Ralph van Kemmen", while a
+  later mention reads "Ralph Etienne-Cummings", the name the claims use.
+
 - **Open question:** the Codex extraction thread also has Codex's built-in code-mode
   `exec` tool (`unified_exec`, on by default; `--disable shell_tool` does not remove it).
   In the first run it listed the repository and read `docs/` before querying the
@@ -288,8 +339,6 @@ Local runs (`curl` against the backend on port 8000), November 2026:
 
 ## Later, without restructuring
 
-- **MP3:** add a `transcribe` step (Whisper; segment the audio and keep offsets so
-  passages get timestamps).
 - **YouTube:** a `download` step (yt-dlp) before `transcribe`.
 - **Watched sources:** an hourly discovery that calls the same API.
 - **Reflector:** a step after `project_graph` that evaluates new claims against
