@@ -24,9 +24,12 @@ app** for HMR development, or **serve front end** when the backend is already ru
 - [x] PostgreSQL + pgvector and LadybugDB schemas on beta, with host-persisted storage and forward-only migrations ([database design](docs/database_design.md)).
 - [ ] **Next:** build the ingestion pipeline that can ingest one episode end-to-end: transcript → passages/embeddings → grounded claims → graph projection. (docs/diagrams/etl_pipeline.png)
   - [x] handle .txt file transcript + podcast metadata ([ingestion design](docs/etl_design.md))
-  - [ ] handle .mp3 file + podcast metadata
-  - [ ] handle a youtube link + podcast metadata
+  - [ ] handle .mp3 file + podcast metadata (will require a new ingestion step: OpenAI whisper API integration)
+  - [ ] handle a youtube link + podcast metadata (will require a new step: use the yt-dlp package to create a .mp3 from the link, and then let it flow through the pipeline as normal)
   - [ ] update the UI with fields where the above 3 can be provided by the user (.txt upload form done)
+- [ ] Discovery/ranking, guest relevance, evaluation
+  - it's important that we don't confuse extracting lots of claims with extracting useful investment signals. The next step should be a new 'ranking' pipeline stage between claim extraction and graph projection - it can be a simplel system that ranks the claims based upon: attributable, genuinely material, verifiable, guest credibility. This will probably require a few new attribtues on the claims table. It can be implemented cheaply using the Decisions API - just one call per claim prior to postgres write. Now when Codex is researching a question, it can retrieve claims using graph/vector search and prioritize those with higher materiality, stronger source evidence, and more relevant speakers. We should use the combination of the attributes we extract from the ranking stage to create a 'signal_score'. This formula could start as a very basic average of all the 0-100 scores it got on all the attributes mentioned above. See "signal score design" chatGPT thread.
+- [ ] Process 10 real episodes
 - [x] Connect Codex database tools (`vector_search`, `graph_query`, `postgres_database_query`); cited answers verified locally.
 - [x] Conversational thesis capture: Codex helps the user sharpen a thesis, then saves it with `add_thesis` (Postgres + graph).
 - [ ] add a new, final step to the current ingestion pipeline: "reflect". reflect() would:
@@ -35,7 +38,7 @@ app** for HMR development, or **serve front end** when the backend is already ru
     3. Identify claims that meaningfully support or challenge each thesis.
     4. Persist the assessments in Postgres and create corresponding SUPPORTS or CHALLENGES relationships in Ladybug.
     5. Trigger an SES notification when sufficiently strong contradictory evidence is found.
-      * this requires new tool add_subscription() which codex can use to update its subscriptions table. That way, it'll know who to email post-reflect stage when a thesis contradiction is detected.
+      * this requires new tool add_subscription() which codex can use to update its subscriptions table. That way, it'll know who to email post-reflect stage when a thesis contradiction is detected and its signal score is let's say >90.
 - [ ] watched sources / scheduled discovery & ingestion
 - [ ] build "suggested prompts" new users can use these UI elements to auto-populate a prompt into the chat box. The same as 'suggested prompts' in ChatGPT, but hardcoded.
 - [ ] build a "architecture overview" tool to allow the agent to read its own code on GitHub - this will be the best way to explain to folks how it works under the hood. Literally just ask it! One of the suggested prompts can just be a 'Explain how you work at a high level'. Will require the creation of a github service account / API key. Readonly, scoped to the podcast_analyst repo. 
