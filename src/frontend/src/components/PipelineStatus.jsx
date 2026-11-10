@@ -3,6 +3,7 @@ import usePipelineStatus from '../hooks/usePipelineStatus.js'
 import './PipelineStatus.css'
 
 const STEP_LABELS = {
+  transcribe: 'Transcribing audio…',
   screen: 'Screening transcript',
   chunk: 'Splitting into passages',
   embed: 'Embedding passages',
