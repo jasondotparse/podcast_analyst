@@ -2,17 +2,21 @@ import asyncio
 import json
 from pathlib import Path
 import secrets
+import shutil
+import subprocess
 import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock
 
+from openai import omit
 import psycopg
 from psycopg.conninfo import make_conninfo
 
 from src.backend.agent_tools import AgentTools
 from src.backend.clients.graph_client import GraphClient
 from src.backend.clients.postgres_client import PostgresClient
+from src.backend.clients.transcription_client import TranscriptionClient
 from src.backend.db.db import migrate_postgres, open_graph
 from src.backend.ingestion.claim_extractor import ClaimExtractor
 from src.backend.ingestion.ingestion_service import OVERLAP_WORDS, IngestionService, split_passages
@@ -29,6 +33,29 @@ class SplitPassagesTests(unittest.TestCase):
         for start in range(0, len(words) - OVERLAP_WORDS + 1, 37):
             quote = " ".join(words[start:start + OVERLAP_WORDS])
             self.assertTrue(any(quote in passage for passage in passages), start)
+
+
+@unittest.skipUnless(shutil.which("ffmpeg"), "ffmpeg is not installed")
+class TranscriptionClientTests(unittest.IsolatedAsyncioTestCase):
+    async def test_splits_audio_and_prompts_each_segment_with_the_previous_text(self):
+        with tempfile.TemporaryDirectory() as directory:
+            clip = Path(directory) / "clip.mp3"
+            subprocess.run(["ffmpeg", "-loglevel", "error", "-f", "lavfi", "-i", "sine=duration=5", str(clip)],
+                           check=True)
+            audio = clip.read_bytes()
+        create = AsyncMock(side_effect=lambda model, file, prompt: SimpleNamespace(text=f"heard in {file.stem}"))
+        client = TranscriptionClient(SimpleNamespace(audio=SimpleNamespace(transcriptions=SimpleNamespace(create=create))))
+        client.SEGMENT_SECONDS, client.PROMPT_WORDS = 2, 2  # A 5-second clip becomes three segments.
+
+        text = await client.transcribe(audio)
+
+        self.assertEqual([(call.kwargs["file"].name, call.kwargs["prompt"]) for call in create.call_args_list],
+                         [("seg_000.mp3", omit), ("seg_001.mp3", "in seg_000"), ("seg_002.mp3", "in seg_001")])
+        self.assertEqual(text, "heard in seg_000\nheard in seg_001\nheard in seg_002")
+
+    async def test_audio_ffmpeg_cannot_read_raises_its_error(self):
+        with self.assertRaisesRegex(RuntimeError, "ffmpeg could not read the audio: .+"):  # Wording varies by version.
+            await TranscriptionClient(openai=None).transcribe(b"This is not audio.")
 
 
 @unittest.skipUnless(DATABASE_URL, "DATABASE_URL is not set")
