@@ -63,6 +63,10 @@ class PostgresBackedTests(unittest.IsolatedAsyncioTestCase):
                 await self.query(sql)
         self.assertIn('"ordinal": 0', await self.query("SELECT ordinal FROM passages"))
 
+    async def test_query_tool_cannot_read_episode_audio(self):
+        with self.assertRaises(psycopg.errors.InsufficientPrivilege):
+            await self.query("SELECT audio FROM episode_audio")
+
     async def test_vector_search_returns_the_nearest_passages_with_citation_details(self):
         def one_hot(index):
             return [1.0 if position == index else 0.0 for position in range(1536)]

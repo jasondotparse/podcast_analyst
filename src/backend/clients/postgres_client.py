@@ -57,9 +57,10 @@ class PostgresClient:
             "JOIN ingestion_jobs j ON j.episode_id = e.id WHERE e.content_hash = %s OR e.source_url = %s",
             content_hash, source_url))
 
-    async def create_episode_job(self, metadata: EpisodeMetadata, transcript: str, content_hash: str) -> IngestionJob:
+    async def create_episode_job(self, metadata: EpisodeMetadata, source_type: str, transcript: str | None,
+                                 content_hash: str, audio: bytes | None = None) -> IngestionJob:
         """Find (updating a provided description) or create the podcast by name, then insert
-        the episode and its pending job."""
+        the episode, its audio if any, and its pending job."""
         async with await self.connect() as conn:
             podcast = await (await conn.execute(
                 "UPDATE podcasts SET description = COALESCE(%s, description) WHERE name = %s RETURNING id",
@@ -68,9 +69,11 @@ class PostgresClient:
                                              (metadata.podcast_name, metadata.podcast_description))).fetchone()
             (episode_id,) = await (await conn.execute(
                 "INSERT INTO episodes (podcast_id, title, description, published_at, guests, source_type, source_url, "
-                "content_hash, transcript_text) VALUES (%s, %s, %s, %s, %s, 'txt', %s, %s, %s) RETURNING id",
+                "content_hash, transcript_text) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
                 (podcast[0], metadata.title, metadata.description, metadata.published_at, metadata.guests,
-                 metadata.source_url, content_hash, transcript))).fetchone()
+                 source_type, metadata.source_url, content_hash, transcript))).fetchone()
+            if audio is not None:
+                await conn.execute("INSERT INTO episode_audio (episode_id, audio) VALUES (%s, %s)", (episode_id, audio))
             return to_job(await (await conn.execute(
                 f"INSERT INTO ingestion_jobs (episode_id) VALUES (%s) RETURNING {JOB_COLUMNS}", (episode_id,))).fetchone())
 
@@ -98,6 +101,16 @@ class PostgresClient:
         row = await self.one("SELECT p.name, e.title, e.description, e.transcript_text, e.claims_extracted_at "
                              "FROM episodes e JOIN podcasts p ON p.id = e.podcast_id WHERE e.id = %s", episode_id)
         return Episode(*row)
+
+    async def get_audio(self, episode_id: UUID) -> bytes:
+        async with await self.connect() as conn:
+            # Binary results: in text format Postgres hex-encodes bytea, doubling the audio's size in transit and memory.
+            (audio,) = await (await conn.execute(
+                "SELECT audio FROM episode_audio WHERE episode_id = %s", (episode_id,), binary=True)).fetchone()
+            return audio
+
+    async def save_transcript(self, episode_id: UUID, text: str) -> None:
+        await self.execute("UPDATE episodes SET transcript_text = %s WHERE id = %s", text, episode_id)
 
     async def has_passages(self, episode_id: UUID) -> bool:
         return await self.one("SELECT 1 FROM passages WHERE episode_id = %s LIMIT 1", episode_id) is not None

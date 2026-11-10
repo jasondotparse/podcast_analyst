@@ -65,7 +65,8 @@ class PostgresMigrationTests(unittest.IsolatedAsyncioTestCase):
             await conn.execute(f"DROP DATABASE {self.name} WITH (FORCE)")
 
     async def test_migrations_apply_once_and_enforce_the_design(self):
-        self.assertEqual(await migrate_postgres(self.url), ["001_initial", "002_ingestion", "003_thesis_entities"])
+        self.assertEqual(await migrate_postgres(self.url), ["001_initial", "002_ingestion", "003_thesis_entities",
+                                                            "004_episode_audio"])
         self.assertEqual(await migrate_postgres(self.url), [])
 
         async with await psycopg.AsyncConnection.connect(self.url, autocommit=True) as conn:

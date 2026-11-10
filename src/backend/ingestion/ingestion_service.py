@@ -72,7 +72,7 @@ class IngestionService:
         existing = await self.db.find_job_by_source(content_hash, metadata.source_url)
         if existing:
             return existing, False
-        return await self.db.create_episode_job(metadata, transcript, content_hash), True
+        return await self.db.create_episode_job(metadata, "txt", transcript, content_hash), True
 
     async def get_job(self, job_id: UUID) -> IngestionJob | None:
         return await self.db.get_job(job_id)
