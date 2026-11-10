@@ -40,6 +40,9 @@ app** for HMR development, or **serve front end** when the backend is already ru
     5. Trigger an SES notification when sufficiently strong contradictory evidence is found.
       * this requires new tool add_subscription() which codex can use to update its subscriptions table. That way, it'll know who to email post-reflect stage when a thesis contradiction is detected and its signal score is let's say >90.
 - [ ] watched sources / scheduled discovery & ingestion
+
+XXX PO REQUIREMENTS COMPLETE AT THIS POINT XXX
+
 - [ ] build "suggested prompts" new users can use these UI elements to auto-populate a prompt into the chat box. The same as 'suggested prompts' in ChatGPT, but hardcoded.
 - [ ] build a "architecture overview" tool to allow the agent to read its own code on GitHub - this will be the best way to explain to folks how it works under the hood. Literally just ask it! One of the suggested prompts can just be a 'Explain how you work at a high level'. Will require the creation of a github service account / API key. Readonly, scoped to the podcast_analyst repo. 
 - [ ] UI nice-to-haves
