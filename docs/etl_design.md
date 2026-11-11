@@ -342,7 +342,7 @@ Back End of Line": a 42-minute, 101 MB, 320 kbps stereo MP3, so 3 segments (20 +
 
 ## RSS watchers
 
-**Status:** implemented and verified locally (November 10, 2026); see [Watcher verification](#watcher-verification).
+**Status:** implemented and verified locally and on beta (November 10, 2026); see [Watcher verification](#watcher-verification).
 
 All 20 podcasts in the case study's starting universe publish RSS feeds. A feed gives each
 episode a GUID, title, show notes, publish date, and an audio `<enclosure>`, and some give a
@@ -434,6 +434,14 @@ Local, November 10, 2026 (unit tests: `tests/test_watcher.py`, mocked feeds and 
   `external_episode_id` held the GUID and `source_url` the episode's Libsyn page.
 - **Hourly re-check:** with `last_checked_at` moved back two hours, both feeds were fetched
   again and nothing was queued.
+
+Beta (release `c257b8e9de91-20261111T005745-2a80e0`), confirmed from `docker compose logs app`:
+startup applied `005_rss_watchers`. In chat (with a password login), "Start watching the Latent
+Space podcast for new episodes." registered `https://podcast.latent.space/feed.xml`. The
+watcher logged `Watcher queued 'Designing for Agents — Zeno Rocha, Resend' …` about 30 s later.
+The episode went through the **transcript path** (its WebVTT transcript, `source_type` `txt`)
+and completed in about 5 minutes with 34 passages and 75 claims. With `last_checked_at` moved
+back two hours, the next tick logged `Watcher checked 1 feed(s); no new episodes`.
 
 ## Later, without restructuring
 

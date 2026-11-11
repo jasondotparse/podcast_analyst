@@ -296,6 +296,13 @@ then `docker compose up -d --wait app`.
 
 ## Validation
 
+The **RSS watcher release** (`c257b8e9de91-20261111T005745-2a80e0`) was deployed to beta on
+**November 10, 2026** with `./scripts/deploy.py beta` only; startup applied `005_rss_watchers`.
+A chat request to watch Latent Space registered its feed, and the watcher queued and fully
+ingested its newest episode (75 claims). The app's own INFO logs (`src.backend.*`, including
+watcher and ingestion progress and Codex stderr lines) now appear in `docker compose logs app`.
+Details: [etl_design.md](etl_design.md#watcher-verification).
+
 The **MP3 ingestion release** (`c1ff8643ecda-20261110T020829-0310e6`) was deployed to beta on
 **November 9, 2026** with `./scripts/deploy.py beta` only; startup applied `004_episode_audio`.
 ffmpeg roughly doubled the image (612 MB to 1.07 GB); the root volume stayed at 38% used. In
