@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { post } from './api.js'
 import PipelineStatus from './components/PipelineStatus.jsx'
 import UploadPodcastButton from './components/UploadPodcastButton.jsx'
+import useActiveIngestion from './hooks/useActiveIngestion.js'
 
 export default function App() {
   const [sessionId, setSessionId] = useState(null)
@@ -13,6 +14,8 @@ export default function App() {
   const [ingestionJobId, setIngestionJobId] = useState(null)
   // Stable, so PipelineStatus's hide timer is not reset by chat re-renders.
   const clearIngestion = useCallback(() => setIngestionJobId(null), [])
+  // Show jobs this page did not start too, e.g. an episode an RSS watcher queued.
+  useActiveIngestion(!ingestionJobId, setIngestionJobId)
   const sessionRequest = useRef(null)
   const bottom = useRef(null)
 

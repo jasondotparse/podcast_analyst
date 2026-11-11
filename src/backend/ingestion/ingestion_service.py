@@ -86,6 +86,9 @@ class IngestionService:
     async def get_job(self, job_id: UUID) -> IngestionJob | None:
         return await self.db.get_job(job_id)
 
+    async def active_job(self) -> IngestionJob | None:
+        return await self.db.active_job()
+
     async def retry(self, job_id: UUID) -> IngestionJob | None:
         await self.db.requeue_job(job_id)
         return await self.db.get_job(job_id)
