@@ -478,6 +478,16 @@ some direct cost and power challenges scored below strength 75, so the gate may 
 Across 1,364 local assessments: 70 challenges (strength 30–99), 18 supports (30–70),
 1,276 unrelated (0–70). The two synthetic episodes together had 12 gate-qualifying claims.
 
+**Thesis reflection and alerts — beta** (November 11, 2026): Startup backfilled 567
+existing claims against two theses, then a chat-created optics thesis was assessed against
+those claims. The 698-word synthetic interview uploaded through the beta UI produced six
+qualifying challenges. The first notify attempt failed because the SESv2 client was used as
+a context manager; after the client fix, retry completed and sent the existing alert row.
+The approved recipient received one email in the inbox with all six claims, quotes, speakers,
+sources, scores, and an app link. A second retry completed with the same single `sent` alert
+row and six saved matches; no second message appeared in the Gmail thread. Across 1,749 beta
+assessments: 26 challenges (strength 48–98), 21 supports (49–98), and 1,702 unrelated (0–68).
+
 ## RSS watchers
 
 **Status:** implemented and verified locally and on beta (November 10, 2026); see [Watcher verification](#watcher-verification).

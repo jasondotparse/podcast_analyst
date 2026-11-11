@@ -315,6 +315,13 @@ replacement deletes the databases and requires explicit owner approval.
 
 ## Validation
 
+The **thesis alert release** (`ef75aaf67954-20261111T132124-ec0a64`) was deployed to beta on
+**November 11, 2026** after the SES client fix. `007_thesis_assessments` applied and the idle
+sweep backfilled existing claims. A beta UI upload of a synthetic optics interview generated
+one alert with six matching challenges. Retrying an initial SES client error sent the alert
+to the approved inbox; retrying again left one `sent` alert row and no second email. See
+[etl_design.md](etl_design.md#verification) for assessment counts and local checks.
+
 The **RSS watcher release** (`c257b8e9de91-20261111T005745-2a80e0`) was deployed to beta on
 **November 10, 2026** with `./scripts/deploy.py beta` only; startup applied `005_rss_watchers`.
 A chat request to watch Latent Space registered its feed, and the watcher queued and fully
