@@ -100,9 +100,10 @@ class TranscriptionClientTests(unittest.IsolatedAsyncioTestCase):
 class EmailTests(unittest.IsolatedAsyncioTestCase):
     async def test_ses_sends_only_plain_text_to_one_recipient(self):
         with patch('src.backend.clients.email_client.boto3.client') as client:
+            client.return_value = SimpleNamespace(send_email=unittest.mock.Mock())
             await EmailClient('alerts@example.com').send('reader@example.com', 'Evidence', '<quote>')
             client.assert_called_once_with('sesv2', region_name='us-east-1')
-            args = client.return_value.__enter__.return_value.send_email.call_args.kwargs
+            args = client.return_value.send_email.call_args.kwargs
             self.assertEqual(args['Destination'], {'ToAddresses': ['reader@example.com']})
             self.assertEqual(args['Content']['Simple']['Body'], {'Text': {'Data': '<quote>', 'Charset': 'UTF-8'}})
         self.assertFalse(EmailClient(None).enabled)
