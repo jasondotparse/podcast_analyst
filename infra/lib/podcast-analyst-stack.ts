@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import {
   CfnOutput, RemovalPolicy, Stack, StackProps,
   aws_ec2 as ec2, aws_ecr as ecr, aws_iam as iam, aws_route53 as route53,
+  aws_ses as ses,
 } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 
@@ -40,6 +41,19 @@ export class PodcastAnalystStack extends Stack {
       managedPolicies: [iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore')],
     });
     repository.grantPull(role);
+    const emailIdentity = new ses.EmailIdentity(this, 'AlertEmailIdentity', {
+      identity: ses.Identity.domain(hostname),
+    });
+    emailIdentity.dkimRecords.forEach((record, index) => {
+      new route53.CnameRecord(this, `AlertDkim${index}`, {
+        // SES returns a full hostname token; the trailing dot prevents CDK appending the zone again.
+        zone, recordName: `${record.name}.`, domainName: record.value,
+      });
+    });
+    role.addToPolicy(new iam.PolicyStatement({
+      actions: ['ses:SendEmail'],
+      resources: [emailIdentity.emailIdentityArn],
+    }));
 
     const instance = new ec2.Instance(this, 'AppHost', {
       vpc,

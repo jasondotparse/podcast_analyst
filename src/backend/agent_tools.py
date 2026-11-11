@@ -1,8 +1,10 @@
 """Handlers for the chat agent's tools (definitions in codex/tools/): three read-only
-research tools, add_thesis, and register_rss_to_watcher. Each passes the model's arguments
+research tools, add_thesis, add_subscription, and register_rss_to_watcher. Each passes the model's arguments
 straight to the clients or services."""
 
 import json
+import re
+from uuid import UUID
 
 from .clients.embedding_client import EmbeddingClient
 from .clients.graph_client import GraphClient
@@ -10,7 +12,8 @@ from .clients.postgres_client import PostgresClient
 
 
 MAX_ROWS, MAX_CHARS = 200, 40_000
-CHAT_TOOLS = ("vector_search", "graph_query", "postgres_database_query", "add_thesis", "register_rss_to_watcher")
+CHAT_TOOLS = ("vector_search", "graph_query", "postgres_database_query", "add_thesis", "register_rss_to_watcher",
+              "add_subscription")
 
 
 class AgentTools:
@@ -50,3 +53,17 @@ class AgentTools:
 
     async def register_rss_to_watcher(self, feed_url: str):
         return await self.watcher.register(feed_url)
+
+    async def add_subscription(self, email: str, thesis_ids: list[str]):
+        email = email.strip().lower()
+        if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
+            raise ValueError(f"Invalid email address: {email}")
+        if not thesis_ids:
+            raise ValueError("Choose at least one active thesis ID.")
+        ids = []
+        for thesis_id in thesis_ids:
+            try:
+                ids.append(UUID(thesis_id))
+            except ValueError:
+                raise ValueError(f"Invalid thesis ID: {thesis_id}") from None
+        return {"email": email, "subscribed_to": await self.db.add_subscription(email, ids)}

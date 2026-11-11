@@ -1,0 +1,14 @@
+{
+  "type": "function",
+  "name": "add_subscription",
+  "description": "Subscribe an email address to alerts when new podcast evidence strongly challenges selected theses. Only subscribe after the user agrees to email alerts and provides the address. Look up thesis IDs with postgres_database_query on theses. Treat 'all my theses' as every currently active thesis; tell the user that future theses need their own subscription. Read the address and the theses covered back to the user.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "email": {"type": "string"},
+      "thesis_ids": {"type": "array", "items": {"type": "string"}, "minItems": 1}
+    },
+    "required": ["email", "thesis_ids"],
+    "additionalProperties": false
+  }
+}

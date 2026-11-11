@@ -4,6 +4,8 @@ from datetime import datetime, timedelta
 from uuid import UUID
 
 import psycopg
+from psycopg.rows import dict_row
+from psycopg.types.json import Jsonb
 
 from ..ingestion.models import (Claim, EntityLink, Episode, EpisodeGraph, EpisodeMetadata, IngestionJob, Signal,
                                 WatchSource)
@@ -197,7 +199,77 @@ class PostgresClient:
                                "JOIN entities e ON e.id = ce.entity_id JOIN claims c ON c.id = ce.claim_id "
                                "JOIN passages p ON p.id = c.passage_id WHERE p.episode_id = %s", episode_id)
         return EpisodeGraph(episode_id, [passage_id for (passage_id,) in passages],
-                            [tuple(row) for row in claims], [EntityLink(*row) for row in links])
+                            [tuple(row) for row in claims], [EntityLink(*row) for row in links],
+                            await self.stance_edges([row[0] for row in claims]))
+
+    # ---- Thesis reflection and alerts ------------------------------------
+
+    async def unassessed_claims(self, episode_id: UUID | None, limit: int | None) -> list:
+        return await self.all(
+            "SELECT p.episode_id, c.id, c.text, c.evidence_quote, c.speaker FROM claims c "
+            "JOIN passages p ON p.id = c.passage_id WHERE (%s::uuid IS NULL OR p.episode_id = %s) "
+            "AND EXISTS (SELECT 1 FROM theses t WHERE t.is_active AND NOT EXISTS "
+            "(SELECT 1 FROM thesis_assessments a WHERE a.claim_id = c.id AND a.thesis_id = t.id)) "
+            "ORDER BY c.id LIMIT %s", episode_id, episode_id, limit)
+
+    async def missing_theses(self, claim_id: UUID) -> list:
+        return await self.all("SELECT id, description FROM theses t WHERE is_active AND NOT EXISTS "
+                              "(SELECT 1 FROM thesis_assessments a WHERE a.thesis_id = t.id AND a.claim_id = %s) "
+                              "ORDER BY id", claim_id)
+
+    async def save_assessments(self, rows: list) -> None:
+        async with await self.connect() as conn, conn.cursor() as cursor:
+            await cursor.executemany("INSERT INTO thesis_assessments (claim_id, thesis_id, stance, strength) "
+                                     "VALUES (%s, %s, %s, %s) ON CONFLICT DO NOTHING", rows)
+
+    async def stance_edges(self, claim_ids: list[UUID]) -> list:
+        return await self.all("SELECT claim_id, thesis_id, stance, strength FROM thesis_assessments "
+                              "WHERE claim_id = ANY(%s::uuid[])", claim_ids)
+
+    async def add_subscription(self, email: str, thesis_ids: list[UUID]) -> list[str]:
+        async with await self.connect() as conn:
+            rows = await (await conn.execute("SELECT id, description FROM theses WHERE is_active "
+                                             "AND id = ANY(%s::uuid[]) ORDER BY id", (thesis_ids,))).fetchall()
+            invalid = set(thesis_ids) - {row[0] for row in rows}
+            if invalid:
+                raise ValueError(f"Unknown or inactive thesis IDs: {', '.join(sorted(map(str, invalid)))}")
+            for thesis_id, _ in rows:
+                await conn.execute("INSERT INTO subscriptions (thesis_id, email) VALUES (%s, %s) "
+                                   "ON CONFLICT DO NOTHING", (thesis_id, email))
+            return [description for _, description in rows]
+
+    async def create_alerts(self, episode_id: UUID, min_strength: int, min_signal: int) -> None:
+        await self.execute(
+            "INSERT INTO alerts (episode_id, thesis_id, matches, recipient_emails) "
+            "SELECT %s, t.id, jsonb_agg(jsonb_build_object('claim_id', c.id, 'strength', a.strength, "
+            "'signal', c.signal) ORDER BY a.strength DESC, c.signal DESC, c.id), "
+            "ARRAY(SELECT s.email FROM subscriptions s WHERE s.thesis_id = t.id ORDER BY s.email) "
+            "FROM thesis_assessments a JOIN claims c ON c.id = a.claim_id "
+            "JOIN passages p ON p.id = c.passage_id JOIN theses t ON t.id = a.thesis_id "
+            "WHERE p.episode_id = %s AND t.is_active AND a.stance = 'challenges' "
+            "AND a.strength >= %s AND c.signal >= %s "
+            "AND EXISTS (SELECT 1 FROM subscriptions s WHERE s.thesis_id = t.id) GROUP BY t.id "
+            "ON CONFLICT (episode_id, thesis_id) DO NOTHING", episode_id, episode_id, min_strength, min_signal)
+
+    async def unsent_alerts(self, episode_id: UUID) -> list:
+        return await self.all("SELECT a.id, t.description, a.recipient_emails, a.matches FROM alerts a "
+                              "JOIN theses t ON t.id = a.thesis_id WHERE a.episode_id = %s AND a.status <> 'sent' "
+                              "ORDER BY a.id", episode_id)
+
+    async def alert_claims(self, matches: list[dict]) -> list[dict]:
+        async with await self.connect() as conn, conn.cursor(row_factory=dict_row) as cursor:
+            await cursor.execute(
+                "SELECT c.text, c.evidence_quote, c.speaker, pod.name AS podcast, e.title AS episode, "
+                "e.published_at, e.source_url, m.signal, m.strength FROM "
+                "jsonb_to_recordset(%s) AS m(claim_id uuid, strength int, signal int) "
+                "JOIN claims c ON c.id = m.claim_id JOIN passages p ON p.id = c.passage_id "
+                "JOIN episodes e ON e.id = p.episode_id JOIN podcasts pod ON pod.id = e.podcast_id "
+                "ORDER BY m.strength DESC, m.signal DESC, c.id", (Jsonb(matches),))
+            return await cursor.fetchall()
+
+    async def set_alert_status(self, alert_id: UUID, status: str) -> None:
+        await self.execute("UPDATE alerts SET status = %s, sent_at = CASE WHEN %s = 'sent' THEN now() ELSE NULL END "
+                           "WHERE id = %s", status, status, alert_id)
 
     # ---- Watch sources (RSS watchers) ---------------------------------------
 

@@ -294,6 +294,25 @@ The running app holds Ladybug's exclusive lock. To inspect the graph, run
 `docker compose stop app`, then `docker compose run --rm --no-deps -T app python -c '...'`,
 then `docker compose up -d --wait app`.
 
+## Thesis alert email (SES)
+
+Each stage owns an SES identity on its app hostname: `beta.podcastanalystagent.com` for beta,
+`podcastanalystagent.com` for prod. CDK publishes three DKIM CNAMEs in the existing zone and
+grants the instance role `ses:SendEmail` on that identity. Compose sets
+`PODCAST_ALERT_SENDER=alerts@${APP_DOMAIN}`; the email app link uses `PODCAST_PUBLIC_ORIGIN`.
+The SDK obtains role credentials through IMDSv2; no AWS keys enter the image or environment.
+
+Check `aws sesv2 get-account --region us-east-1`: production access is enabled (verified
+November 11, 2026). In sandbox mode, recipients must be verified; obtain owner approval
+before creating a recipient identity or sending a test. The beta domain identity's DKIM status was SUCCESS on November 11, 2026, after the
+three CNAMEs were corrected to use absolute DNS names.
+
+Docker needs metadata hop limit 2. Beta already reports 2 with tokens required. On a host
+reporting 1, fix it live without changing the CDK instance definition:
+`aws ec2 modify-instance-metadata-options --region us-east-1 --instance-id <id> --http-put-response-hop-limit 2 --http-tokens required`.
+Always review `cdk diff`: this feature changes only SES, its DKIM records, and IAM. Instance
+replacement deletes the databases and requires explicit owner approval.
+
 ## Validation
 
 The **RSS watcher release** (`c257b8e9de91-20261111T005745-2a80e0`) was deployed to beta on

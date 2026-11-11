@@ -17,10 +17,7 @@ Read first: [database_design.md](database_design.md) (schema, contracts, Codex t
 
 Test with `curl` against localhost, then on beta.
 
-**Out (later steps or features):** UI upload form and status view, MP3 (Whisper),
-YouTube (yt-dlp), hourly watched sources, thesis evaluation ("reflector"), SES alerts,
-and database tools in chat threads (they arrive with the research skill). Each of these is
-designed to slot in without restructuring.
+**Still deferred:** YouTube (yt-dlp). The UI, MP3, watchers, chat tools, reflection, and email alerts have since been implemented.
 
 ## How it works
 
@@ -32,7 +29,7 @@ POST /api/ingestions   (multipart: metadata JSON + transcript .txt or audio .mp3
      ingestion_job(pending) in one transaction → 202 with the job
 
 Background worker: one in-process asyncio task, one job at a time (oldest pending first)
-  transcribe → screen → chunk → embed → extract_claims → rank → project_graph
+  transcribe → screen → chunk → embed → extract_claims → rank → reflect → project_graph → notify
      │ the screen rejects → job 'skipped', error names the failed question
      │ any exception      → job 'failed',  error = message
   each step: read input from Postgres → write output to Postgres (or Ladybug)
@@ -43,7 +40,7 @@ GET /api/ingestions/{job_id} → {status, current_step, error}   (the client pol
 The runner is a plain list of async functions:
 
 ```python
-STEPS = [transcribe, screen, chunk, embed, extract_claims, rank, project_graph]
+STEPS = [transcribe, screen, chunk, embed, extract_claims, rank, reflect, project_graph, notify]
 
 async def run_job(job):
     for step in STEPS:
@@ -60,7 +57,9 @@ async def run_job(job):
 | `embed` | Embed passages `WHERE embedding IS NULL`, in batches. | none are NULL |
 | `extract_claims` | One Codex thread for the whole episode (below). It reads the transcript with SQL and writes claims one at a time with `write_claim`. When its turn completes, set `episodes.claims_extracted_at`. | `claims_extracted_at` is set; otherwise first delete claims left by an interrupted run |
 | `rank` | One Decisions API call per claim (8 at a time) with three `score` questions, each rated against five anchored levels: `specificity`, `materiality`, `source_standing`. Each becomes a 0–100 column on `claims`, and `signal` is their mean ([Claim ranking](#claim-ranking)). | `claims.signal` is set; it scores only `WHERE signal IS NULL` |
-| `project_graph` | Deterministic `MERGE`s from Postgres: Episode, Passage, `CONTAINS`, Claim (with `signal`), `EVIDENCED_BY`, Entity, `ABOUT` (Claim→Entity), and `MENTIONS` (Passage→Entity, derived from that passage's claim entities). | never; `MERGE` makes it a safe full rerun |
+| `reflect` | Decisions assesses each claim against missing active theses; saves stance and strength, including unrelated. | the pair already has a `thesis_assessments` row |
+| `project_graph` | Deterministic `MERGE`s from Postgres: Episode, Passage, `CONTAINS`, Claim (with `signal`), `EVIDENCED_BY`, Entity, `ABOUT` (Claim→Entity), and `MENTIONS` (Passage→Entity, derived from that passage's claim entities); replace `SUPPORTS`/`CHALLENGES` edges with strength ≥25. | never; `MERGE` makes it a safe full rerun |
+| `notify` | Snapshot high-signal challenges and subscribers; send one plain-text SES email per recipient. | alert is already `sent`; disabled email only logs |
 
 Retrying a job means running the whole list again; finished work is skipped. On
 startup, reset `running` jobs to `pending`. An interrupted extraction thread is abandoned,
@@ -162,6 +161,36 @@ It is the most valuable signal and the hardest to score without outside knowledg
 Decisions API has no web search. Per-speaker credibility as a property of a Person
 entity rather than of each claim is also left for later.
 
+## Thesis reflection and alerts
+
+`reflect` uses one `gpt-6-luna` Decisions call per claim, eight concurrently, with two
+questions per missing active thesis: stance (`supports`, `challenges`, `unrelated`) and
+strength. The five strength anchors are no bearing, tangential, contributing factor,
+core driver/premise, and predicted outcome/timeline. The weighted 0–4 score maps to
+0–100 exactly like ranking. Refused stance becomes unrelated; refused strength becomes 0.
+Every pair is saved once, including unrelated, in migration `007_thesis_assessments`.
+Thesis text goes in questions; claim, quote, speaker, and episode context go in input.
+
+`project_graph` replaces stance edges from Postgres; strength ≥25 preserves research
+recall. `notify` follows projection and requires an active subscribed thesis, challenges,
+strength ≥75, and signal ≥60 (a placeholder to tune; NULL never qualifies). Alerts snapshot
+all qualifying `{claim_id, strength, signal}` matches and recipient addresses. Each recipient
+gets a separate plain-text email, strongest first, at most ten claims with quotes and sources.
+The closing app link invites investigation; the analyst decides whether to revise a thesis.
+
+`add_subscription` normalizes the address and checks every thesis is active. “All my theses”
+means currently active theses only; future theses need a new subscription. Email is disabled
+when `PODCAST_ALERT_SENDER` is unset: subject/body are logged and alerts stay pending. Retries
+may repeat these local logs, but never create a duplicate alert row. SES errors mark failed
+and fail the job visibly; retries skip sent alerts. Partial recipient failures may resend
+to recipients reached earlier in the same alert.
+
+When idle, the worker assesses at most 50 claims across episodes and projects their stances,
+without notifying. This connects new theses to old evidence and backfills existing theses.
+Errors are logged and delay the sweep by 60 seconds. **Deferred by owner:** a failure after
+assessments commit but before projection can leave missing graph edges; pair idempotency
+means the sweep will not repair them automatically. Manually re-project affected episodes.
+
 ## Key decisions and trade-offs
 
 1. **No workflow framework (Airflow, n8n, Celery, queues).** It's one host, ~20
@@ -239,6 +268,13 @@ entity rather than of each claim is also left for later.
     `score` levels were chosen over a single 0–100 rating because they calibrate better across
     episodes, and the weighted level still gives fractional resolution.
 
+15. **Reflection persists before projection; notification follows projection.** Postgres remains
+    authoritative and readers find the evidence before email arrives.
+16. **Low graph threshold, high email threshold.** Keep research connections broad while avoiding
+    weak alerts; unrelated rows prevent repeat API work. Plain text preserves quotes as data.
+17. **Idle batches, no extra worker.** Handle new theses and backfill with one loop; defer durable
+    recovery between assessment and projection for this demo.
+
 ## Models and APIs
 
 - **Transcription:** [`gpt-transcribe`](https://developers.openai.com/api/docs/guides/speech-to-text)
@@ -255,6 +291,8 @@ entity rather than of each claim is also left for later.
   plus ordered `levels` (`label`, `description`); the answer's `score` is the
   probability-weighted level index, with a `confidence` we do not store. About 600 input tokens
   per claim at $0.10 per million, so well under a cent per episode.
+- **Reflection:** Decisions (`gpt-6-luna`), two questions per missing active thesis, one request per claim.
+- **Email:** boto3 `sesv2.send_email` in `asyncio.to_thread`, us-east-1, instance-role credentials.
 - **Embeddings:** `text-embedding-3-large` with `dimensions=1536`. Query-time
   embeddings (Codex `vector_search`) must use the same model and `dimensions`.
 - **New dependencies:** `openai` (async client, for Decisions and embeddings; it needs a version
@@ -303,6 +341,9 @@ ingestion/ingestion_service.py   IngestionService: submit/get/retry, the worker,
   │                                 (ChatHarness, PostgresClient, AgentTools injected)
   ├─▶ ingestion/claim_ranker.py   ClaimRanker: the rubric, the Decisions call, signal_score()
   │                                 (PostgresClient, OpenAI client injected)
+  ├─▶ ingestion/thesis_reflector.py  ThesisReflector: missing pair assessments (Postgres only)
+  ├─▶ ingestion/notifier.py     Notifier: alert snapshots, plain-text rendering, delivery status
+  ├─▶ clients/email_client.py   EmailClient: SES (disabled without sender)
   ├─▶ clients/embedding_client.py EmbeddingClient: the one embedding model + dimensions
   ├─▶ clients/transcription_client.py  TranscriptionClient: ffmpeg segments → gpt-transcribe
   ├─▶ clients/postgres_client.py PostgresClient: every SQL statement; returns domain values
@@ -331,6 +372,11 @@ RSS watchers sit beside this stack: `ingestion/watcher_service.py` (`WatcherServ
   - Rerun the job to prove idempotence.
 
   Then deploy to beta and repeat.
+
+Reflection tests extend `test_ingestion.py` with fake Decisions/email clients: pair idempotency,
+refusals, inactive theses, sweep limits/errors, stance replacement and thresholds, subscription
+validation, alert gates, separate recipients, failed/sent retries, and disabled delivery.
+`test_db.py` checks migration 007, stance/strength constraints, uniqueness, and cascading deletion.
 
 ## Verification
 
@@ -417,6 +463,20 @@ Back End of Line": a 42-minute, 101 MB, 320 kbps stereo MP3, so 3 segments (20 +
   In the first run it listed the repository and read `docs/` before querying the
   transcript. The read-only sandbox still allows reading files. We have not decided
   whether to disable it.
+
+**Thesis reflection and alerts — local** (November 11, 2026): 57 backend tests passed against
+Postgres and four CDK tests passed. The initial idle sweep assessed 303 claims against three
+existing theses (909 pairs). A 698-word synthetic executive interview completed in 93 s with
+20 claims. Chat saved a new optics thesis, offered email alerts, and subscribed the approved
+address. The new thesis got assessments across all 323 claims within 17 s; the first rows
+arrived after about 2 s. Chat found 21 CHALLENGES edges and read a linked claim/quote.
+A second synthetic interview produced six qualifying challenges, one pending alert and one
+plain-text email log with quote, speaker, source context, scores and app link. Retrying the job
+left one alert row and logged the email again, as intended in disabled-email mode. By-eye
+review of the first episode's 20 assessments found no false positives at the alert gate;
+some direct cost and power challenges scored below strength 75, so the gate may miss evidence.
+Across 1,364 local assessments: 70 challenges (strength 30–99), 18 supports (30–70),
+1,276 unrelated (0–70). The two synthetic episodes together had 12 gate-qualifying claims.
 
 ## RSS watchers
 
@@ -524,7 +584,4 @@ back two hours, the next tick logged `Watcher checked 1 feed(s); no new episodes
 ## Later, without restructuring
 
 - **YouTube:** a `download` step (yt-dlp) before `transcribe`.
-- **Reflector:** a step after `project_graph` that evaluates new claims against
-  active theses → `SUPPORTS`/`CHALLENGES` edges and `alerts` rows → SES. This is likely
-  another Codex thread with its own skill and tools. `signal` is the natural gate for
-  which contradictions are worth an email.
+- Durable sweep recovery if graph projection fails after assessments commit.

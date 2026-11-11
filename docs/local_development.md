@@ -73,6 +73,9 @@ Run tests with `.venv/bin/python -m unittest discover -s tests -v`. The Postgres
 test creates and drops a temporary database through `DATABASE_URL`; without it
 set, that test is skipped. The `TranscriptionClient` tests are skipped without ffmpeg.
 
+Leave `PODCAST_ALERT_SENDER` unset locally: alerts stay pending and their plain-text email is
+logged at INFO. Retrying may log again but cannot create a duplicate alert.
+
 ### Watch a podcast (RSS)
 
 Ask the chat, for example, "Start watching the Dwarkesh Podcast for new episodes." Codex finds

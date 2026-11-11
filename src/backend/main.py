@@ -26,6 +26,9 @@ from .codex_config import sync_codex_config, tool_specs
 from .db.db import migrate_postgres, open_graph
 from .ingestion.claim_extractor import ClaimExtractor
 from .ingestion.claim_ranker import ClaimRanker
+from .ingestion.thesis_reflector import ThesisReflector
+from .ingestion.notifier import Notifier
+from .clients.email_client import EmailClient
 from .ingestion.ingestion_service import IngestionService
 from .ingestion.models import EpisodeMetadata
 from .ingestion.watcher_service import WatcherService
@@ -75,7 +78,11 @@ async def lifespan(app: FastAPI):
     extractor = ClaimExtractor(db, harness, tools, home / "skills" / "extract-claims" / "SKILL.md")
     transcriber = TranscriptionClient(openai)
     ranker = ClaimRanker(db, openai)
-    app.state.ingestion = IngestionService(db, graph, openai, embedder, extractor, transcriber, ranker)
+    reflector = ThesisReflector(db, openai)
+    notifier = Notifier(db, EmailClient(os.environ.get("PODCAST_ALERT_SENDER")),
+                        app.state.public_origin or "http://127.0.0.1:8000")
+    app.state.ingestion = IngestionService(db, graph, openai, embedder, extractor, transcriber, ranker,
+                                           reflector, notifier)
     # RSS watchers queue new episodes into that pipeline; the chat's register_rss_to_watcher tool adds feeds.
     tools.watcher = WatcherService(db, FeedClient(), app.state.ingestion, MAX_AUDIO_BYTES)
     worker = asyncio.create_task(app.state.ingestion.run_worker())
