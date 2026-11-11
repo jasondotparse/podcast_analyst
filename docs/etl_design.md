@@ -1,6 +1,6 @@
 # Podcast Analyst — Ingestion Pipeline Design
 
-**Status:** `.txt` and `.mp3` ingestion implemented and verified locally and on beta (see [Verification](#verification)) · **Audience:** the engineer building ingestion
+**Status:** `.txt` and `.mp3` ingestion implemented and verified locally and on beta (see [Verification](#verification)); [RSS watchers](#rss-watchers) feed new podcast episodes into it · **Audience:** the engineer building ingestion
 
 Read first: [database_design.md](database_design.md) (schema, contracts, Codex tools),
 [agent_harness_design.md](agent_harness_design.md) (the Codex app-server harness),
@@ -251,8 +251,11 @@ ingestion/ingestion_service.py   IngestionService: submit/get/retry, the worker,
   ├─▶ clients/postgres_client.py PostgresClient: every SQL statement; returns domain values
   └─▶ clients/graph_client.py    GraphClient: every Cypher statement (MERGE projection)
 
-ingestion/models.py              EpisodeMetadata, IngestionJob, Episode, EpisodeGraph
+ingestion/models.py              EpisodeMetadata, IngestionJob, Episode, EpisodeGraph, Feed, ...
 ```
+
+RSS watchers sit beside this stack: `ingestion/watcher_service.py` (`WatcherService`) calls
+`IngestionService.submit`, `clients/feed_client.py`, and `PostgresClient`; see [RSS watchers](#rss-watchers).
 
 - `src/backend/clients/codex_client.py`, `src/backend/chat.py`: the small harness changes above.
 - `codex/skills/extract-claims/SKILL.md`: the extraction instructions; tool definitions are in `codex/tools/`.
@@ -337,10 +340,112 @@ Back End of Line": a 42-minute, 101 MB, 320 kbps stereo MP3, so 3 segments (20 +
   transcript. The read-only sandbox still allows reading files. We have not decided
   whether to disable it.
 
+## RSS watchers
+
+**Status:** implemented and verified locally and on beta (November 10, 2026); see [Watcher verification](#watcher-verification).
+
+All 20 podcasts in the case study's starting universe publish RSS feeds. A feed gives each
+episode a GUID, title, show notes, publish date, and an audio `<enclosure>`, and some give a
+`<podcast:transcript>`. So automated monitoring polls registered feeds instead of
+scraping YouTube. The watcher only *acquires* episodes; it queues them through the same
+`IngestionService.submit` as uploads, and the pipeline above runs unchanged.
+
+```text
+chat: "Start watching the Dwarkesh Podcast"
+  └─ skill register-watcher-on-podcast: web search → official feed URL
+       └─ tool register_rss_to_watcher(feed_url)
+            ├─ fetch + validate the feed (RSS or Atom; ≥1 dated episode with audio or a supported transcript)
+            ├─ invalid → {status: "invalid", error}
+            └─ INSERT watch_sources(url, description = feed title, ingest_since = newest episode's date)
+                 → {status: "registered" | "already_registered", ...}
+
+WatcherService.run: one in-process asyncio task, every 60 s
+  ├─ an ingestion job is pending or running? → do nothing this tick
+  └─ for each feed not checked for an hour (least recently checked first):
+       set last_checked_at; fetch the feed (an error → log, next feed)
+       for each episode published ≥ ingest_since, newest first:
+         already an episode with this GUID (same podcast) or source_url? → next
+         <podcast:transcript> in text/plain, WebVTT, or SRT? → submit(transcript=…)
+         otherwise download the audio enclosure → submit(audio=…)
+         a download error → log, next episode;  queued → stop (one episode per tick)
+```
+
+- **No backfill.** `ingest_since` is the newest episode's publish time at registration, so
+  the first check queues only that episode; later checks queue episodes published after it.
+  Older episodes are never ingested.
+- **Dedupe:** the watcher sets `episodes.external_episode_id` to the GUID (falling back to the
+  enclosure URL), and `UNIQUE(podcast_id, external_episode_id)` already exists. Every check
+  compares the feed's episodes against those rows, so several new episodes are picked up
+  across several checks, newest first. `submit`'s own `content_hash`/`source_url` dedupe
+  still applies. A job that fails or is skipped still counts as seen; retry it with
+  `POST /api/ingestions/{job_id}/retry`.
+- **Strictly serial:** a tick queues at most one episode, and only while no job is pending
+  or running. The existing worker runs it. No queue, lock, or extra worker was added. A manual
+  upload that arrives while a tick is downloading is queued as usual, and the worker still runs
+  jobs one at a time.
+- **Failures** (unreachable or malformed feeds, failed downloads, a missing transcript) are
+  logged as warnings and skipped. A failed feed is retried at its next hourly check, and a
+  failed download is retried at that feed's next check. An unexpected exception is logged,
+  and the loop continues on the next tick.
+- **Metadata:** podcast name and description come from the channel, and the episode title,
+  show notes (HTML stripped), and publish date come from the item. `source_url` is the
+  episode's own page (`<link>`), or its audio URL when the feed links every episode to the
+  same page.
+- **Fetching safety (basic):** http(s) only; the host and every redirect hop must resolve
+  only to public addresses (no private, loopback, link-local, or metadata IPs); 10 s connect
+  and 30 s read timeouts; caps of 20 MB for a feed, 5 MB for a transcript, and
+  `MAX_AUDIO_BYTES` (300 MB) for audio. XML is parsed with the standard library (expat
+  ≥ 2.4.1 refuses entity-expansion bombs). This is not DNS-rebinding-proof.
+- **Code:** `clients/feed_client.py` (`FeedClient`: fetch, parse, download),
+  `ingestion/watcher_service.py` (`WatcherService`: `register`, `run`, `check_feeds`), and
+  migration `005_rss_watchers.sql` (`watch_sources.ingest_since`). The skill is
+  `codex/skills/register-watcher-on-podcast/SKILL.md`, and the tool is
+  `codex/tools/register_rss_to_watcher.json`, a chat tool handled by `AgentTools`.
+  `httpx2` (already installed for `openai`) does the HTTP.
+
+**Limitations (deliberately deferred):**
+- No UI or API to list, pause, or remove feeds. Ask Codex (it can read `watch_sources`),
+  or set `is_active = false` in SQL.
+- Episodes that leave a feed before they are queued are missed. An episode whose
+  `pubDate` is earlier than `ingest_since` is never ingested, and undated episodes are ignored.
+- Video-only enclosures and HTML/JSON transcripts are not supported. A broken
+  enclosure is retried every hour, with a warning each time.
+- A long episode can exceed the extraction step's existing 10-minute Codex timeout.
+- A burst of new episodes across many feeds drains at one episode per tick, once the previous
+  job finishes.
+
+### Watcher verification
+
+Local, November 10, 2026 (unit tests: `tests/test_watcher.py`, mocked feeds and HTTP):
+
+- **Real feeds** parsed by `FeedClient`: Dwarkesh (145 episodes, 78 with WebVTT
+  transcripts), Acquired (218), All-In (444), and Latent Space (297, 247 with WebVTT).
+  Wrong feed URLs returned `invalid` with the HTTP error.
+- **Chat:** "Start watching the Dwarkesh Podcast for new episodes." Codex applied the skill,
+  found the feed through Apple's directory, and registered it. "Please also keep an eye on the
+  All-In podcast" registered its Libsyn feed. Asking for Dwarkesh again returned
+  `already_registered` ("already being watched").
+- **Transcript path:** within a minute, the watcher queued Dwarkesh's newest episode from its
+  WebVTT transcript (9,001 words, `source_type` `txt`). The screen skipped it as `on_topic`;
+  it is a Robert Caro episode about political power.
+- **Audio path:** the next tick queued All-In's newest episode, the Axon CEO interview: a
+  76 MB MP3. It was transcribed (11,031 words) and completed in about 7 minutes with 22
+  passages and 66 claims, with speakers attributed (Rick Smith, David Friedberg).
+  `external_episode_id` held the GUID and `source_url` the episode's Libsyn page.
+- **Hourly re-check:** with `last_checked_at` moved back two hours, both feeds were fetched
+  again and nothing was queued.
+
+Beta (release `c257b8e9de91-20261111T005745-2a80e0`), confirmed from `docker compose logs app`:
+startup applied `005_rss_watchers`. In chat (with a password login), "Start watching the Latent
+Space podcast for new episodes." registered `https://podcast.latent.space/feed.xml`. The
+watcher logged `Watcher queued 'Designing for Agents — Zeno Rocha, Resend' …` about 30 s later.
+The episode went through the **transcript path** (its WebVTT transcript, `source_type` `txt`)
+and completed in about 5 minutes with 34 passages and 75 claims. With `last_checked_at` moved
+back two hours, the next tick logged `Watcher checked 1 feed(s); no new episodes`.
+
 ## Later, without restructuring
 
 - **YouTube:** a `download` step (yt-dlp) before `transcribe`.
-- **Watched sources:** an hourly discovery that calls the same API.
 - **Reflector:** a step after `project_graph` that evaluates new claims against
   active theses → `SUPPORTS`/`CHALLENGES` edges and `alerts` rows → SES. This is likely
   another Codex thread with its own skill and tools.

@@ -1,6 +1,7 @@
 import asyncio
 from contextlib import asynccontextmanager
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Annotated
@@ -17,6 +18,7 @@ from .agent_tools import CHAT_TOOLS, AgentTools
 from .chat import ChatHarness
 from .clients.codex_client import CodexError
 from .clients.embedding_client import EmbeddingClient
+from .clients.feed_client import FeedClient
 from .clients.graph_client import GraphClient
 from .clients.postgres_client import PostgresClient
 from .clients.transcription_client import TranscriptionClient
@@ -25,6 +27,7 @@ from .db.db import migrate_postgres, open_graph
 from .ingestion.claim_extractor import ClaimExtractor
 from .ingestion.ingestion_service import IngestionService
 from .ingestion.models import EpisodeMetadata
+from .ingestion.watcher_service import WatcherService
 from .auth import PasswordAuthMiddleware, router as auth_router, valid_login
 
 
@@ -35,6 +38,9 @@ FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     load_dotenv(ROOT / ".env")
+    # Show the app's own INFO logs (ingestion and watcher progress) alongside Uvicorn's.
+    logging.basicConfig(format="%(levelname)s:     %(name)s: %(message)s")
+    logging.getLogger("src.backend").setLevel(logging.INFO)
     app.state.app_password = os.environ.get("PODCAST_APP_PASSWORD")
     app.state.public_origin = os.environ.get("PODCAST_PUBLIC_ORIGIN")
     app.state.login_sessions = {}
@@ -68,12 +74,16 @@ async def lifespan(app: FastAPI):
     extractor = ClaimExtractor(db, harness, tools, home / "skills" / "extract-claims" / "SKILL.md")
     transcriber = TranscriptionClient(openai)
     app.state.ingestion = IngestionService(db, graph, openai, embedder, extractor, transcriber)
+    # RSS watchers queue new episodes into that pipeline; the chat's register_rss_to_watcher tool adds feeds.
+    tools.watcher = WatcherService(db, FeedClient(), app.state.ingestion, MAX_AUDIO_BYTES)
     worker = asyncio.create_task(app.state.ingestion.run_worker())
+    watcher = asyncio.create_task(tools.watcher.run())
     try:
         yield
     finally:
         worker.cancel()
-        await asyncio.gather(worker, return_exceptions=True)
+        watcher.cancel()
+        await asyncio.gather(worker, watcher, return_exceptions=True)
         await harness.client.close()
         graph.close()
 

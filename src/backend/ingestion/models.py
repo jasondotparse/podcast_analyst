@@ -15,6 +15,7 @@ class EpisodeMetadata(BaseModel):
     published_at: date | None = None
     guests: list[str] | None = None
     source_url: str | None = None
+    external_episode_id: str | None = None  # An RSS episode's GUID; the watcher dedupes on it.
 
 
 class IngestionJob(BaseModel):
@@ -50,3 +51,29 @@ class EpisodeGraph:
     passage_ids: list[UUID]
     claims: list[tuple[UUID, UUID]]  # (claim_id, passage_id)
     entity_links: list[EntityLink]
+
+
+@dataclass
+class FeedEpisode:
+    guid: str
+    title: str
+    description: str | None
+    published_at: datetime
+    source_url: str | None  # What citations link to: the episode's own web page, else its audio file.
+    audio_url: str | None
+    transcript_url: str | None = None
+    transcript_type: str | None = None
+
+
+@dataclass
+class Feed:
+    title: str
+    description: str | None
+    episodes: list[FeedEpisode]  # Only usable ones: an ID, a publish time, and audio or a supported transcript.
+
+
+@dataclass
+class WatchSource:
+    id: UUID
+    url: str
+    ingest_since: datetime

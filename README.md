@@ -25,8 +25,7 @@ app** for HMR development, or **serve front end** when the backend is already ru
 - [ ] **Next:** build the ingestion pipeline that can ingest one episode end-to-end: transcript → passages/embeddings → grounded claims → graph projection. (docs/diagrams/etl_pipeline.png)
   - [x] handle .txt file transcript + podcast metadata ([ingestion design](docs/etl_design.md))
   - [x] handle .mp3 file + podcast metadata (a `transcribe` step: ffmpeg segments → OpenAI `gpt-transcribe`)
-  - [ ] handle a youtube link + podcast metadata (will require a new step: use the yt-dlp package to create a .mp3 from the link, and then let it flow through the pipeline as normal)
-  - [ ] update the UI with fields where the above 3 can be provided by the user (.txt and .mp3 upload form done)
+  - [x] watch podcasts via RSS: the `register-watcher-on-podcast` skill finds a feed, the `register_rss_to_watcher` tool validates and saves it, and an hourly watcher queues new episodes (transcript or audio) into the pipeline ([below](#watching-podcasts-rss))
 - [ ] Discovery/ranking, guest relevance, evaluation
   - it's important that we don't confuse extracting lots of claims with extracting useful investment signals. The next step should be a new 'ranking' pipeline stage between claim extraction and graph projection - it can be a simplel system that ranks the claims based upon: attributable, genuinely material, verifiable, guest credibility. This will probably require a few new attribtues on the claims table. It can be implemented cheaply using the Decisions API - just one call per claim prior to postgres write. Now when Codex is researching a question, it can retrieve claims using graph/vector search and prioritize those with higher materiality, stronger source evidence, and more relevant speakers. We should use the combination of the attributes we extract from the ranking stage to create a 'signal_score'. This formula could start as a very basic average of all the 0-100 scores it got on all the attributes mentioned above. See "signal score design" chatGPT thread.
 - [ ] Process 10 real episodes
@@ -39,7 +38,7 @@ app** for HMR development, or **serve front end** when the backend is already ru
     4. Persist the assessments in Postgres and create corresponding SUPPORTS or CHALLENGES relationships in Ladybug.
     5. Trigger an SES notification when sufficiently strong contradictory evidence is found.
       * this requires new tool add_subscription() which codex can use to update its subscriptions table. That way, it'll know who to email post-reflect stage when a thesis contradiction is detected and its signal score is let's say >90.
-- [ ] watched sources / scheduled discovery & ingestion
+- [x] watched sources / scheduled discovery & ingestion (RSS watchers)
 
 XXX PO REQUIREMENTS COMPLETE AT THIS POINT XXX
 
@@ -54,6 +53,25 @@ XXX PO REQUIREMENTS COMPLETE AT THIS POINT XXX
   	- New podcast ingested: Evaluate its claims against existing theses. (Done) 
   	- New thesis created: Evaluate existing claims against the new thesis.
 - [ ] Prod env deployment.
+
+## Watching podcasts (RSS)
+
+Ask the chat to *"Start watching the Dwarkesh Podcast."* Codex follows the
+`register-watcher-on-podcast` skill: it web-searches for the official RSS feed and calls
+`register_rss_to_watcher`. The backend then fetches and validates the feed (http(s) only, public
+hosts only, timeouts and size caps) and saves it in `watch_sources`.
+- **First run:** only the newest episode at registration is ingested; the archive is not backfilled.
+- **Polling:** every minute the watcher checks whether the pipeline is idle (no pending or running job).
+  When it is, it fetches the feeds not checked for an hour and queues **one** new episode, compared by
+  RSS GUID against `episodes`. It uses the feed's transcript (plain text, WebVTT, or SRT) if there is
+  one, otherwise the audio enclosure, through the existing ingestion path.
+- **Limitations:** no UI to list or remove feeds; episodes that drop out of a feed before they are
+  queued are missed; video-only feeds and HTML/JSON transcripts are not supported; and a failed
+  job is not retried automatically.
+
+Details: [RSS watchers](docs/etl_design.md#rss-watchers).
+
+## Documentation
 
 - [Local setup and VS Code run configuration](docs/local_development.md)
 - [Local Codex chat setup](docs/local_codex_chat.md)

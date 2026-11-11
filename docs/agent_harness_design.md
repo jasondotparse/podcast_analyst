@@ -275,9 +275,10 @@ Do not confuse Codex's `callId` with the JSON-RPC `id` used to answer the reques
 | `graph_query(cypher)` | chat | `AgentTools` → `GraphClient.read_only_query` (one prepared statement in a read-only Ladybug transaction) |
 | `postgres_database_query(sql)` | chat, claim extraction | `AgentTools` → `PostgresClient.read_only_query` (SELECT-only role, `READ ONLY` transaction, one statement) |
 | `write_claim(...)` | claim extraction only | `ClaimExtractor.write_claim` (see [etl_design.md](etl_design.md)) |
+| `register_rss_to_watcher(feed_url)` | chat | `AgentTools` → `WatcherService.register`: fetches and validates the feed, then saves it to `watch_sources`. Returns `registered`, `already_registered`, or `invalid` with the reason. The `register-watcher-on-podcast` skill tells Codex how to find the official feed (see [etl_design.md](etl_design.md#rss-watchers)). |
 | `add_thesis(description, entities)` | chat | `AgentTools.add_thesis` → `PostgresClient.add_thesis` (thesis + `thesis_entities`, one transaction) → `GraphClient.project_thesis` (`(Thesis)-[:ABOUT]->(Entity)`). Its description tells Codex to ask follow-up questions about a vague stance ("I'm bullish on AMZN") and to save a specific thesis immediately; a blank description or no entities is refused. |
 
-`add_thesis` is the chat agent's only write tool. `AgentTools.call` serializes results to JSON and caps them at 200 rows / 40,000 characters.
+`add_thesis` and `register_rss_to_watcher` are the chat agent's only write tools. `AgentTools.call` serializes results to JSON and caps them at 200 rows / 40,000 characters.
 A handler exception is returned to the model as a failed tool result so it can correct itself.
 
 Dynamic tools are **experimental**, even when Codex itself is a stable release. We accept that tradeoff to avoid a separate MCP service for a small demonstration app.
