@@ -27,11 +27,10 @@ app** for HMR development, or **serve front end** when the backend is already ru
   - [x] handle .mp3 file + podcast metadata (a `transcribe` step: ffmpeg segments → OpenAI `gpt-transcribe`)
   - [x] watch podcasts via RSS: the `register-watcher-on-podcast` skill finds a feed, the `register_rss_to_watcher` tool validates and saves it, and an hourly watcher queues new episodes (transcript or audio) into the pipeline ([below](#watching-podcasts-rss))
 - [x] Claim ranking: a `rank` pipeline stage between claim extraction and graph projection scores each claim on specificity, materiality, and source standing (Decisions API, one call per claim) and derives `claims.signal` (0–100, their mean). Codex is told to lead with high-signal claims and may web-search to substantiate them ([design](docs/etl_design.md#claim-ranking)).
-  - [ ] verify on beta with a real episode; retry older jobs to backfill scores
-  - [ ] later: a novelty / non-consensus axis; guest credibility as a property of the speaker rather than each claim
-- [ ] Process 10 real episodes
+  - [x] verify on beta with a real episode; retry older jobs to backfill scores
 - [x] Connect Codex database tools (`vector_search`, `graph_query`, `postgres_database_query`); cited answers verified locally.
 - [x] Conversational thesis capture: Codex helps the user sharpen a thesis, then saves it with `add_thesis` (Postgres + graph).
+- [x] watched sources / scheduled discovery & ingestion (RSS watchers)
 - [ ] add a new, final step to the current ingestion pipeline: "reflect". reflect() would:
     1. Retrieve active theses from Postgres.
     2. Compare newly extracted claims against those theses using an LLM.
@@ -39,7 +38,7 @@ app** for HMR development, or **serve front end** when the backend is already ru
     4. Persist the assessments in Postgres and create corresponding SUPPORTS or CHALLENGES relationships in Ladybug.
     5. Trigger an SES notification when sufficiently strong contradictory evidence is found.
       * this requires new tool add_subscription() which codex can use to update its subscriptions table. That way, it'll know who to email post-reflect stage when a thesis contradiction is detected and its signal score is let's say >90.
-- [x] watched sources / scheduled discovery & ingestion (RSS watchers)
+- [ ] Process 10 real episodes
 
 XXX PO REQUIREMENTS COMPLETE AT THIS POINT XXX
 
@@ -53,6 +52,7 @@ XXX PO REQUIREMENTS COMPLETE AT THIS POINT XXX
 - [ ] support reflection in both directions, not just ingestion:
   	- New podcast ingested: Evaluate its claims against existing theses. (Done) 
   	- New thesis created: Evaluate existing claims against the new thesis.
+- [ ] later: a novelty / non-consensus axis on the 'signal' measure - guest credibility as a property of the speaker rather than each claim
 - [ ] Prod env deployment.
 
 ## Watching podcasts (RSS)
