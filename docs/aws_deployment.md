@@ -296,6 +296,14 @@ then `docker compose up -d --wait app`.
 
 ## Validation
 
+The **active-ingestion status release** (`50df71006a60-20261111T012253-97df1d`) was deployed to
+beta on **November 10, 2026** with `./scripts/deploy.py beta` only. In headless Chromium, via the
+login page, with a finished job temporarily set back to `running` in SQL, the page showed
+"Acquired: Seinfeld · Extracting claims (takes a few minutes)" without an upload from that page.
+The bar hid once the job was set back to `completed`. Earlier on this deploy's base, the watcher
+had fully ingested Acquired's roughly 4-hour "Seinfeld" episode (211 MB audio, about 37,000 words,
+113 claims) in 13 minutes; claim extraction took about 5.5 of its 10 allowed minutes.
+
 The **RSS watcher release** (`c257b8e9de91-20261111T005745-2a80e0`) was deployed to beta on
 **November 10, 2026** with `./scripts/deploy.py beta` only; startup applied `005_rss_watchers`.
 A chat request to watch Latent Space registered its feed, and the watcher queued and fully
