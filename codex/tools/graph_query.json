@@ -1,7 +1,7 @@
 {
   "type": "function",
   "name": "graph_query",
-  "description": "Run one read-only Cypher query (Kuzu dialect) against the knowledge graph and get JSON rows back (at most 200 rows). Nodes: Episode(id), Passage(id), Claim(id), Entity(id, name, kind), Thesis(id). Relationships: (Episode)-[:CONTAINS]->(Passage), (Claim)-[:EVIDENCED_BY]->(Passage), (Claim)-[:ABOUT]->(Entity), (Passage)-[:MENTIONS]->(Entity), (Claim)-[:SUPPORTS]->(Thesis), (Claim)-[:CHALLENGES]->(Thesis), (Thesis)-[:ABOUT]->(Entity). Node ids are the Postgres UUIDs; fetch claim and passage text with postgres_database_query.",
+  "description": "Run one read-only Cypher query (Kuzu dialect) against the knowledge graph and get JSON rows back (at most 200 rows). Nodes: Episode(id), Passage(id), Claim(id, signal), Entity(id, name, kind), Thesis(id). Claim.signal is the 0-100 investment-signal score (NULL if not ranked yet; NULLs sort first in ORDER BY DESC, so filter them out). Relationships: (Episode)-[:CONTAINS]->(Passage), (Claim)-[:EVIDENCED_BY]->(Passage), (Claim)-[:ABOUT]->(Entity), (Passage)-[:MENTIONS]->(Entity), (Claim)-[:SUPPORTS]->(Thesis), (Claim)-[:CHALLENGES]->(Thesis), (Thesis)-[:ABOUT]->(Entity). Node ids are the Postgres UUIDs; fetch claim and passage text with postgres_database_query.",
   "inputSchema": {
     "type": "object",
     "properties": {"cypher": {"type": "string", "description": "A single read-only Cypher statement."}},

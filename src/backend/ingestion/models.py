@@ -33,6 +33,26 @@ class Episode:
     description: str | None
     transcript_text: str | None  # NULL for an MP3 until the transcribe step fills it.
     claims_extracted_at: datetime | None
+    published_at: date | None = None
+    guests: list[str] | None = None
+
+
+@dataclass
+class Claim:
+    """A claim as the rank step scores it."""
+    claim_id: UUID
+    text: str
+    evidence_quote: str
+    speaker: str | None
+
+
+@dataclass
+class Signal:
+    """The rank step's 0-100 scores for one claim; `signal` is derived from the other three."""
+    specificity: int
+    materiality: int
+    source_standing: int
+    signal: int
 
 
 @dataclass
@@ -49,7 +69,7 @@ class EpisodeGraph:
     """An episode's rows that the knowledge graph mirrors."""
     episode_id: UUID
     passage_ids: list[UUID]
-    claims: list[tuple[UUID, UUID]]  # (claim_id, passage_id)
+    claims: list[tuple[UUID, UUID, int | None]]  # (claim_id, passage_id, signal)
     entity_links: list[EntityLink]
 
 

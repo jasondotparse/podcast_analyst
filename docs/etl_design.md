@@ -1,6 +1,6 @@
 # Podcast Analyst — Ingestion Pipeline Design
 
-**Status:** `.txt` and `.mp3` ingestion implemented and verified locally and on beta (see [Verification](#verification)); [RSS watchers](#rss-watchers) feed new podcast episodes into it · **Audience:** the engineer building ingestion
+**Status:** `.txt` and `.mp3` ingestion implemented and verified locally and on beta (see [Verification](#verification)); [claim ranking](#claim-ranking) implemented; [RSS watchers](#rss-watchers) feed new podcast episodes into it · **Audience:** the engineer building ingestion
 
 Read first: [database_design.md](database_design.md) (schema, contracts, Codex tools),
 [agent_harness_design.md](agent_harness_design.md) (the Codex app-server harness),
@@ -32,7 +32,7 @@ POST /api/ingestions   (multipart: metadata JSON + transcript .txt or audio .mp3
      ingestion_job(pending) in one transaction → 202 with the job
 
 Background worker: one in-process asyncio task, one job at a time (oldest pending first)
-  transcribe → screen → chunk → embed → extract_claims → project_graph
+  transcribe → screen → chunk → embed → extract_claims → rank → project_graph
      │ the screen rejects → job 'skipped', error names the failed question
      │ any exception      → job 'failed',  error = message
   each step: read input from Postgres → write output to Postgres (or Ladybug)
@@ -43,7 +43,7 @@ GET /api/ingestions/{job_id} → {status, current_step, error}   (the client pol
 The runner is a plain list of async functions:
 
 ```python
-STEPS = [transcribe, screen, chunk, embed, extract_claims, project_graph]
+STEPS = [transcribe, screen, chunk, embed, extract_claims, rank, project_graph]
 
 async def run_job(job):
     for step in STEPS:
@@ -59,7 +59,8 @@ async def run_job(job):
 | `chunk` | ~750-word passages with ~250 words of overlap, zero-based `ordinal`; timestamps stay NULL for `.txt`. Insert all passages in one transaction. | passages already exist |
 | `embed` | Embed passages `WHERE embedding IS NULL`, in batches. | none are NULL |
 | `extract_claims` | One Codex thread for the whole episode (below). It reads the transcript with SQL and writes claims one at a time with `write_claim`. When its turn completes, set `episodes.claims_extracted_at`. | `claims_extracted_at` is set; otherwise first delete claims left by an interrupted run |
-| `project_graph` | Deterministic `MERGE`s from Postgres: Episode, Passage, `CONTAINS`, Claim, `EVIDENCED_BY`, Entity, `ABOUT` (Claim→Entity), and `MENTIONS` (Passage→Entity, derived from that passage's claim entities). | never; `MERGE` makes it a safe full rerun |
+| `rank` | One Decisions API call per claim (8 at a time) with three `score` questions, each rated against five anchored levels: `specificity`, `materiality`, `source_standing`. Each becomes a 0–100 column on `claims`, and `signal` is their mean, times 0.75 when the claim has no speaker ([Claim ranking](#claim-ranking)). | `claims.signal` is set; it scores only `WHERE signal IS NULL` |
+| `project_graph` | Deterministic `MERGE`s from Postgres: Episode, Passage, `CONTAINS`, Claim (with `signal`), `EVIDENCED_BY`, Entity, `ABOUT` (Claim→Entity), and `MENTIONS` (Passage→Entity, derived from that passage's claim entities). | never; `MERGE` makes it a safe full rerun |
 
 Retrying a job means running the whole list again; finished work is skipped. On
 startup, reset `running` jobs to `pending`. An interrupted extraction thread is abandoned,
@@ -117,6 +118,48 @@ turn/completed  status completed → set claims_extracted_at; anything else or >
   - The turn times out after 10 minutes; the step then sends `turn/interrupt` and fails the job.
   - The thread is kept (not ephemeral), so a developer can inspect what Codex did. Log
     its ID with the job.
+
+## Claim ranking
+
+Extracting many claims is not the same as finding investment signal. The `rank` step
+(`ingestion/claim_ranker.py`) scores every claim so the chat agent can lead with the ones
+that matter, and leaves the rest in place for recall.
+
+**Rubric.** One Decisions API call per claim carries three `score` questions. Each has five
+anchored levels (0–4); the API returns the probability-weighted level, which becomes a
+0–100 component (`level / 4 × 100`, rounded):
+
+| Axis | What it measures | Level 0 … level 4 |
+|---|---|---|
+| `specificity` | How checkable the claim is: a measurable quantity, a timeframe, a named subject. Verifiability and falsifiability fold into this axis. | vague sentiment … quantified, time-bound, and about a named subject |
+| `materiality` | How much it would move an analyst's estimates or view of an identifiable public company, if true. | anecdote … bears directly on a key debate or earnings driver |
+| `source_standing` | How well placed the speaker is to know, and whether the statement is first-hand ("we are seeing") or hearsay ("I read that"). Judged from `speaker`, the `guests` metadata, and the quote's wording. | unknown speaker, no basis … a direct participant on their own business |
+
+**Formula.** `signal = round(mean(specificity, materiality, source_standing) × f)`, where
+`f = 1` when the claim has a speaker and `0.75` when it has none (attribution is known
+deterministically from `speaker IS NULL`, so no question is spent on it). All four values
+are stored, so the formula can change with an `UPDATE`, without another API call.
+
+**What the scorer sees:** the claim text, its evidence quote, its speaker, and a short
+header (podcast, episode title and date, episode description, guests). Not the transcript.
+The `guests` field does real work for `source_standing`, so it is worth filling in.
+
+**Failures.** A refused question scores its axis 0 (logged); an API error fails the job,
+and a retry scores whatever is still `NULL`. To re-score after changing the rubric, set
+`signal` to `NULL` for the claims in question and retry the job. Episodes ingested before
+this step have `NULL` scores until their job is retried, which also re-projects the graph.
+
+**At research time.** `claims.signal` and its components are visible to
+`postgres_database_query`, and `project_graph` copies `signal` onto the graph's `Claim`
+node so a traversal can sort without a second query. The chat instructions tell Codex to
+lead with high-signal claims when evidence is plentiful, and that it may run a quick web
+search to check whether a high-signal claim has since been confirmed or contradicted,
+reporting that separately from the podcast evidence.
+
+**Deferred:** a novelty / non-consensus axis (would a sector analyst already know this?).
+It is the most valuable signal and the hardest to score without outside knowledge; the
+Decisions API has no web search. Per-speaker credibility as a property of a Person
+entity rather than of each claim is also left for later.
 
 ## Key decisions and trade-offs
 
@@ -187,6 +230,13 @@ turn/completed  status completed → set claims_extracted_at; anything else or >
     transcription. `podcast_reader` cannot select it, so Codex's SQL tool never reads audio.
     Cost: a 100 MB upload is held in memory in the request and again in the step, which is why
     uploads are capped at 300 MB.
+14. **Ranking is its own step after `extract_claims`, not part of `write_claim`.** It follows
+    the `embed` idiom: score `WHERE signal IS NULL`, so retries are idempotent and a rubric change
+    is re-scored by nulling `signal`, not by re-running a multi-minute extraction thread. It also
+    keeps `write_claim` fast inside the extraction turn's 10-minute budget. Low-signal claims are
+    kept, not deleted: they remain recall for vector search, and the threshold will move. Anchored
+    `score` levels were chosen over a single 0–100 rating because they calibrate better across
+    episodes, and the weighted level still gives fractional resolution.
 
 ## Models and APIs
 
@@ -200,6 +250,10 @@ turn/completed  status completed → set claims_extracted_at; anything else or >
   `OPENAI_API_KEY`. Input-size limits aren't documented; test with the longest transcript we have.
 - **Claim extraction:** a Codex thread, as described above. `gpt-6-luna` at high reasoning
   are already the Git-managed defaults in `codex/config.toml`.
+- **Ranking:** the Decisions API again (`gpt-6-luna`), with `score` questions: `instructions`
+  plus ordered `levels` (`label`, `description`); the answer's `score` is the
+  probability-weighted level index, with a `confidence` we do not store. About 600 input tokens
+  per claim at $0.10 per million, so well under a cent per episode.
 - **Embeddings:** `text-embedding-3-large` with `dimensions=1536`. Query-time
   embeddings (Codex `vector_search`) must use the same model and `dimensions`.
 - **New dependencies:** `openai` (async client, for Decisions and embeddings; it needs a version
@@ -246,12 +300,14 @@ ingestion/ingestion_service.py   IngestionService: submit/get/retry, the worker,
   │                              screening and embedding calls (OpenAI client injected)
   ├─▶ ingestion/claim_extractor.py  ClaimExtractor: the Codex thread and write_claim
   │                                 (ChatHarness, PostgresClient, AgentTools injected)
+  ├─▶ ingestion/claim_ranker.py   ClaimRanker: the rubric, the Decisions call, signal_score()
+  │                                 (PostgresClient, OpenAI client injected)
   ├─▶ clients/embedding_client.py EmbeddingClient: the one embedding model + dimensions
   ├─▶ clients/transcription_client.py  TranscriptionClient: ffmpeg segments → gpt-transcribe
   ├─▶ clients/postgres_client.py PostgresClient: every SQL statement; returns domain values
   └─▶ clients/graph_client.py    GraphClient: every Cypher statement (MERGE projection)
 
-ingestion/models.py              EpisodeMetadata, IngestionJob, Episode, EpisodeGraph, Feed, ...
+ingestion/models.py              EpisodeMetadata, IngestionJob, Episode, Claim, Signal, EpisodeGraph, Feed, ...
 ```
 
 RSS watchers sit beside this stack: `ingestion/watcher_service.py` (`WatcherService`) calls
@@ -261,8 +317,12 @@ RSS watchers sit beside this stack: `ingestion/watcher_service.py` (`WatcherServ
 - `codex/skills/extract-claims/SKILL.md`: the extraction instructions; tool definitions are in `codex/tools/`.
 - `src/backend/db/migrations/002_ingestion.sql`: the entity tables,
   `episodes.claims_extracted_at`, and the SELECT-only role.
-- **Tests:** unit-test the pure parts (chunker, fingerprint, hash, and finding a quote's
-  passage). Add a check that `postgres_database_query` rejects writes. Run end to end on
+- `src/backend/db/migrations/006_claim_signal.sql`: the four score columns on `claims`;
+  `graph_schema.cypher` adds `Claim.signal` with `ALTER TABLE … ADD IF NOT EXISTS`.
+- **Tests:** unit-test the pure parts (chunker, fingerprint, hash, finding a quote's
+  passage, and `signal_score`). The ranker is tested against Postgres with a fake Decisions
+  client: it scores only unranked claims, a refusal scores 0, and `project_graph` carries
+  `signal` onto the Claim node. Add a check that `postgres_database_query` rejects writes. Run end to end on
   localhost with a real short transcript:
   - Check that claims are sensible and their quotes are verbatim.
   - Check the entities and graph edges.
@@ -448,4 +508,5 @@ back two hours, the next tick logged `Watcher checked 1 feed(s); no new episodes
 - **YouTube:** a `download` step (yt-dlp) before `transcribe`.
 - **Reflector:** a step after `project_graph` that evaluates new claims against
   active theses → `SUPPORTS`/`CHALLENGES` edges and `alerts` rows → SES. This is likely
-  another Codex thread with its own skill and tools.
+  another Codex thread with its own skill and tools. `signal` is the natural gate for
+  which contradictions are worth an email.

@@ -5,7 +5,8 @@ from uuid import UUID
 
 import psycopg
 
-from ..ingestion.models import EntityLink, Episode, EpisodeGraph, EpisodeMetadata, IngestionJob, WatchSource
+from ..ingestion.models import (Claim, EntityLink, Episode, EpisodeGraph, EpisodeMetadata, IngestionJob, Signal,
+                                WatchSource)
 
 
 JOB_COLUMNS = "id, episode_id, status, current_step, error"
@@ -103,7 +104,8 @@ class PostgresClient:
     # ---- Episodes and passages -------------------------------------------
 
     async def get_episode(self, episode_id: UUID) -> Episode:
-        row = await self.one("SELECT p.name, e.title, e.description, e.transcript_text, e.claims_extracted_at "
+        row = await self.one("SELECT p.name, e.title, e.description, e.transcript_text, e.claims_extracted_at, "
+                             "e.published_at, e.guests "
                              "FROM episodes e JOIN podcasts p ON p.id = e.podcast_id WHERE e.id = %s", episode_id)
         return Episode(*row)
 
@@ -174,10 +176,23 @@ class PostgresClient:
     async def mark_claims_extracted(self, episode_id: UUID) -> None:
         await self.execute("UPDATE episodes SET claims_extracted_at = now() WHERE id = %s", episode_id)
 
+    # ---- Claim ranking ---------------------------------------------------
+
+    async def unranked_claims(self, episode_id: UUID) -> list[Claim]:
+        rows = await self.all("SELECT c.id, c.text, c.evidence_quote, c.speaker FROM claims c "
+                              "JOIN passages p ON p.id = c.passage_id WHERE p.episode_id = %s AND c.signal IS NULL",
+                              episode_id)
+        return [Claim(*row) for row in rows]
+
+    async def set_claim_signal(self, claim_id: UUID, scores: Signal) -> None:
+        await self.execute("UPDATE claims SET specificity = %s, materiality = %s, source_standing = %s, signal = %s "
+                           "WHERE id = %s", scores.specificity, scores.materiality, scores.source_standing,
+                           scores.signal, claim_id)
+
     async def episode_graph(self, episode_id: UUID) -> EpisodeGraph:
         passages = await self.all("SELECT id FROM passages WHERE episode_id = %s", episode_id)
-        claims = await self.all("SELECT c.id, c.passage_id FROM claims c JOIN passages p ON p.id = c.passage_id "
-                                "WHERE p.episode_id = %s", episode_id)
+        claims = await self.all("SELECT c.id, c.passage_id, c.signal FROM claims c "
+                                "JOIN passages p ON p.id = c.passage_id WHERE p.episode_id = %s", episode_id)
         links = await self.all("SELECT ce.claim_id, c.passage_id, e.id, e.name, e.kind FROM claim_entities ce "
                                "JOIN entities e ON e.id = ce.entity_id JOIN claims c ON c.id = ce.claim_id "
                                "JOIN passages p ON p.id = c.passage_id WHERE p.episode_id = %s", episode_id)

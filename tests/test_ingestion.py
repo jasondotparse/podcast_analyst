@@ -21,8 +21,9 @@ from src.backend.clients.postgres_client import PostgresClient
 from src.backend.clients.transcription_client import TranscriptionClient
 from src.backend.db.db import migrate_postgres, open_graph
 from src.backend.ingestion.claim_extractor import ClaimExtractor
+from src.backend.ingestion.claim_ranker import RUBRIC, UNATTRIBUTED_FACTOR, ClaimRanker, signal_score
 from src.backend.ingestion.ingestion_service import OVERLAP_WORDS, IngestionService, split_passages
-from src.backend.ingestion.models import EpisodeMetadata, IngestionJob
+from src.backend.ingestion.models import Claim, Episode, EpisodeMetadata, IngestionJob
 from src.backend.main import app
 from tests.test_db import DATABASE_URL
 
@@ -36,6 +37,38 @@ class SplitPassagesTests(unittest.TestCase):
         for start in range(0, len(words) - OVERLAP_WORDS + 1, 37):
             quote = " ".join(words[start:start + OVERLAP_WORDS])
             self.assertTrue(any(quote in passage for passage in passages), start)
+
+
+class SignalScoreTests(unittest.TestCase):
+    def test_signal_is_the_mean_of_the_components_discounted_without_a_speaker(self):
+        components = {"specificity": 100, "materiality": 50, "source_standing": 30}
+        self.assertEqual(signal_score(components, attributed=True).signal, 60)
+        self.assertEqual(signal_score(components, attributed=False).signal, 45)  # 60 * 0.75
+        self.assertEqual(UNATTRIBUTED_FACTOR, 0.75)
+        scores = signal_score(components, attributed=True)
+        self.assertEqual((scores.specificity, scores.materiality, scores.source_standing), (100, 50, 30))
+
+    def test_rubric_has_three_five_level_score_questions(self):
+        self.assertEqual([q["name"] for q in RUBRIC], ["specificity", "materiality", "source_standing"])
+        for question in RUBRIC:
+            self.assertEqual(question["type"], "score")
+            self.assertEqual([level["label"] for level in question["levels"]], ["0", "1", "2", "3", "4"])
+
+
+def fake_decisions(scores_by_claim: dict):
+    """A stand-in for AsyncOpenAI whose decisions.create answers from the claim text in the input.
+    A value of None for an axis is returned as a refusal."""
+    def answer(name, score):
+        if score is None:
+            return SimpleNamespace(type="refusal", name=name)
+        return SimpleNamespace(type="score", name=name, score=score, confidence=0.9)
+
+    async def create(model, questions, input):
+        text = next(line for line in input.splitlines() if line.startswith("Claim: "))[len("Claim: "):]
+        scores = scores_by_claim[text]
+        return SimpleNamespace(answers=[answer(q["name"], scores[q["name"]]) for q in questions])
+
+    return SimpleNamespace(decisions=SimpleNamespace(create=AsyncMock(side_effect=create)))
 
 
 @unittest.skipUnless(shutil.which("ffmpeg"), "ffmpeg is not installed")
@@ -161,7 +194,8 @@ class PostgresBackedTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(results, ["Saved."] * 12)
 
     async def test_submit_queues_once_and_returns_the_existing_job_for_a_duplicate(self):
-        service = IngestionService(self.db, graph=None, openai=None, embedder=None, extractor=None, transcriber=None)
+        service = IngestionService(self.db, graph=None, openai=None, embedder=None, extractor=None, transcriber=None,
+                                   ranker=None)
         metadata = EpisodeMetadata(podcast_name="Chips", podcast_description="Semiconductor news", title="Packaging")
         job, created = await service.submit(metadata, "Advanced packaging is the bottleneck.")
         self.assertTrue(created)
@@ -173,7 +207,8 @@ class PostgresBackedTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await self.db.all("SELECT name, description FROM podcasts"), [("Chips", "Semiconductor news")])
 
     async def test_submit_audio_stores_it_untranscribed_and_dedupes_on_its_bytes(self):
-        service = IngestionService(self.db, graph=None, openai=None, embedder=None, extractor=None, transcriber=None)
+        service = IngestionService(self.db, graph=None, openai=None, embedder=None, extractor=None, transcriber=None,
+                                   ranker=None)
         metadata = EpisodeMetadata(podcast_name="Chips", title="Memristors")
         job, created = await service.submit(metadata, audio=b"ID3 audio bytes")
         self.assertTrue(created)
@@ -187,7 +222,7 @@ class PostgresBackedTests(unittest.IsolatedAsyncioTestCase):
     async def test_transcribe_skips_existing_transcripts_and_saves_new_ones(self):
         transcriber = SimpleNamespace(transcribe=AsyncMock(return_value="Memristors reach pilot customers by 2030."))
         service = IngestionService(self.db, graph=None, openai=None, embedder=None, extractor=None,
-                                   transcriber=transcriber)
+                                   transcriber=transcriber, ranker=None)
         metadata = EpisodeMetadata(podcast_name="Chips", title="Memristors")
         text_job, _ = await service.submit(metadata, transcript="Already a transcript.")
         audio_job, _ = await service.submit(metadata, audio=b"ID3 audio bytes")
@@ -203,11 +238,58 @@ class PostgresBackedTests(unittest.IsolatedAsyncioTestCase):
     async def test_transcribe_fails_when_the_audio_has_no_speech(self):
         transcriber = SimpleNamespace(transcribe=AsyncMock(return_value=" \n"))
         service = IngestionService(self.db, graph=None, openai=None, embedder=None, extractor=None,
-                                   transcriber=transcriber)
+                                   transcriber=transcriber, ranker=None)
         job, _ = await service.submit(EpisodeMetadata(podcast_name="Chips", title="Silence"), audio=b"ID3 silence")
         with self.assertRaisesRegex(ValueError, "no text"):
             await service.transcribe(job.episode_id)
         self.assertIsNone((await self.db.get_episode(job.episode_id)).transcript_text)
+
+    async def test_rank_scores_unranked_claims_once_and_tolerates_refusals(self):
+        for claim in ({"text": "Sivers expects lasers to ship in 2027.", "evidence_quote": "Lasers ship next year.",
+                       "speaker": "Anders Storm", "entities": [{"name": "Sivers", "kind": "company"}]},
+                      {"text": "Power is a constraint.", "evidence_quote": "We are power constrained.",
+                       "speaker": None, "entities": [{"name": "power", "kind": "concept"}]}):
+            await self.extractor.write_claim(self.episode, claim)
+        openai = fake_decisions({
+            "Sivers expects lasers to ship in 2027.": {"specificity": 4, "materiality": 3, "source_standing": 2.5},
+            "Power is a constraint.": {"specificity": 1, "materiality": None, "source_standing": 1},
+        })
+        ranker = ClaimRanker(self.db, openai)
+
+        await ranker.rank(self.episode)
+        rows = await self.db.all("SELECT text, specificity, materiality, source_standing, signal FROM claims ORDER BY text")
+        # 4/4, 3/4, 2.5/4 of 100 -> 100, 75, 62 (Python rounds 62.5 half to even); mean 79 -> 79.
+        # The refused axis scores 0; (25 + 0 + 25) / 3 = 16.7, times 0.75 for no speaker = 12.5 -> 12.
+        self.assertEqual(rows, [("Power is a constraint.", 25, 0, 25, 12),
+                                ("Sivers expects lasers to ship in 2027.", 100, 75, 62, 79)])
+        self.assertEqual(openai.decisions.create.await_count, 2)
+        prompt = openai.decisions.create.await_args_list[0].kwargs["input"]
+        self.assertIn("Podcast: Chips\nEpisode: Optics", prompt)
+        self.assertIn("Evidence quote:", prompt)
+
+        await ranker.rank(self.episode)  # A retry finds nothing unranked.
+        self.assertEqual(openai.decisions.create.await_count, 2)
+
+        # Resetting signal is how a rubric change is re-scored, without re-extracting.
+        await self.db.execute("UPDATE claims SET signal = NULL WHERE text = 'Power is a constraint.'")
+        await ranker.rank(self.episode)
+        self.assertEqual(openai.decisions.create.await_count, 3)
+
+    async def test_project_graph_carries_signal_onto_claim_nodes(self):
+        await self.extractor.write_claim(self.episode, {
+            "text": "Lasers ship next year.", "evidence_quote": "Lasers ship next year.", "speaker": "Anders Storm",
+            "entities": [{"name": "Sivers", "kind": "company"}]})
+        with tempfile.TemporaryDirectory() as directory:
+            graph = GraphClient(open_graph(Path(directory) / "graph.lbug"))
+            graph.project_episode(await self.db.episode_graph(self.episode))  # Before ranking: NULL signal.
+            self.assertEqual(graph.read_only_query("MATCH (c:Claim) RETURN c.signal AS signal", 10),
+                             [{"signal": None}])
+            await self.db.execute("UPDATE claims SET signal = 81")
+            graph.project_episode(await self.db.episode_graph(self.episode))  # A rerun updates it in place.
+            self.assertEqual(graph.read_only_query(
+                "MATCH (c:Claim)-[:EVIDENCED_BY]->(p:Passage) RETURN c.signal AS signal, count(p) AS passages", 10),
+                [{"signal": 81, "passages": 1}])
+            graph.close()
 
     async def test_add_thesis_links_existing_and_new_entities_in_postgres_and_the_graph(self):
         await self.extractor.write_claim(self.episode, {

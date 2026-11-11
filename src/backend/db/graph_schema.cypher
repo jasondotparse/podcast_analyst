@@ -12,3 +12,7 @@ CREATE REL TABLE IF NOT EXISTS ABOUT(FROM Claim TO Entity, FROM Thesis TO Entity
 CREATE REL TABLE IF NOT EXISTS SUPPORTS(FROM Claim TO Thesis);
 CREATE REL TABLE IF NOT EXISTS CHALLENGES(FROM Claim TO Thesis);
 CREATE REL TABLE IF NOT EXISTS MENTIONS(FROM Passage TO Entity);
+
+// Claim.signal (0-100, from Postgres claims.signal) lets traversals rank claims without a
+// SQL round trip. ALTER rather than a column in CREATE so existing graphs gain it too.
+ALTER TABLE Claim ADD IF NOT EXISTS signal INT64;
