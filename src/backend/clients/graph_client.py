@@ -17,9 +17,10 @@ class GraphClient:
         for passage_id in graph.passage_ids:
             conn.execute("MATCH (e:Episode {id: $e}) MERGE (p:Passage {id: $p}) MERGE (e)-[:CONTAINS]->(p)",
                          {"e": episode, "p": str(passage_id)})
-        for claim_id, passage_id in graph.claims:
-            conn.execute("MATCH (p:Passage {id: $p}) MERGE (c:Claim {id: $c}) MERGE (c)-[:EVIDENCED_BY]->(p)",
-                         {"p": str(passage_id), "c": str(claim_id)})
+        for claim_id, passage_id, signal in graph.claims:
+            conn.execute("MATCH (p:Passage {id: $p}) MERGE (c:Claim {id: $c}) SET c.signal = $signal "
+                         "MERGE (c)-[:EVIDENCED_BY]->(p)",
+                         {"p": str(passage_id), "c": str(claim_id), "signal": signal})
         for link in graph.entity_links:
             conn.execute("MATCH (c:Claim {id: $c}), (p:Passage {id: $p}) "
                          "MERGE (n:Entity {id: $n}) ON CREATE SET n.name = $name, n.kind = $kind "

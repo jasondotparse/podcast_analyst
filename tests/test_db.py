@@ -66,7 +66,8 @@ class PostgresMigrationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_migrations_apply_once_and_enforce_the_design(self):
         self.assertEqual(await migrate_postgres(self.url), ["001_initial", "002_ingestion", "003_thesis_entities",
-                                                            "004_episode_audio", "005_rss_watchers"])
+                                                            "004_episode_audio", "005_rss_watchers",
+                                                            "006_claim_signal"])
         self.assertEqual(await migrate_postgres(self.url), [])
 
         async with await psycopg.AsyncConnection.connect(self.url, autocommit=True) as conn:
@@ -95,6 +96,9 @@ class PostgresMigrationTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(psycopg.errors.DataException):
                 await conn.execute("INSERT INTO passages (episode_id, ordinal, text, embedding) "
                                    "VALUES (%s, 1, 'y', '[1,2,3]')", (episode,))
+            with self.assertRaises(psycopg.errors.CheckViolation):
+                await conn.execute("UPDATE claims SET signal = 101")
+            self.assertEqual(await one("SELECT signal FROM claims"), (None,))  # Unranked until the rank step.
 
 
 if __name__ == "__main__":

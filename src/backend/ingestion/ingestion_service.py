@@ -16,6 +16,7 @@ from ..clients.graph_client import GraphClient
 from ..clients.postgres_client import PostgresClient
 from ..clients.transcription_client import TranscriptionClient
 from .claim_extractor import ClaimExtractor
+from .claim_ranker import ClaimRanker
 from .models import EpisodeMetadata, IngestionJob
 
 
@@ -57,14 +58,16 @@ def split_passages(text: str) -> list[str]:
 
 class IngestionService:
     def __init__(self, db: PostgresClient, graph: GraphClient, openai: AsyncOpenAI, embedder: EmbeddingClient,
-                 extractor: ClaimExtractor, transcriber: TranscriptionClient):
+                 extractor: ClaimExtractor, transcriber: TranscriptionClient, ranker: ClaimRanker):
         self.db = db
         self.graph = graph
         self.openai = openai
         self.embedder = embedder
         self.extractor = extractor
         self.transcriber = transcriber
-        self.steps = [self.transcribe, self.screen, self.chunk, self.embed, self.extract_claims, self.project_graph]
+        self.ranker = ranker
+        self.steps = [self.transcribe, self.screen, self.chunk, self.embed, self.extract_claims, self.rank,
+                      self.project_graph]
 
     # ---- Requests ---------------------------------------------------------
 
@@ -158,6 +161,9 @@ class IngestionService:
         thread_id = await self.extractor.extract(episode_id)
         log.info("Extracted claims for episode %s in Codex thread %s", episode_id, thread_id)
         await self.db.mark_claims_extracted(episode_id)
+
+    async def rank(self, episode_id: UUID) -> None:
+        await self.ranker.rank(episode_id)  # Scores only claims with signal IS NULL.
 
     async def project_graph(self, episode_id: UUID) -> None:
         self.graph.project_episode(await self.db.episode_graph(episode_id))

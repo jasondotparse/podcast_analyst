@@ -8,6 +8,7 @@ const STEP_LABELS = {
   chunk: 'Splitting into passages',
   embed: 'Embedding passages',
   extract_claims: 'Extracting claims (takes a few minutes)',
+  rank: 'Ranking claims',
   project_graph: 'Updating the knowledge graph',
 }
 
