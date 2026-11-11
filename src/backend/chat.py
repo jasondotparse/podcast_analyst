@@ -41,7 +41,7 @@ CHAT_INSTRUCTIONS = (
     "for new episodes. Every claim carries a signal score (claims.signal, also "
     "Claim.signal in the graph) from 0 to 100: the mean of specificity (how checkable it is), materiality (how "
     "much it would move an analyst's view of a public company), and source_standing (how well placed the speaker "
-    "is to know, and whether it is first-hand), discounted when no speaker is attributed. When evidence is "
+    "is to know, and whether it is first-hand). When evidence is "
     "plentiful, lead with the highest-signal claims and say which are low-signal; when it is scarce, use what "
     "there is and say so. When a high-signal claim matters to the user's question, you may run a quick web search "
     "to check whether it has since been confirmed, contradicted, or reported elsewhere, and report what you found "

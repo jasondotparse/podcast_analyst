@@ -21,7 +21,7 @@ from src.backend.clients.postgres_client import PostgresClient
 from src.backend.clients.transcription_client import TranscriptionClient
 from src.backend.db.db import migrate_postgres, open_graph
 from src.backend.ingestion.claim_extractor import ClaimExtractor
-from src.backend.ingestion.claim_ranker import RUBRIC, UNATTRIBUTED_FACTOR, ClaimRanker, signal_score
+from src.backend.ingestion.claim_ranker import RUBRIC, ClaimRanker, signal_score
 from src.backend.ingestion.ingestion_service import OVERLAP_WORDS, IngestionService, split_passages
 from src.backend.ingestion.models import Claim, Episode, EpisodeMetadata, IngestionJob
 from src.backend.main import app
@@ -40,13 +40,11 @@ class SplitPassagesTests(unittest.TestCase):
 
 
 class SignalScoreTests(unittest.TestCase):
-    def test_signal_is_the_mean_of_the_components_discounted_without_a_speaker(self):
-        components = {"specificity": 100, "materiality": 50, "source_standing": 30}
-        self.assertEqual(signal_score(components, attributed=True).signal, 60)
-        self.assertEqual(signal_score(components, attributed=False).signal, 45)  # 60 * 0.75
-        self.assertEqual(UNATTRIBUTED_FACTOR, 0.75)
-        scores = signal_score(components, attributed=True)
+    def test_signal_is_the_mean_of_the_components(self):
+        scores = signal_score({"specificity": 100, "materiality": 50, "source_standing": 30})
+        self.assertEqual(scores.signal, 60)
         self.assertEqual((scores.specificity, scores.materiality, scores.source_standing), (100, 50, 30))
+        self.assertEqual(signal_score({"specificity": 25, "materiality": 0, "source_standing": 25}).signal, 17)
 
     def test_rubric_has_three_five_level_score_questions(self):
         self.assertEqual([q["name"] for q in RUBRIC], ["specificity", "materiality", "source_standing"])
@@ -259,8 +257,8 @@ class PostgresBackedTests(unittest.IsolatedAsyncioTestCase):
         await ranker.rank(self.episode)
         rows = await self.db.all("SELECT text, specificity, materiality, source_standing, signal FROM claims ORDER BY text")
         # 4/4, 3/4, 2.5/4 of 100 -> 100, 75, 62 (Python rounds 62.5 half to even); mean 79 -> 79.
-        # The refused axis scores 0; (25 + 0 + 25) / 3 = 16.7, times 0.75 for no speaker = 12.5 -> 12.
-        self.assertEqual(rows, [("Power is a constraint.", 25, 0, 25, 12),
+        # The refused axis scores 0; (25 + 0 + 25) / 3 = 16.7 -> 17, with no extra discount for the missing speaker.
+        self.assertEqual(rows, [("Power is a constraint.", 25, 0, 25, 17),
                                 ("Sivers expects lasers to ship in 2027.", 100, 75, 62, 79)])
         self.assertEqual(openai.decisions.create.await_count, 2)
         prompt = openai.decisions.create.await_args_list[0].kwargs["input"]

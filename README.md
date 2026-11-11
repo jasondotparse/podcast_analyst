@@ -26,7 +26,7 @@ app** for HMR development, or **serve front end** when the backend is already ru
   - [x] handle .txt file transcript + podcast metadata ([ingestion design](docs/etl_design.md))
   - [x] handle .mp3 file + podcast metadata (a `transcribe` step: ffmpeg segments → OpenAI `gpt-transcribe`)
   - [x] watch podcasts via RSS: the `register-watcher-on-podcast` skill finds a feed, the `register_rss_to_watcher` tool validates and saves it, and an hourly watcher queues new episodes (transcript or audio) into the pipeline ([below](#watching-podcasts-rss))
-- [x] Claim ranking: a `rank` pipeline stage between claim extraction and graph projection scores each claim on specificity, materiality, and source standing (Decisions API, one call per claim) and derives `claims.signal` (0–100, discounted when unattributed). Codex is told to lead with high-signal claims and may web-search to substantiate them ([design](docs/etl_design.md#claim-ranking)).
+- [x] Claim ranking: a `rank` pipeline stage between claim extraction and graph projection scores each claim on specificity, materiality, and source standing (Decisions API, one call per claim) and derives `claims.signal` (0–100, their mean). Codex is told to lead with high-signal claims and may web-search to substantiate them ([design](docs/etl_design.md#claim-ranking)).
   - [ ] verify on beta with a real episode; retry older jobs to backfill scores
   - [ ] later: a novelty / non-consensus axis; guest credibility as a property of the speaker rather than each claim
 - [ ] Process 10 real episodes

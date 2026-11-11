@@ -59,7 +59,7 @@ async def run_job(job):
 | `chunk` | ~750-word passages with ~250 words of overlap, zero-based `ordinal`; timestamps stay NULL for `.txt`. Insert all passages in one transaction. | passages already exist |
 | `embed` | Embed passages `WHERE embedding IS NULL`, in batches. | none are NULL |
 | `extract_claims` | One Codex thread for the whole episode (below). It reads the transcript with SQL and writes claims one at a time with `write_claim`. When its turn completes, set `episodes.claims_extracted_at`. | `claims_extracted_at` is set; otherwise first delete claims left by an interrupted run |
-| `rank` | One Decisions API call per claim (8 at a time) with three `score` questions, each rated against five anchored levels: `specificity`, `materiality`, `source_standing`. Each becomes a 0–100 column on `claims`, and `signal` is their mean, times 0.75 when the claim has no speaker ([Claim ranking](#claim-ranking)). | `claims.signal` is set; it scores only `WHERE signal IS NULL` |
+| `rank` | One Decisions API call per claim (8 at a time) with three `score` questions, each rated against five anchored levels: `specificity`, `materiality`, `source_standing`. Each becomes a 0–100 column on `claims`, and `signal` is their mean ([Claim ranking](#claim-ranking)). | `claims.signal` is set; it scores only `WHERE signal IS NULL` |
 | `project_graph` | Deterministic `MERGE`s from Postgres: Episode, Passage, `CONTAINS`, Claim (with `signal`), `EVIDENCED_BY`, Entity, `ABOUT` (Claim→Entity), and `MENTIONS` (Passage→Entity, derived from that passage's claim entities). | never; `MERGE` makes it a safe full rerun |
 
 Retrying a job means running the whole list again; finished work is skipped. On
@@ -135,10 +135,11 @@ anchored levels (0–4); the API returns the probability-weighted level, which b
 | `materiality` | How much it would move an analyst's estimates or view of an identifiable public company, if true. | anecdote … bears directly on a key debate or earnings driver |
 | `source_standing` | How well placed the speaker is to know, and whether the statement is first-hand ("we are seeing") or hearsay ("I read that"). Judged from `speaker`, the `guests` metadata, and the quote's wording. | unknown speaker, no basis … a direct participant on their own business |
 
-**Formula.** `signal = round(mean(specificity, materiality, source_standing) × f)`, where
-`f = 1` when the claim has a speaker and `0.75` when it has none (attribution is known
-deterministically from `speaker IS NULL`, so no question is spent on it). All four values
-are stored, so the formula can change with an `UPDATE`, without another API call.
+**Formula.** `signal = round(mean(specificity, materiality, source_standing))`. A claim with
+no speaker is penalized only through `source_standing`, which scores about 0 for an unknown
+speaker; an extra discount for `speaker IS NULL` was tried and dropped because it penalized
+the same thing twice. All four values are stored, so the formula can change with an
+`UPDATE`, without another API call.
 
 **What the scorer sees:** the claim text, its evidence quote, its speaker, and a short
 header (podcast, episode title and date, episode description, guests). Not the transcript.
@@ -400,11 +401,13 @@ Back End of Line": a 42-minute, 101 MB, 320 kbps stereo MP3, so 3 segments (20 +
   about 2 minutes: 15 claims, signal 32–68. The guest's claims scored source standing 63–100;
   the host's (a journalist) 26–27.
 - Retrying the 10 earlier completed jobs ranked their 288 claims in about 25 s, with no refusals
-  or errors. All 303 claims: 18 below 20, 52 at 20–40, 141 at 40–60, 86 at 60–80, 6 at 80+.
-  The top claims are first-hand executive statements with figures (Axon's CEO on Taser's share
-  price and body-camera volumes); the bottom are unattributed technical explanations.
-- Unattributed claims (23) scored 12–31: source standing is about 0 for an unknown speaker, and
-  the 0.75 factor applies on top. Most come from test uploads without `guests` metadata.
+  or errors. The top claims are first-hand executive statements with figures (Axon's CEO on
+  Taser's share price and body-camera volumes); the bottom are unattributed technical explanations.
+- Unattributed claims (23) first scored 12–31: source standing was about 0 for an unknown speaker,
+  and a 0.75 factor applied on top. The factor was then dropped, and one `UPDATE` recomputed
+  `signal` from the stored components (no API calls): they now score 16–42, and the 280
+  attributed claims were unchanged. All 303 claims: 6 below 20, 63 at 20–40, 142 at 40–60,
+  86 at 60–80, 6 at 80+. Most unattributed claims come from test uploads without `guests` metadata.
 - The graph matched Postgres: 303 `Claim` nodes, each with the same `signal`.
 - Asked about optics and copper, the chat cited claims with their signal scores and led with the
   highest.

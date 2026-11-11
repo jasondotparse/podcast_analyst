@@ -2,8 +2,9 @@
 See docs/etl_design.md#claim-ranking.
 
 Three `score` questions rate the claim against anchored 0-4 levels; each becomes a 0-100
-component, and `signal` is their mean, discounted when no speaker is attributed. The
-components are stored too, so the formula can change without calling the API again.
+component, and `signal` is their mean. An unknown speaker already scores about 0 on
+source_standing, so there is no separate attribution discount. The components are stored
+too, so the formula can change without calling the API again.
 """
 
 import asyncio
@@ -20,7 +21,6 @@ log = logging.getLogger(__name__)
 
 MODEL = "gpt-6-luna"
 CONCURRENCY = 8  # Claims scored at once; the Decisions API is fast, so this is per-episode seconds.
-UNATTRIBUTED_FACTOR = 0.75  # Applied to the signal of a claim with no speaker.
 
 
 def levels(*descriptions: str) -> list[dict]:
@@ -69,10 +69,9 @@ AXES = [question["name"] for question in RUBRIC]
 TOP_LEVEL = len(RUBRIC[0]["levels"]) - 1
 
 
-def signal_score(components: dict[str, int], attributed: bool) -> Signal:
-    """The mean of the three 0-100 components, times UNATTRIBUTED_FACTOR when no speaker is known."""
-    mean = sum(components[axis] for axis in AXES) / len(AXES)
-    return Signal(**components, signal=round(mean * (1 if attributed else UNATTRIBUTED_FACTOR)))
+def signal_score(components: dict[str, int]) -> Signal:
+    """The mean of the three 0-100 components."""
+    return Signal(**components, signal=round(sum(components[axis] for axis in AXES) / len(AXES)))
 
 
 def scorer_input(episode: Episode, claim: Claim) -> str:
@@ -117,4 +116,4 @@ class ClaimRanker:
                 log.warning("Decisions refused %s for claim %s", question["name"], claim.claim_id)
                 score = 0
             components[question["name"]] = round(min(max(score, 0), TOP_LEVEL) / TOP_LEVEL * 100)
-        return signal_score(components, attributed=bool(claim.speaker))
+        return signal_score(components)
