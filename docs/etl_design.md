@@ -1,6 +1,6 @@
 # Podcast Analyst — Ingestion Pipeline Design
 
-**Status:** `.txt` and `.mp3` ingestion implemented and verified locally and on beta (see [Verification](#verification)); [claim ranking](#claim-ranking) implemented; [RSS watchers](#rss-watchers) feed new podcast episodes into it · **Audience:** the engineer building ingestion
+**Status:** `.txt` and `.mp3` ingestion implemented and verified locally and on beta (see [Verification](#verification)); [claim ranking](#claim-ranking) implemented and verified locally; [RSS watchers](#rss-watchers) feed new podcast episodes into it · **Audience:** the engineer building ingestion
 
 Read first: [database_design.md](database_design.md) (schema, contracts, Codex tools),
 [agent_harness_design.md](agent_harness_design.md) (the Codex app-server harness),
@@ -393,6 +393,21 @@ Back End of Line": a 42-minute, 101 MB, 320 kbps stereo MP3, so 3 segments (20 +
 - **Transcripts have no speaker labels**, so Codex attributes speakers only from context and
   metadata. Proper names can come out phonetically: the intro has "Ralph van Kemmen", while a
   later mention reads "Ralph Etienne-Cummings", the name the claims use.
+
+**Claim ranking** (November 10, 2026, locally):
+
+- A new 1,500-word excerpt of "Enabling AI at the Speed of Light" (with `guests`) completed in
+  about 2 minutes: 15 claims, signal 32–68. The guest's claims scored source standing 63–100;
+  the host's (a journalist) 26–27.
+- Retrying the 10 earlier completed jobs ranked their 288 claims in about 25 s, with no refusals
+  or errors. All 303 claims: 18 below 20, 52 at 20–40, 141 at 40–60, 86 at 60–80, 6 at 80+.
+  The top claims are first-hand executive statements with figures (Axon's CEO on Taser's share
+  price and body-camera volumes); the bottom are unattributed technical explanations.
+- Unattributed claims (23) scored 12–31: source standing is about 0 for an unknown speaker, and
+  the 0.75 factor applies on top. Most come from test uploads without `guests` metadata.
+- The graph matched Postgres: 303 `Claim` nodes, each with the same `signal`.
+- Asked about optics and copper, the chat cited claims with their signal scores and led with the
+  highest.
 
 - **Open question:** the Codex extraction thread also has Codex's built-in code-mode
   `exec` tool (`unified_exec`, on by default; `--disable shell_tool` does not remove it).
