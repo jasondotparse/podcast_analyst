@@ -73,6 +73,16 @@ Run tests with `.venv/bin/python -m unittest discover -s tests -v`. The Postgres
 test creates and drops a temporary database through `DATABASE_URL`; without it
 set, that test is skipped. The `TranscriptionClient` tests are skipped without ffmpeg.
 
+### Watch a podcast (RSS)
+
+Ask the chat, for example, "Start watching the Dwarkesh Podcast for new episodes." Codex finds
+the feed and registers it with `register_rss_to_watcher`. Within about a minute (once no other
+job is pending or running), the watcher queues the podcast's newest episode, and the status
+appears in the backend log (`src.backend.ingestion.watcher_service: Watcher queued ...`) and in
+`ingestion_jobs`. Feeds are rechecked hourly. To force a recheck, run
+`UPDATE watch_sources SET last_checked_at = NULL`. See the
+[watcher design](etl_design.md#rss-watchers).
+
 ## VS Code run configurations
 
 Open **Run and Debug**, choose a configuration, and press **F5**:

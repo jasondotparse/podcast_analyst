@@ -38,8 +38,9 @@ configuration or ChatGPT login. To relocate this app's state, set
 ## Git-managed Codex configuration
 
 Edit `codex/config.toml` for defaults and `codex/AGENTS.md` for the agent's global
-instructions. Skills belong in `codex/skills/<skill-name>/SKILL.md`; the first is
-`extract-claims`, used by the ingestion pipeline.
+instructions. Skills belong in `codex/skills/<skill-name>/SKILL.md`: `extract-claims` is
+attached to the ingestion pipeline's extraction turns, and chat threads discover
+`register-watcher-on-podcast` on their own when a user asks to watch a podcast.
 
 Each FastAPI startup copies those two files into the selected Codex home,
 overwriting the installed versions, and replaces its entire `skills/` directory.
@@ -69,7 +70,7 @@ read-only commands anywhere the sandbox allows reading; see
 [etl_design.md](etl_design.md#verification). Live web search is enabled through `codex/config.toml`; no podcast-specific
 tools are advertised.
 Chat threads get three read-only research tools (`vector_search`, `graph_query`,
-`postgres_database_query`) and one write tool, `add_thesis`; ingestion extraction threads get `postgres_database_query`,
+`postgres_database_query`) and two write tools, `add_thesis` and `register_rss_to_watcher`; ingestion extraction threads get `postgres_database_query`,
 `write_claim`, and the `extract-claims` skill. Tool definitions live in `codex/tools/`.
 Other server RPC requests receive an explicit error instead of hanging.
 

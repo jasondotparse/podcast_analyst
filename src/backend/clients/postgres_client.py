@@ -1,10 +1,11 @@
 """PostgreSQL access. Callers pass and receive domain values; all SQL lives here."""
 
+from datetime import datetime, timedelta
 from uuid import UUID
 
 import psycopg
 
-from ..ingestion.models import EntityLink, Episode, EpisodeGraph, EpisodeMetadata, IngestionJob
+from ..ingestion.models import EntityLink, Episode, EpisodeGraph, EpisodeMetadata, IngestionJob, WatchSource
 
 
 JOB_COLUMNS = "id, episode_id, status, current_step, error"
@@ -69,9 +70,10 @@ class PostgresClient:
                                              (metadata.podcast_name, metadata.podcast_description))).fetchone()
             (episode_id,) = await (await conn.execute(
                 "INSERT INTO episodes (podcast_id, title, description, published_at, guests, source_type, source_url, "
-                "content_hash, transcript_text) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                "external_episode_id, content_hash, transcript_text) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                "RETURNING id",
                 (podcast[0], metadata.title, metadata.description, metadata.published_at, metadata.guests,
-                 source_type, metadata.source_url, content_hash, transcript))).fetchone()
+                 source_type, metadata.source_url, metadata.external_episode_id, content_hash, transcript))).fetchone()
             if audio is not None:
                 await conn.execute("INSERT INTO episode_audio (episode_id, audio) VALUES (%s, %s)", (episode_id, audio))
             return to_job(await (await conn.execute(
@@ -87,6 +89,9 @@ class PostgresClient:
     async def requeue_job(self, job_id: UUID) -> None:
         await self.execute("UPDATE ingestion_jobs SET status = 'pending', error = NULL, updated_at = now() "
                            "WHERE id = %s AND status <> 'running'", job_id)
+
+    async def has_active_job(self) -> bool:
+        return await self.one("SELECT 1 FROM ingestion_jobs WHERE status IN ('pending', 'running') LIMIT 1") is not None
 
     async def requeue_running_jobs(self) -> None:
         await self.execute("UPDATE ingestion_jobs SET status = 'pending' WHERE status = 'running'")
@@ -178,6 +183,30 @@ class PostgresClient:
                                "JOIN passages p ON p.id = c.passage_id WHERE p.episode_id = %s", episode_id)
         return EpisodeGraph(episode_id, [passage_id for (passage_id,) in passages],
                             [tuple(row) for row in claims], [EntityLink(*row) for row in links])
+
+    # ---- Watch sources (RSS watchers) ---------------------------------------
+
+    async def add_watch_source(self, url: str, description: str, ingest_since: datetime) -> bool:
+        """False if the URL is already registered."""
+        return await self.one("INSERT INTO watch_sources (url, description, ingest_since) VALUES (%s, %s, %s) "
+                              "ON CONFLICT (url) DO NOTHING RETURNING id", url, description, ingest_since) is not None
+
+    async def due_watch_sources(self, interval: timedelta) -> list[WatchSource]:
+        """Active sources not checked within the interval, least recently checked first."""
+        rows = await self.all("SELECT id, url, ingest_since FROM watch_sources WHERE is_active AND "
+                              "(last_checked_at IS NULL OR last_checked_at < now() - %s) "
+                              "ORDER BY last_checked_at NULLS FIRST", interval)
+        return [WatchSource(*row) for row in rows]
+
+    async def mark_watch_source_checked(self, source_id: UUID) -> None:
+        await self.execute("UPDATE watch_sources SET last_checked_at = now() WHERE id = %s", source_id)
+
+    async def has_episode(self, podcast_name: str, external_episode_id: str, source_url: str | None) -> bool:
+        """Whether the podcast already has an episode with this GUID, or any podcast one with this URL."""
+        return await self.one(
+            "SELECT 1 FROM episodes e JOIN podcasts p ON p.id = e.podcast_id "
+            "WHERE (p.name = %s AND e.external_episode_id = %s) OR e.source_url = %s LIMIT 1",
+            podcast_name, external_episode_id, source_url) is not None
 
     # ---- Agent tools -----------------------------------------------------
 

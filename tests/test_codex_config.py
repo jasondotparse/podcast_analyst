@@ -83,9 +83,12 @@ class StartupConfigTests(unittest.IsolatedAsyncioTestCase):
             }), patch("src.backend.main.load_dotenv"), patch(
                 "src.backend.main.migrate_postgres", AsyncMock()
             ), patch("src.backend.main.open_graph"), patch("src.backend.main.IngestionService") as service_type, patch(
+                "src.backend.main.WatcherService"
+            ) as watcher_type, patch(
                 "src.backend.main.ChatHarness"
             ) as harness_type:
                 service_type.return_value.run_worker = AsyncMock()
+                watcher_type.return_value.run = AsyncMock()
                 client = harness_type.return_value.client
                 client.start = AsyncMock(side_effect=check_installed)
                 client.close = AsyncMock()

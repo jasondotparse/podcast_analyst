@@ -1,5 +1,6 @@
 """Handlers for the chat agent's tools (definitions in codex/tools/): three read-only
-research tools and add_thesis. Each passes the model's arguments straight to the clients."""
+research tools, add_thesis, and register_rss_to_watcher. Each passes the model's arguments
+straight to the clients or services."""
 
 import json
 
@@ -9,7 +10,7 @@ from .clients.postgres_client import PostgresClient
 
 
 MAX_ROWS, MAX_CHARS = 200, 40_000
-CHAT_TOOLS = ("vector_search", "graph_query", "postgres_database_query", "add_thesis")
+CHAT_TOOLS = ("vector_search", "graph_query", "postgres_database_query", "add_thesis", "register_rss_to_watcher")
 
 
 class AgentTools:
@@ -17,6 +18,7 @@ class AgentTools:
         self.db = db
         self.graph = graph
         self.embedder = embedder
+        self.watcher = None  # A WatcherService, set by main.py once the ingestion pipeline it feeds exists.
 
     async def call(self, name: str, arguments: dict) -> str:
         """Run a tool and return its result as (capped) JSON text for the model."""
@@ -45,3 +47,6 @@ class AgentTools:
         self.graph.project_thesis(thesis_id, linked)
         return {"thesis_id": thesis_id, "saved": description.strip(),
                 "about": [f"{name} ({kind})" for _, name, kind in linked]}
+
+    async def register_rss_to_watcher(self, feed_url: str):
+        return await self.watcher.register(feed_url)
