@@ -154,9 +154,10 @@ FastAPI; breakpoints in `src/backend/main.py` work in the backend debugger.
 open the UI. The chat creates a fresh session when the page opens; reload the
 page after restarting the backend. Wait for **Ready** before sending a message.
 
-An empty chat centers the message input beneath a welcome heading, with three
-hardcoded suggested prompts below it: save a Microsoft thesis, request email
-alerts for that thesis, and follow the a16z podcast. Each card shows a label and
+An empty chat centers the message input beneath a welcome heading, with four
+hardcoded suggested prompts below it in a 2x2 grid: save a Microsoft thesis,
+request email alerts for that thesis, follow the a16z podcast, and research the
+strongest claims against an Nvidia data center thesis. Each card shows a label and
 a shortened preview; selecting it fills and focuses the input with the full prompt
 without sending, so it can be edited first. The alert example intentionally refers
 to an existing Microsoft thesis. After the first message is submitted, the cards
@@ -243,7 +244,10 @@ The current chat harness's live streaming tests are recorded in
 Suggested prompts were checked locally in Chrome on November 11, 2026: all three
 cards filled and focused the input without sending; the cards stacked at 390 px
 width; editing and sending a test message hid the welcome area, moved the input
-to the bottom, and received a live reply. The frontend build passed.
+to the bottom, and received a live reply. The frontend build passed. The fourth
+(research) card was checked the same day in headless Chromium: it filled and
+focused the input with the full prompt without sending, the cards formed a 2x2
+grid at 1280 px and stacked at 390 px, with no horizontal scroll or console errors.
 
 References: [Vite server options](https://vite.dev/config/server-options.html),
 [VS Code compound launches](https://code.visualstudio.com/docs/debugtest/debugging-configuration#_compound-launch-configurations),
