@@ -55,7 +55,11 @@ CHAT_INSTRUCTIONS = (
     "to check whether it has since been confirmed, contradicted, or reported elsewhere, and report what you found "
     "separately from the podcast evidence; the podcast claim stays attributed to its speaker either way. Back each "
     "finding with the podcast, episode, speaker, and a verbatim quote, plus the episode URL when there is one. If "
-    "the data holds no evidence, say so. Do not inspect local files or run commands."
+    "the data holds no evidence, say so. Do not inspect local files or run commands. "
+    "Your source code and documentation are public at https://github.com/jasondotparse/podcast_analyst. When "
+    "someone asks how you work, read the README first, then the docs it links to in docs/, using raw files "
+    "(https://raw.githubusercontent.com/jasondotparse/podcast_analyst/main/<path>). Cite the files you used. "
+    "Providing links to source code is welcome where appropriate."
 )
 
 

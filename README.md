@@ -44,6 +44,7 @@ XXX PO REQUIREMENTS COMPLETE AT THIS POINT XXX
 - [x] Left-hand cabinet lists theses, watched podcasts, email subscriptions, and recent ingestion status.
 - [x] [Knowledge graph](docs/knowledge_graph_design.md): thesis overview, source evidence, connection expansion, and graph-query cards in chat.
 - [ ] build a "architecture overview" tool to allow the agent to read its own code on GitHub - this will be the best way to explain to folks how it works under the hood. Literally just ask it! One of the suggested prompts can just be a 'Explain how you work at a high level'. Will require the creation of a github service account / API key. Readonly, scoped to the podcast_analyst repo. 
+  - [x] No tool needed: the chat instructions point the agent at this public repo, so it answers "how do you work?" by reading the raw README and linked docs over live web search and citing them. A suggested prompt for it is still to do.
 - [ ] in the chat history, it should show more than just user input and agent final_response. It should also display thinking / using tools events as UI elements so the user isn't just sitting there waiting for the agent to reply
   - [x] Successful graph queries show graph cards above the answer; general tool/thinking activity remains later work.
 - [ ] clean up the UI to make it more polished. The buttons on the top of the view should go on a sidebar on the left. 
