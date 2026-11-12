@@ -88,7 +88,7 @@ class ChatHarness:
 
     def require_ready(self):
         if not self.client.ready:
-            raise HTTPException(503, "Codex is not ready. Check the backend and reload the page.")
+            raise HTTPException(503, "Podcast Analyst is not ready. Check the backend and reload the page.")
 
     def session(self, session_id: str, owner_session_id: str | None = None) -> ChatSession:
         self.require_ready()
@@ -134,7 +134,7 @@ class ChatHarness:
             # Acceptance may be ambiguous after a timeout; never replay the turn.
             session.invalid = True
             session.busy = False
-            session.emit("fatal", {"message": "The Codex request failed. Reload the page to start a new chat."})
+            session.emit("fatal", {"message": "The Podcast Analyst request failed. Reload the page to start a new chat."})
             raise
 
     async def run_task(self, text: str, skill: Path, tools: list, call_tool, timeout: float) -> str:
@@ -158,11 +158,11 @@ class ChatHarness:
                 result = await asyncio.wait_for(done, timeout)
             except TimeoutError:
                 await self.client.request("turn/interrupt", {"threadId": thread_id, "turnId": turn["turn"]["id"]})
-                raise TimeoutError(f"Codex thread {thread_id} timed out after {timeout:.0f}s")
+                raise TimeoutError(f"Podcast Analyst task (thread {thread_id}) timed out after {timeout:.0f}s")
         finally:
             self.background.pop(thread_id, None)
         if result["status"] != "completed":
-            raise CodexError(f"Codex thread {thread_id} ended {result['status']}: {result.get('error')}")
+            raise CodexError(f"Podcast Analyst task (thread {thread_id}) ended {result['status']}: {result.get('error')}")
         return thread_id
 
     def server_request(self, method: str, params: dict):
@@ -224,7 +224,7 @@ class ChatHarness:
             session.active_turn_id = None
             session.emit("completed", {
                 "status": turn["status"],
-                "error": "Codex could not complete this turn." if turn.get("error") else None,
+                "error": "Podcast Analyst could not complete this turn." if turn.get("error") else None,
             })
 
     def project_tool_item(self, method: str, params: dict) -> dict:
