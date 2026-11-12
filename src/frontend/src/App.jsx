@@ -17,6 +17,10 @@ const SUGGESTED_PROMPTS = [
     label: 'Follow a podcast',
     text: 'Follow the a16z podcast for new episodes',
   },
+  {
+    label: 'Conduct research',
+    text: `What are the top 3 most high signal claims that have been made against my thesis "Nvidia's data center revenue will keep growing more than 40% a year through 2027"?`,
+  },
 ]
 
 export default function App() {
