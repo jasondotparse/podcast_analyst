@@ -161,6 +161,13 @@ works through Vite's SPA fallback. `main.jsx` picks the page: the onboarding pat
   2028, Microsoft captures enterprise AI spending through both Azure and its own apps." Its
   alert offer was declined, so no subscription was created.
 
+### How it works
+
+The cabinet's **How it works** button opens a seven-page technical walkthrough with interactive
+diagrams and chapter navigation. It uses a modal dialog, so the current chat stays mounted;
+there is no separate route or automatic launch. See [the walkthrough guide](how_it_works.md)
+for controls, source references, and content-maintenance notes.
+
 ## VS Code run configurations
 
 Open **Run and Debug**, choose a configuration, and press **F5**:
