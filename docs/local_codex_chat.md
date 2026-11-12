@@ -103,6 +103,11 @@ chat responses that end the turn immediately. The agent must not use
 reply: users can only send their answer after the current turn finishes. Restart
 the backend and reload the page to apply instruction changes to a new chat.
 
+For "how do you work?" questions, the instructions point the agent at this public
+GitHub repo: it reads the README, then the linked `docs/`, as raw files over live web
+search, and cites them. It answers from `main` on GitHub, not from local
+or unmerged changes.
+
 Stop with **Ctrl+C** or **Shift+F5**. The launch configurations allow three
 seconds for open SSE streams to finish before cancellation, then the lifespan
 handler terminates and reaps Codex. Run one Uvicorn worker.
