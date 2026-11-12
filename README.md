@@ -44,7 +44,7 @@ XXX PO REQUIREMENTS COMPLETE AT THIS POINT XXX
 - [x] Successful graph queries show graph cards above the answer; general tool/thinking activity remains later work.
 - [x] clean up the UI to make it more polished and the colors more appealing (dark Nocturne restyle).
 - [x] in the chat history, it should show more than just user input and agent final_response. It should also display thinking / using tools events as UI elements so the user isn't just sitting there waiting for the agent to reply. It should also render markown correctly. Right now the model keeps appending * and backtick characters everywhere which looks odd in the inline chat view. 
-- [ ] a 'new user' onboarding screen (can just be 'new session' onboarding screen for demo purposes, if we boost session lifespan to like 1 day). This should be a few pages that teach the user how to use the agent - can be a single index.html deployed to newuser.podcastanalyst.com
+- [x] [Onboarding](docs/local_development.md#onboarding): a six-page primer at `/app/onboarding`, shown on a browser's first visit and reopened from the rail's **Onboarding** button.
 - [ ] exact same thing for actually describing *how it works under the hood*. deployed to howitworks.podcastanalyst.com
 - [ ] testing 
 - [ ] Prod env deployment.
@@ -55,7 +55,6 @@ XXX PO REQUIREMENTS COMPLETE AT THIS POINT XXX
   - [ ] include section "stuff I was tempted to add but didn't"
   - [ ] include section "cost breakdown"
   - [ ] include section "system design tradeoffs"
-
 
 ## Watching podcasts (RSS)
 

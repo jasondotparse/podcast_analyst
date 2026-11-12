@@ -88,8 +88,8 @@ appears in the backend log (`src.backend.ingestion.watcher_service: Watcher queu
 
 ### Browse the database (cabinet)
 
-The rail on the left of the page (`DbCabinet`) has **Upload podcast** at the top, **Sign out**
-at the bottom, and between them buttons listing what the database holds. Each button opens
+The rail on the left of the page (`DbCabinet`) has **Upload podcast** at the top, **Onboarding**
+and **Sign out** at the bottom, and between them buttons listing what the database holds. Each button opens
 a drawer, with **Close** at its top, which fetches its list fresh every time it opens:
 
 | Button | Shows | Endpoint |
@@ -134,6 +134,32 @@ and the full-width 375 x 800 layout with stacked details. Beta's authenticated
 API, graph counts, 401 protection, and final frontend assets were checked over
 HTTPS; the beta browser remained at sign-in. Full notes and remaining manual
 checks are in the graph design document.
+
+### Onboarding
+
+A six-page primer (one screenshot and a few lines each, with Previous/Next) teaches the core
+loop: save a thesis, follow podcasts, get alerts, research, see the graph. It lives at
+`/app/onboarding`; `/onboarding` redirects there. Both need a login, and in Vite dev the page
+works through Vite's SPA fallback. `main.jsx` picks the page: the onboarding path renders
+`Onboarding` without `App`, so the primer opens no chat session.
+
+- **First visit:** without the `localStorage` key `podcastAnalyst.onboardingSeen`, `/app/`
+  redirects to the primer. Loading the primer sets the key. If storage is blocked, onboarding
+  counts as seen, so the redirect can never loop. The key is per browser (there are no user
+  accounts). To see the primer as a new user again, run
+  `localStorage.removeItem('podcastAnalyst.onboardingSeen')` in the console, or use a private window.
+- **Coming back:** the rail's **Onboarding** button opens it again. It's a full page load, so
+  returning with **Start researching →** starts a fresh chat.
+- **Copy and images:** the `STEPS` constant in `src/frontend/src/components/Onboarding.jsx`; the
+  screenshots are `src/frontend/src/assets/onboarding/1-home.png` … `6-graph.png`, imported so Vite
+  fingerprints them.
+- **Screenshots** (November 12, 2026): 1, 2, 3, and 5 were captured on beta with Playwright
+  through the login page (1440 x 900 at 2x, with the seen key preset), then downscaled to
+  1600 px wide; 5 is cropped to the answer. The owner supplied 4 (a real alert email, which still
+  shows the old "thesis strength" label) and 6 (cropped to the graph card). 5 and 6 were reduced
+  to 256-color PNGs with ffmpeg to stay under 500 KB. **Written to beta:** one thesis, "Through
+  2028, Microsoft captures enterprise AI spending through both Azure and its own apps." Its
+  alert offer was declined, so no subscription was created.
 
 ## VS Code run configurations
 
@@ -229,12 +255,14 @@ returns a clear 503 response until the build exists.
 | FastAPI path | Behavior |
 |---|---|
 | `/` and `/app` | Redirect to `/app/` |
-| `/app/` | Built React page |
+| `/onboarding` | Redirect to `/app/onboarding` |
+| `/app/` and `/app/onboarding` | Built React page |
 | `/app/assets/*` | Built JavaScript/CSS |
 | `/api/health` | `{"status":"ok"}` |
 
 Unknown API paths and missing assets return 404. API documentation endpoints
-remain disabled. There is no client-side page router in this initial UI.
+remain disabled. There is no client-side router: `main.jsx` renders the onboarding page at
+`/app/onboarding` and the chat everywhere else.
 
 ## Docker and deployment
 
@@ -277,6 +305,18 @@ the graph with and without a selected node. The drawer slide and list-to-graph w
 change animate and are instant with reduced motion; Escape restores focus; keyboard
 focus shows the accent ring. Layouts were also checked at 390 and 640 px. The only
 console error was the intercepted `409`.
+
+Onboarding was checked on November 12, 2026 in headless Chromium, locally (the built app through
+FastAPI, with a login password set) and on beta (release `0cbd607d434f-20261112T140139-ed4663`)
+through the login page, with the same 54 checks passing in both. In a fresh browser, `/app/`
+redirected to `/app/onboarding`, and no `POST /api/sessions` fired there. Next stepped
+through all six pages, with the dots and the hidden "Step N of 6" text tracking the page and every
+image loaded. Previous was disabled on page 1 and worked elsewhere. **Start researching →** landed
+on `/app/`, which opened a chat and stayed put on reload. The rail's **Onboarding** button reopened
+the primer, and `/onboarding` redirected to it. Logged out, both URLs went to `/login`. With
+`localStorage` throwing, or only its writes throwing, `/app/` loaded the app. No page scrolled at
+1440 x 900 or 1280 x 800, nothing overflowed horizontally at 390 px, and there were no console
+errors. Beta served the local build's JS and CSS hashes.
 
 References: [Vite server options](https://vite.dev/config/server-options.html),
 [VS Code compound launches](https://code.visualstudio.com/docs/debugtest/debugging-configuration#_compound-launch-configurations),
