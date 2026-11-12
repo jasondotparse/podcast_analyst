@@ -1,15 +1,19 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { CompassIcon, SignOutIcon } from '@phosphor-icons/react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { CompassIcon, SignOutIcon, TreeStructureIcon } from '@phosphor-icons/react'
 import CabinetPanel from './CabinetPanel.jsx'
 import UploadPodcastButton from './UploadPodcastButton.jsx'
 import { CABINET_VIEWS } from './cabinetViews.jsx'
 import './DbCabinet.css'
 
-// A left-hand rail: Upload podcast at the top, Onboarding and Sign out at the bottom, and between them
+const HowItWorks = lazy(() => import('./HowItWorks.jsx'))
+
+// A left-hand rail: Upload podcast at the top, learning panels and Sign out at the bottom, and between them
 // buttons that each open a drawer listing part of what the database holds.
 export default function DbCabinet({ graphRequest, onUploaded }) {
   const [openId, setOpenId] = useState(null)
   const [initialGraph, setInitialGraph] = useState(null)
+  const [howOpen, setHowOpen] = useState(false)
+  const howButton = useRef(null)
   const returnFocus = useRef(null)
   const graphButton = useRef(null)
   const view = CABINET_VIEWS.find((candidate) => candidate.id === openId)
@@ -55,6 +59,8 @@ export default function DbCabinet({ graphRequest, onUploaded }) {
           ))}
         </div>
         <div className="cabinet-footer">
+          <button ref={howButton} type="button" className="btn btn-secondary cabinet-action" aria-haspopup="dialog"
+            onClick={() => { setOpenId(null); setHowOpen(true) }}><TreeStructureIcon size={15} aria-hidden="true" />How it works</button>
           <a className="btn btn-secondary cabinet-action" href="/app/onboarding"><CompassIcon size={15} aria-hidden="true" />Onboarding</a>
           <form className="cabinet-signout" action="/api/logout" method="post">
             <button type="submit" className="btn btn-secondary cabinet-action"><SignOutIcon size={15} aria-hidden="true" />Sign out</button>
@@ -62,6 +68,9 @@ export default function DbCabinet({ graphRequest, onUploaded }) {
         </div>
       </nav>
       {view && <CabinetPanel view={view} onClose={close} graphRequest={initialGraph} />}
+      {howOpen && <Suspense fallback={null}>
+        <HowItWorks onClose={() => { setHowOpen(false); howButton.current?.focus() }} />
+      </Suspense>}
     </aside>
   )
 }

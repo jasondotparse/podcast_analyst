@@ -5,6 +5,7 @@ import podcastsImage from '../assets/onboarding/3-podcasts.png'
 import emailImage from '../assets/onboarding/4-email.png'
 import researchImage from '../assets/onboarding/5-research.png'
 import graphImage from '../assets/onboarding/6-graph.png'
+import WalkthroughNav from './WalkthroughNav.jsx'
 import './Onboarding.css'
 
 const STEPS = [
@@ -65,7 +66,6 @@ const STEPS = [
 export default function Onboarding() {
   const [index, setIndex] = useState(0)
   const step = STEPS[index]
-  const last = index === STEPS.length - 1
 
   // Load every screenshot up front so Next never shows an empty frame.
   useEffect(() => { for (const { image } of STEPS) new Image().src = image }, [])
@@ -82,19 +82,9 @@ export default function Onboarding() {
           )}
           {step.footnote && <p className="onboarding-footnote">{step.footnote}</p>}
         </div>
-        <div className="onboarding-dots">
-          {STEPS.map((candidate, dot) => (
-            <span key={candidate.title} aria-hidden="true" className={dot === index ? 'active' : undefined} />
-          ))}
-          <span className="visually-hidden">Step {index + 1} of {STEPS.length}</span>
-        </div>
-        <div className="onboarding-nav">
-          <button type="button" className="btn btn-secondary" disabled={index === 0}
-            onClick={() => setIndex(index - 1)}>Previous</button>
-          {last
-            ? <a className="btn btn-primary" href="/app/">Start researching →</a>
-            : <button type="button" className="btn btn-primary" onClick={() => setIndex(index + 1)}>Next</button>}
-        </div>
+        <WalkthroughNav index={index} count={STEPS.length}
+          onPrevious={() => setIndex(index - 1)} onNext={() => setIndex(index + 1)}
+          finishHref="/app/" finishLabel="Start researching →" />
       </div>
     </main>
   )
