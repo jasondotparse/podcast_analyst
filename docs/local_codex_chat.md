@@ -97,6 +97,12 @@ conversation; there is no browser-session restoration. Sending a second prompt
 while the same conversation is busy returns 409. The UI disables Send until
 `turn/completed`, rather than treating HTTP acceptance as completion.
 
+Chat developer instructions require clarification questions to be normal final
+chat responses that end the turn immediately. The agent must not use
+`request_user_input`, `request_user_input_async`, or sleep/wait tools to wait for a
+reply: users can only send their answer after the current turn finishes. Restart
+the backend and reload the page to apply instruction changes to a new chat.
+
 Stop with **Ctrl+C** or **Shift+F5**. The launch configurations allow three
 seconds for open SSE streams to finish before cancellation, then the lifespan
 handler terminates and reaps Codex. Run one Uvicorn worker.
