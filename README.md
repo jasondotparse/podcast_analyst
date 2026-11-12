@@ -47,7 +47,7 @@ XXX PO REQUIREMENTS COMPLETE AT THIS POINT XXX
 - [x] [Onboarding](docs/local_development.md#onboarding): a six-page primer at `/app/onboarding`, shown on a browser's first visit and reopened from the rail's **Onboarding** button.
 - [ ] exact same thing for actually describing *how it works under the hood*. deployed to howitworks.podcastanalyst.com
 - [ ] testing 
-- [ ] Prod env deployment.
+- [x] Prod env deployment: [podcastanalystagent.com](https://podcastanalystagent.com) ([verified release](docs/aws_deployment.md#prod-release-verification)).
 - [ ] Process 10 real episodes
 - [ ] update readme.md & docs with your product vision, tradeoffs made, next steps for future development etc. 
   - [ ] include section "features to add next": 1) a novelty / non-consensus axis on the 'signal' measure - guest credibility as a property of the speaker rather than each claim

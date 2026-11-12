@@ -225,7 +225,8 @@ local edits separately before releasing.
    Expect only NS/SOA at the apex; an existing A record conflicts with CDK.
    If CAA is present, it must allow `letsencrypt.org`. CDK must create the apex
    SES identity and its DKIM records; delete a manually created apex identity
-   first. Leave beta's identity and DNS untouched.
+   first. Remove only that old identity's three DKIM CNAMEs if they would conflict
+   with the CDK-managed records. Leave beta's identity and DNS untouched.
 
 2. Set `PODCAST_PROD_PASSWORD` in the **gitignored** root `.env`: at least eight
    characters, on one line. `OPENAI_API_KEY` must already be present. If the
@@ -414,6 +415,49 @@ Always review `cdk diff`: this feature changes only SES, its DKIM records, and I
 replacement deletes the databases and requires explicit owner approval.
 
 ## Validation
+
+### Prod release verification
+
+Prod was created and released on **November 12, 2026** from merged PR #33,
+clean main commit `b46a7af692b51566514aa65b659b0afa4176ab61`:
+
+- **URL:** `https://podcastanalystagent.com`; stack `PodcastAnalyst-prod`
+  reached `CREATE_COMPLETE`. Instance `i-0606ad425b56f6a75`, Elastic IP `3.208.180.67`.
+- **Release:** `b46a7af692b5-20261112T233936-a529d4`;
+  deploy SSM command `7ad091df-a7ad-4171-a5c6-c7d391903b74` succeeded.
+  ECR digest `sha256:256f6cf6c69e0522072fd78cfecf06df2bdc736c1036eb6673712ae28884d457`
+  exactly matches beta's `adf82ce2abba-20261112T143420-161cba` image.
+- **Infrastructure:** `t3.medium`, encrypted 32 GiB gp3 root disk, only 80/443
+  inbound. IMDSv2 requires tokens with hop limit 2; the app container resolved
+  its `iam-role` credentials. Apex SES DKIM is `SUCCESS`. The old manual apex
+  identity and its three DKIM records were removed before CDK created replacements.
+  Beta's CDK diff had no differences and its stack was not updated.
+- **Checks before release:** five CDK tests passed; the runtime setup rejected
+  seven-character passwords and accepted eight-character passwords in an offline
+  check. Runtime secrets were uploaded without printing them.
+- **Fresh private Chrome context:** valid HTTPS, root redirected to `/login`, prod
+  password login worked, the cookie was Secure/HttpOnly/SameSite=Lax, all six
+  onboarding images loaded, and onboarding created no chat session. **Start
+  researching →** opened chat and reached **Ready**. All five drawers showed empty
+  prod data. A live `postgres_database_query` turn returned five zero counts and
+  returned to **Ready**, confirming the new data stores had no beta content.
+  Authenticated health/readiness returned 200; anonymous requests returned 401.
+  Logout invalidated the session. No browser JavaScript or console errors occurred.
+- **Approved UI upload:** FT / Tech Tonic, *Bill Gates: AI bioweapons ‘could be
+  worse than Covid’*, from the owner's supplied transcript, completed with
+  **1 episode, 8 passages, 40 claims** after all seven migrations applied.
+  Job `265aa87a-3d44-437a-9f48-1f2e47948681`, episode
+  `12711d6c-c8ca-4ffb-8d71-cc8e9d5f67f2`. The Ingestions drawer showed `completed`.
+  App and Postgres remained healthy; final host check SSM command
+  `0108315c-bf10-439c-be99-11d0ced8ea6d` confirmed the counts and EBS-backed storage.
+
+**Remaining demo setup:** seed Nvidia and optical-interconnect theses, register
+the desired feeds, and upload the remaining episodes through the prod UI. Theses,
+feeds, and subscriptions remained empty after verification; no alert email was sent.
+MP3 ingestion and a full seeded demo dry run were not repeated on prod. Rotate the
+prod password after the demo using the commands above.
+
+### Beta release verification
 
 The **onboarding release** (`0cbd607d434f-20261112T140139-ed4663`, no migrations) was deployed to
 beta on **November 12, 2026** with `./scripts/deploy.py beta` only. Beta served the local build's
