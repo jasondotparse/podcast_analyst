@@ -9,13 +9,19 @@ from ..ingestion.models import EntityLink, Episode, EpisodeGraph, EpisodeMetadat
 
 
 JOB_COLUMNS = "id, episode_id, status, current_step, error"
+# Jobs with their episode's podcast name and title, so the UI can say what is being ingested.
+LABELED_JOBS = ("SELECT j.id, j.episode_id, j.status, j.current_step, j.error, p.name, e.title FROM ingestion_jobs j "
+                "JOIN episodes e ON e.id = j.episode_id JOIN podcasts p ON p.id = e.podcast_id")
 
 
 def to_job(row) -> IngestionJob | None:
+    """From JOB_COLUMNS, optionally followed by the podcast name and episode title."""
     if row is None:
         return None
-    job_id, episode_id, status, current_step, error = row
-    return IngestionJob(job_id=job_id, episode_id=episode_id, status=status, current_step=current_step, error=error)
+    job_id, episode_id, status, current_step, error, *label = row
+    podcast_name, title = label or (None, None)
+    return IngestionJob(job_id=job_id, episode_id=episode_id, status=status, current_step=current_step, error=error,
+                        podcast_name=podcast_name, title=title)
 
 
 async def upsert_entities(conn, entities: list[tuple[str, str]]) -> list[tuple[UUID, str, str]]:
@@ -53,10 +59,8 @@ class PostgresClient:
     # ---- Ingestion jobs ---------------------------------------------------
 
     async def find_job_by_source(self, content_hash: str, source_url: str | None) -> IngestionJob | None:
-        return to_job(await self.one(
-            "SELECT j.id, j.episode_id, j.status, j.current_step, j.error FROM episodes e "
-            "JOIN ingestion_jobs j ON j.episode_id = e.id WHERE e.content_hash = %s OR e.source_url = %s",
-            content_hash, source_url))
+        return to_job(await self.one(f"{LABELED_JOBS} WHERE e.content_hash = %s OR e.source_url = %s",
+                                     content_hash, source_url))
 
     async def create_episode_job(self, metadata: EpisodeMetadata, source_type: str, transcript: str | None,
                                  content_hash: str, audio: bytes | None = None) -> IngestionJob:
@@ -76,11 +80,17 @@ class PostgresClient:
                  source_type, metadata.source_url, metadata.external_episode_id, content_hash, transcript))).fetchone()
             if audio is not None:
                 await conn.execute("INSERT INTO episode_audio (episode_id, audio) VALUES (%s, %s)", (episode_id, audio))
-            return to_job(await (await conn.execute(
-                f"INSERT INTO ingestion_jobs (episode_id) VALUES (%s) RETURNING {JOB_COLUMNS}", (episode_id,))).fetchone())
+            job = await (await conn.execute(
+                f"INSERT INTO ingestion_jobs (episode_id) VALUES (%s) RETURNING {JOB_COLUMNS}", (episode_id,))).fetchone()
+            return to_job((*job, metadata.podcast_name, metadata.title))
 
     async def get_job(self, job_id: UUID) -> IngestionJob | None:
-        return to_job(await self.one(f"SELECT {JOB_COLUMNS} FROM ingestion_jobs WHERE id = %s", job_id))
+        return to_job(await self.one(f"{LABELED_JOBS} WHERE j.id = %s", job_id))
+
+    async def active_job(self) -> IngestionJob | None:
+        """The job the worker is running, else the next one it will run."""
+        return to_job(await self.one(f"{LABELED_JOBS} WHERE j.status IN ('running', 'pending') "
+                                     "ORDER BY j.status = 'running' DESC, j.created_at LIMIT 1"))
 
     async def next_pending_job(self) -> IngestionJob | None:
         return to_job(await self.one(

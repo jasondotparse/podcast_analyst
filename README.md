@@ -64,7 +64,8 @@ hosts only, timeouts and size caps) and saves it in `watch_sources`.
 - **Polling:** every minute the watcher checks whether the pipeline is idle (no pending or running job).
   When it is, it fetches the feeds not checked for an hour and queues **one** new episode, compared by
   RSS GUID against `episodes`. It uses the feed's transcript (plain text, WebVTT, or SRT) if there is
-  one, otherwise the audio enclosure, through the existing ingestion path.
+  one, otherwise the audio enclosure, through the existing ingestion path. Its progress appears
+  in the page's status bar, like an upload's.
 - **Limitations:** no UI to list or remove feeds; episodes that drop out of a feed before they are
   queued are missed; video-only feeds and HTML/JSON transcripts are not supported; and a failed
   job is not retried automatically.

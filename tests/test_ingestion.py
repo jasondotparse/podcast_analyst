@@ -84,6 +84,14 @@ class IngestionEndpointTests(unittest.TestCase):
         self.assertEqual([call.kwargs for call in self.submit.call_args_list],
                          [{"transcript": "Lasers ship next year."}, {"audio": b"ID3 audio"}])
 
+    def test_active_ingestion_returns_the_current_job_or_null(self):
+        job = IngestionJob(job_id=uuid4(), episode_id=uuid4(), status="running", current_step="transcribe",
+                           podcast_name="Acquired", title="Seinfeld")
+        app.state.ingestion = SimpleNamespace(active_job=AsyncMock(side_effect=[job, None]))
+        response = self.client.get("/api/ingestions/active")  # Not mistaken for /api/ingestions/{job_id}.
+        self.assertEqual((response.status_code, response.json()), (200, job.model_dump(mode="json")))
+        self.assertIsNone(self.client.get("/api/ingestions/active").json())
+
     def test_audio_over_the_size_limit_is_rejected(self):
         with patch("src.backend.main.MAX_AUDIO_BYTES", 4):
             self.assertEqual(self.post(audio=("episode.mp3", b"ID3 audio")).status_code, 413)
@@ -171,6 +179,20 @@ class PostgresBackedTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(duplicate, job)
         self.assertEqual(await service.get_job(job.job_id), job)
         self.assertEqual(await self.db.all("SELECT name, description FROM podcasts"), [("Chips", "Semiconductor news")])
+
+    async def test_active_job_is_the_running_one_else_the_oldest_pending_with_its_label(self):
+        service = IngestionService(self.db, graph=None, openai=None, embedder=None, extractor=None, transcriber=None)
+        self.assertIsNone(await service.active_job())
+        first, _ = await service.submit(EpisodeMetadata(podcast_name="Acquired", title="Seinfeld"), "Transcript one.")
+        second, _ = await service.submit(EpisodeMetadata(podcast_name="Chips", title="Packaging"), "Transcript two.")
+        self.assertEqual(((await service.active_job()).job_id, first.podcast_name, first.title),
+                         (first.job_id, "Acquired", "Seinfeld"))
+        await self.db.update_job(second.job_id, "running", "embed")
+        self.assertEqual(await service.active_job(), second.model_copy(update={"status": "running",
+                                                                                "current_step": "embed"}))
+        await self.db.update_job(second.job_id, "completed")
+        await self.db.update_job(first.job_id, "failed", error="Some error")
+        self.assertIsNone(await service.active_job())
 
     async def test_submit_audio_stores_it_untranscribed_and_dedupes_on_its_bytes(self):
         service = IngestionService(self.db, graph=None, openai=None, embedder=None, extractor=None, transcriber=None)

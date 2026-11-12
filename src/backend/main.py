@@ -26,7 +26,7 @@ from .codex_config import sync_codex_config, tool_specs
 from .db.db import migrate_postgres, open_graph
 from .ingestion.claim_extractor import ClaimExtractor
 from .ingestion.ingestion_service import IngestionService
-from .ingestion.models import EpisodeMetadata
+from .ingestion.models import EpisodeMetadata, IngestionJob
 from .ingestion.watcher_service import WatcherService
 from .auth import PasswordAuthMiddleware, router as auth_router, valid_login
 
@@ -183,6 +183,13 @@ async def create_ingestion(metadata: Annotated[Json[EpisodeMetadata], Form()], i
             raise HTTPException(413, f"Audio files are limited to {MAX_AUDIO_BYTES // (1024 * 1024)} MB.")
         job, created = await ingestion.submit(metadata, audio=await audio.read())
     return job if created else JSONResponse(job.model_dump(mode="json"), status_code=409)
+
+
+# Declared before /api/ingestions/{job_id}, which would otherwise match "active" and reject it as a UUID.
+@app.get("/api/ingestions/active")
+async def active_ingestion(ingestion: Ingestion) -> IngestionJob | None:
+    """The running (else the next pending) job, from any source: an upload, another tab, or a watcher."""
+    return await ingestion.active_job()
 
 
 @app.get("/api/ingestions/{job_id}")
