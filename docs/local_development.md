@@ -116,6 +116,8 @@ speaker, source, and signal, or use **Show connections** to add neighbors. **Res
 reloads the current view. **Escape**, **Close**, or the cabinet button closes it
 and restores focus; chat and its event stream stay mounted.
 
+Successful chat `graph_query` calls can also show a 280 px graph card. **Open in
+graph view**, or clicking a card node, opens that subgraph in the cabinet.
 Components live in `src/frontend/src/components/graph/`; only `GraphCanvas.jsx`
 imports the lazy-loaded, exactly pinned `react-force-graph-2d` library. Evidence
 appears as plain text, and only http(s) source URLs become links. Keyboard users
