@@ -182,7 +182,7 @@ export default function App() {
         <header>
           <h1>Podcast Analyst</h1>
           <p role="status" className={`connection-status${connected && !busy ? ' ready' : ''}`}>
-            {busy ? 'Codex is replying…' : connected ? 'Ready' : 'Connecting to Codex…'}
+            {busy ? 'Podcast Analyst is replying…' : connected ? 'Ready' : 'Connecting to Podcast Analyst…'}
           </p>
         </header>
         <section className={`chat-content${isEmpty ? ' is-empty' : ''}`} aria-label="Research chat">
@@ -200,7 +200,7 @@ export default function App() {
                 <li key={message.id} className={`message ${message.role}`}>
                   {message.role === 'graph' ? <GraphCard graph={message.graph} onOpen={openGraph} />
                     : message.role === 'tool' ? <ToolActivity tool={message} /> : <>
-                      <span className="speaker">{message.role === 'user' ? 'You' : 'Codex'}</span>
+                      <span className="speaker">{message.role === 'user' ? 'You' : 'Podcast Analyst'}</span>
                       {message.role === 'user' ? <p>{message.text}</p> : <MarkdownMessage text={message.text} />}
                     </>}
                 </li>
@@ -212,7 +212,7 @@ export default function App() {
           {error && <p className="error" role="alert">{error}</p>}
           <form className="composer" onSubmit={sendMessage}>
             <label className="visually-hidden" htmlFor="message">Message</label>
-            <textarea ref={messageInput} id="message" placeholder="Message Codex…" value={draft} rows={2}
+            <textarea ref={messageInput} id="message" placeholder="Message Podcast Analyst…" value={draft} rows={2}
               maxLength={20000} onChange={(event) => setDraft(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {

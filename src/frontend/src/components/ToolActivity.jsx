@@ -71,7 +71,7 @@ export default function ToolActivity({ tool }) {
       <pre>{display(tool.arguments ?? null)}</pre>
       <h4>Response{tool.truncated && <span className="tool-truncated"> · truncated to 40,000 characters for display</span>}</h4>
       {tool.result != null ? <pre>{display(tool.result)}</pre>
-        : <p className="tool-empty">{tool.status === 'running' ? 'Waiting for the tool to finish…' : 'No result payload exposed by Codex'}</p>}
+        : <p className="tool-empty">{tool.status === 'running' ? 'Waiting for the tool to finish…' : 'No result details available'}</p>}
     </details>
   )
 }

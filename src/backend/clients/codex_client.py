@@ -65,12 +65,12 @@ class CodexAppServerClient:
     async def write(self, message):
         async with self.write_lock:
             if self.process is None or self.process.returncode is not None:
-                raise CodexError("Codex is not running. Restart the backend.")
+                raise CodexError("Podcast Analyst is not running. Restart the backend.")
             try:
                 self.process.stdin.write((json.dumps(message) + "\n").encode())
                 await self.process.stdin.drain()
             except (BrokenPipeError, ConnectionResetError) as error:
-                raise CodexError("Codex disconnected. Restart the backend.") from error
+                raise CodexError("Podcast Analyst disconnected. Restart the backend.") from error
 
     async def request(self, method: str, params: dict, timeout: float = 30):
         self.next_id += 1
@@ -81,7 +81,7 @@ class CodexAppServerClient:
             await self.write({"id": request_id, "method": method, "params": params})
             return await asyncio.wait_for(future, timeout)
         except TimeoutError as error:
-            raise CodexError(f"Codex request timed out: {method}. Start a new chat.") from error
+            raise CodexError(f"Podcast Analyst request timed out: {method}. Start a new chat.") from error
         finally:
             self.pending.pop(request_id, None)
 
@@ -108,7 +108,7 @@ class CodexAppServerClient:
             log.exception("Codex stdout connection failed")
         finally:
             self.ready = False
-            error = CodexError("Codex disconnected. Restart the backend and reload the page.")
+            error = CodexError("Podcast Analyst disconnected. Restart the backend and reload the page.")
             for future in list(self.pending.values()):
                 if not future.done():
                     future.set_exception(error)
