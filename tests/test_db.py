@@ -10,6 +10,7 @@ from psycopg.conninfo import make_conninfo
 import real_ladybug as ladybug
 
 from src.backend.clients.graph_client import GraphClient
+from src.backend.clients.postgres_client import PostgresClient
 from src.backend.db.db import migrate_postgres, open_graph
 
 
@@ -110,6 +111,39 @@ class PostgresMigrationTests(unittest.IsolatedAsyncioTestCase):
                 await conn.execute("INSERT INTO thesis_assessments VALUES (%s, %s, 'supports', 25)", (claim_id, thesis))
             await conn.execute("DELETE FROM claims")
             self.assertEqual(await one("SELECT count(*) FROM thesis_assessments"), (0,))
+
+    async def test_catalog_lists_what_the_cabinet_shows(self):
+        await migrate_postgres(self.url)
+        db = PostgresClient(self.url)
+        async with await psycopg.AsyncConnection.connect(self.url, autocommit=True) as conn:
+            async def one(query, *params):
+                return await (await conn.execute(query, params)).fetchone()
+
+            (thesis,) = await one("INSERT INTO theses (description) VALUES ('Optics win') RETURNING id")
+            await conn.execute("INSERT INTO theses (description, is_active) VALUES ('Old idea', false)")
+            await conn.execute("INSERT INTO subscriptions (thesis_id, email) VALUES (%s, 'a@example.com')", (thesis,))
+            await conn.execute("INSERT INTO watch_sources (url, description, ingest_since) VALUES "
+                               "('https://b.example/rss', 'Beta Pod', now()), ('https://a.example/rss', NULL, now()), "
+                               "('https://c.example/rss', 'Gone', now())")
+            await conn.execute("UPDATE watch_sources SET is_active = false WHERE description = 'Gone'")
+            (podcast,) = await one("INSERT INTO podcasts (name) VALUES ('Chips') RETURNING id")
+            for title, status, age in [('Old', 'completed', '2 hours'), ('New', 'failed', '1 minute')]:
+                (episode,) = await one("INSERT INTO episodes (podcast_id, title, source_type) "
+                                       "VALUES (%s, %s, 'txt') RETURNING id", podcast, title)
+                await conn.execute("INSERT INTO ingestion_jobs (episode_id, status, error, updated_at) "
+                                   "VALUES (%s, %s, %s, now() - %s::interval)",
+                                   (episode, status, 'boom' if status == 'failed' else None, age))
+
+        theses = await db.list_theses()
+        self.assertEqual({(row["description"], row["is_active"]) for row in theses},
+                         {("Optics win", True), ("Old idea", False)})
+        self.assertEqual([row["name"] for row in await db.list_watched_podcasts()],
+                         ["Beta Pod", "https://a.example/rss"])  # Falls back to the URL; inactive feeds hidden.
+        self.assertEqual([(row["email"], row["thesis"]) for row in await db.list_subscriptions()],
+                         [("a@example.com", "Optics win")])
+        jobs = await db.recent_ingestions(1)
+        self.assertEqual([(row["podcast"], row["title"], row["status"], row["error"]) for row in jobs],
+                         [("Chips", "New", "failed", "boom")])
 
 
 

@@ -15,6 +15,7 @@ from openai import AsyncOpenAI
 from pydantic import BaseModel, Field, Json
 
 from .agent_tools import CHAT_TOOLS, AgentTools
+from .catalog_service import CatalogService
 from .chat import ChatHarness
 from .clients.codex_client import CodexError
 from .clients.embedding_client import EmbeddingClient
@@ -64,6 +65,7 @@ async def lifespan(app: FastAPI):
     openai = AsyncOpenAI(api_key=api_key)
     embedder = EmbeddingClient(openai)
     tools = AgentTools(db, graph, embedder)
+    app.state.catalog = CatalogService(db)
 
     home = Path(os.environ.get("PODCAST_CODEX_HOME", ROOT / ".local" / "codex")).expanduser().resolve()
     sync_codex_config(ROOT / "codex", home)
@@ -208,6 +210,34 @@ async def retry_ingestion(job_id: UUID, ingestion: Ingestion):
     if job is None:
         raise HTTPException(404, "Unknown ingestion job.")
     return job
+
+
+# Read-only lists for the UI's left-hand cabinet.
+def catalog_service(request: Request) -> CatalogService:
+    return request.app.state.catalog
+
+
+Catalog = Annotated[CatalogService, Depends(catalog_service)]
+
+
+@app.get("/api/catalog/theses")
+async def catalog_theses(catalog: Catalog):
+    return await catalog.theses()
+
+
+@app.get("/api/catalog/podcasts")
+async def catalog_podcasts(catalog: Catalog):
+    return await catalog.podcasts()
+
+
+@app.get("/api/catalog/subscriptions")
+async def catalog_subscriptions(catalog: Catalog):
+    return await catalog.subscriptions()
+
+
+@app.get("/api/catalog/ingestions")
+async def catalog_ingestions(catalog: Catalog):
+    return await catalog.ingestions()
 
 
 @app.get("/ready")

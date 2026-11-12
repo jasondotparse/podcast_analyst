@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { post } from './api.js'
+import DbCabinet from './components/DbCabinet.jsx'
 import PipelineStatus from './components/PipelineStatus.jsx'
 import UploadPodcastButton from './components/UploadPodcastButton.jsx'
 
@@ -106,6 +107,7 @@ export default function App() {
 
   return (
     <main className="chat">
+      <DbCabinet />
       {ingestionJobId && <PipelineStatus key={ingestionJobId} jobId={ingestionJobId} onDismiss={clearIngestion} />}
       <header>
         <h1>Podcast Analyst</h1>
