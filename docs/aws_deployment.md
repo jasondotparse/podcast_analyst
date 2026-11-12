@@ -315,6 +315,13 @@ replacement deletes the databases and requires explicit owner approval.
 
 ## Validation
 
+The **Nocturne restyle release** (`c6370906881a-20261112T030213-7ed711`, frontend only) was
+deployed to beta on **November 11, 2026** with `./scripts/deploy.py beta` only. Beta served the
+same CSS and JS asset hashes as the local build. In headless Chromium via the login page, home,
+the Theses and Ingestions drawers, and the knowledge graph (56 nodes / 119 connections, with a
+claim selected) rendered in the new theme with no console errors. Local checks are in
+[local_development.md](local_development.md#verified-behavior).
+
 The **thesis alert release** (`ef75aaf67954-20261111T132124-ec0a64`) was deployed to beta on
 **November 11, 2026** after the SES client fix. `007_thesis_assessments` applied and the idle
 sweep backfilled existing claims. A beta UI upload of a synthetic optics interview generated

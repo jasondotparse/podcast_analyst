@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { CheckIcon, CircleNotchIcon } from '@phosphor-icons/react'
 import usePipelineStatus from '../hooks/usePipelineStatus.js'
 import './PipelineStatus.css'
 
@@ -22,7 +23,7 @@ function describe(job) {
   return STEP_LABELS[job.current_step] ?? job.current_step
 }
 
-// A green bar that fills as the job moves through the pipeline. It disappears shortly
+// A bar that fills as the job moves through the pipeline. It disappears shortly
 // after success; a rejected or failed job stays visible until dismissed.
 export default function PipelineStatus({ jobId, onDismiss }) {
   const { job, progress, finished } = usePipelineStatus(jobId)
@@ -42,8 +43,9 @@ export default function PipelineStatus({ jobId, onDismiss }) {
         <div className="pipeline-fill" style={{ width: `${progress * 100}%` }} />
       </div>
       <p role="status">
+        {succeeded ? <CheckIcon size={13} aria-hidden="true" /> : !problem && <CircleNotchIcon size={13} aria-hidden="true" />}
         {describe(job)}
-        {problem && <button type="button" className="secondary" onClick={onDismiss}>Dismiss</button>}
+        {problem && <button type="button" className="btn btn-secondary" onClick={onDismiss}>Dismiss</button>}
       </p>
     </div>
   )

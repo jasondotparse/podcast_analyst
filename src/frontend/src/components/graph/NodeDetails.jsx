@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { ArrowLeftIcon, ArrowUpRightIcon } from '@phosphor-icons/react'
 import { nodeId } from './graphStyle.js'
 
 export default function NodeDetails({ graph, selectedId, onSelect, onExpand, expanding }) {
@@ -10,18 +11,24 @@ export default function NodeDetails({ graph, selectedId, onSelect, onExpand, exp
   return (
     <aside className="graph-details" aria-label="Graph node details">
       {node ? <>
-        <button type="button" className="secondary" onClick={() => onSelect(null)}>All nodes</button>
+        <button type="button" className="btn btn-ghost graph-back" onClick={() => onSelect(null)}>
+          <ArrowLeftIcon size={13} aria-hidden="true" />All nodes
+        </button>
         <p className="graph-node-type">{node.type}{detail.kind ? ` · ${detail.kind}` : ''}</p>
         <h3 ref={heading} tabIndex={-1}>{node.label}</h3>
-        {node.type === 'Claim' && <p>Signal: {node.signal ?? 'Not scored'}</p>}
+        {node.type === 'Claim' && <p className="graph-signal">Signal: <span className="graph-signal-bar" aria-hidden="true">
+          <span style={{ width: `${node.signal ?? 0}%` }} />
+        </span><span className="graph-signal-value">{node.signal ?? 'Not scored'}</span></p>}
         {detail.quote && <blockquote>{detail.quote}</blockquote>}
         <dl>
           {['speaker', 'podcast', 'episode', 'published_at'].filter((key) => detail[key]).map((key) => (
             <div key={key}><dt>{key === 'published_at' ? 'Published' : key}</dt><dd>{detail[key]}</dd></div>
           ))}
         </dl>
-        {/^https?:\/\//i.test(detail.source_url ?? '') && <a href={detail.source_url} target="_blank" rel="noreferrer">Open source ↗</a>}
-        <button type="button" onClick={() => onExpand(node.id)} disabled={expanding}>
+        {/^https?:\/\//i.test(detail.source_url ?? '') && <a href={detail.source_url} target="_blank" rel="noreferrer">
+          Open source<ArrowUpRightIcon size={12} aria-hidden="true" />
+        </a>}
+        <button type="button" className="btn btn-primary graph-expand" onClick={() => onExpand(node.id)} disabled={expanding}>
           {expanding ? 'Loading connections…' : 'Show connections'}
         </button>
         <h4>Connections</h4>
@@ -30,7 +37,7 @@ export default function NodeDetails({ graph, selectedId, onSelect, onExpand, exp
           const other = graph.nodes.find((candidate) => candidate.id === otherId)
           return <li key={`${link.type}|${otherId}`}>
             <button type="button" className="graph-node-button" onClick={() => onSelect(otherId)}>
-              <span>{link.type.replaceAll('_', ' ')}{link.strength != null ? ` · ${link.strength}` : ''} · {other.type}</span>
+              <span className={`edge-${link.type}`}>{link.type.replaceAll('_', ' ')}{link.strength != null ? ` · ${link.strength}` : ''} · {other.type}</span>
               {other.label}
             </button>
           </li>

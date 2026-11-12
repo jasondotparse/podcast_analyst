@@ -50,10 +50,10 @@ episode), and the status bar shows "Transcribing audio…" meanwhile. Optional f
 the episode's original URL (`source_url`, which gives claims a linkable source and also
 dedupes re-uploads) and comma-separated guests. The form closes once the server accepts the
 upload (`202`) and shows the server's error otherwise, for example a duplicate (`409`).
-A green bar at the top of the page then tracks that upload: the `usePipelineStatus` hook
+A thin accent bar above the chat header then tracks that upload: the `usePipelineStatus` hook
 (`src/frontend/src/hooks/`) polls `GET /api/ingestions/{job_id}` every 2 s and fills one
 segment per pipeline step. The bar disappears after success; a rejected or failed job
-stays visible, in red with its reason, until dismissed. It tracks only the latest upload
+stays visible, in the error red with its reason, until dismissed. It tracks only the latest upload
 and is not restored after a page reload.
 Components live in `src/frontend/src/components/`; API calls in `src/frontend/src/api.js`.
 
@@ -155,8 +155,8 @@ FastAPI; breakpoints in `src/backend/main.py` work in the backend debugger.
 open the UI. The chat creates a fresh session when the page opens; reload the
 page after restarting the backend. Wait for **Ready** before sending a message.
 
-An empty chat centers the message input beneath a welcome heading, with five
-hardcoded suggested prompts below it in a two-column grid: save a Microsoft thesis,
+An empty chat shows a left-aligned welcome heading and the message input, with five
+hardcoded suggested prompts below it in a ruled grid (two columns when there is room): save a Microsoft thesis,
 request email alerts for that thesis, follow the a16z podcast, research the
 strongest claims against an Nvidia data center thesis, and **Connect my theses**.
 The new graph prompt traces evidence between the Nvidia, AWS-capex, and optical
@@ -166,6 +166,18 @@ without sending, so it can be edited first. The alert example intentionally refe
 to an existing Microsoft thesis. After the first message is submitted, the cards
 and welcome heading disappear and the input moves to the bottom of the chat.
 The cards stack vertically on narrow screens.
+
+### Visual theme
+
+The UI uses the dark **Nocturne** design system. `src/frontend/src/nocturne.css` is an
+unmodified copy of its token sheet (colors, Inter type, radii, and the `.btn`, `.input`,
+`.field`, `.tag`, and `.dialog` classes); `main.jsx` imports it before everything else. App and
+component stylesheets use its variables rather than hex values. `style.css` adds the one
+off-ramp color, a muted red (`--color-error*`) for CHALLENGES edges, failed jobs, and errors,
+and the fading-rule gradients (`--rule-x`, `--rule-y`, `--rule-row`). Icons are
+`@phosphor-icons/react` (regular weight). The cabinet rail is the shell's first grid column
+(232 px; 196 px at 700 px and below, 156 px at 500 px and below), and its drawers slide out from
+behind it unless the browser asks for reduced motion.
 
 Stop with **Shift+F5**. Stopping a session launched by the full-stack compound
 stops both sessions. Stop existing servers before switching launch modes: the
@@ -255,6 +267,16 @@ grid at 1280 px and stacked at 390 px, with no horizontal scroll or console erro
 The fifth **Connect my theses** card was also checked locally in Chrome: selecting
 it filled and focused the composer without sending, including the three-claim
 limit near the start of the prompt. The frontend build passed.
+
+The Nocturne restyle was checked on November 11, 2026 in headless Chromium against the
+design handoff's screenshots (924 x 540) and prototype (1440 x 900): home, a live chat
+reply with a graph card and its chat subgraph, all five cabinet drawers, the upload
+dialog (empty, file chosen, wrong file type, server `409`), the pipeline bar (running,
+complete, failed and dismissed; job responses were intercepted in the browser), and
+the graph with and without a selected node. The drawer slide and list-to-graph width
+change animate and are instant with reduced motion; Escape restores focus; keyboard
+focus shows the accent ring. Layouts were also checked at 390 and 640 px. The only
+console error was the intercepted `409`.
 
 References: [Vite server options](https://vite.dev/config/server-options.html),
 [VS Code compound launches](https://code.visualstudio.com/docs/debugtest/debugging-configuration#_compound-launch-configurations),

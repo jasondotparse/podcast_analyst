@@ -11,7 +11,7 @@ export default function CabinetPanel({ view, onClose, graphRequest }) {
     <section id="cabinet-panel" className={`cabinet-panel${view.id === 'graph' ? ' graph-cabinet' : ''}`} aria-labelledby="cabinet-title">
       <div className="cabinet-header">
         <h2 id="cabinet-title">{view.title ?? view.label}</h2>
-        <button ref={closeButton} type="button" className="secondary" onClick={onClose}>Close</button>
+        <button ref={closeButton} type="button" className="btn btn-secondary" onClick={onClose}>Close</button>
       </div>
       <div className="cabinet-body">
         {view.id === 'graph'

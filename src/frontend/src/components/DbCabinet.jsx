@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { SignOutIcon } from '@phosphor-icons/react'
 import CabinetPanel from './CabinetPanel.jsx'
 import UploadPodcastButton from './UploadPodcastButton.jsx'
 import { CABINET_VIEWS } from './cabinetViews.jsx'
@@ -35,22 +36,26 @@ export default function DbCabinet({ graphRequest, onUploaded }) {
   return (
     <aside className="cabinet" aria-label="Database cabinet">
       <nav className="cabinet-rail">
-        <UploadPodcastButton className="cabinet-action" onUploaded={onUploaded} />
-        {CABINET_VIEWS.map((candidate) => (
-          <button key={candidate.id} type="button" className="cabinet-tab"
-            ref={candidate.id === 'graph' ? graphButton : null}
-            aria-pressed={candidate.id === openId} aria-controls="cabinet-panel"
-            onClick={(event) => {
-              returnFocus.current = event.currentTarget
-              if (openId === candidate.id) return close()
-              setInitialGraph(null)
-              setOpenId(candidate.id)
-            }}>
-            {candidate.label}
-          </button>
-        ))}
+        <div className="cabinet-brand" aria-hidden="true"><span className="cabinet-brand-mark" />Podcast Analyst</div>
+        <UploadPodcastButton className="btn btn-primary cabinet-action" onUploaded={onUploaded} />
+        <div className="cabinet-tabs">
+          <div className="cabinet-label" aria-hidden="true">Database</div>
+          {CABINET_VIEWS.map((candidate) => (
+            <button key={candidate.id} type="button" className="cabinet-tab"
+              ref={candidate.id === 'graph' ? graphButton : null}
+              aria-pressed={candidate.id === openId} aria-controls="cabinet-panel"
+              onClick={(event) => {
+                returnFocus.current = event.currentTarget
+                if (openId === candidate.id) return close()
+                setInitialGraph(null)
+                setOpenId(candidate.id)
+              }}>
+              <candidate.icon size={16} aria-hidden="true" />{candidate.label}
+            </button>
+          ))}
+        </div>
         <form className="cabinet-signout" action="/api/logout" method="post">
-          <button type="submit" className="secondary cabinet-action">Sign out</button>
+          <button type="submit" className="btn btn-secondary cabinet-action"><SignOutIcon size={15} aria-hidden="true" />Sign out</button>
         </form>
       </nav>
       {view && <CabinetPanel view={view} onClose={close} graphRequest={initialGraph} />}

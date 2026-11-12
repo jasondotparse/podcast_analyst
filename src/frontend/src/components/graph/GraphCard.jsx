@@ -1,4 +1,5 @@
 import { lazy, Suspense, useMemo } from 'react'
+import { GraphIcon } from '@phosphor-icons/react'
 import { copyGraph } from './graphStyle.js'
 import GraphLegend from './GraphLegend.jsx'
 import useGraphSize from './useGraphSize.js'
@@ -19,7 +20,9 @@ export default function GraphCard({ graph, onOpen }) {
       </div>
       <div className="graph-card-caption">
         <span>{graph.nodes.length} nodes · {graph.links.length} connections{graph.truncated ? ' · limited view' : ''}</span>
-        <button type="button" className="secondary" onClick={() => onOpen(graph)}>Open in graph view</button>
+        <button type="button" className="btn btn-secondary" onClick={() => onOpen(graph)}>
+          <GraphIcon size={13} aria-hidden="true" />Open in graph view
+        </button>
       </div>
     </div>
   )

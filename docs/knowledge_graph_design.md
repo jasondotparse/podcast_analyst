@@ -14,10 +14,12 @@ Claims include verbatim quote, speaker, podcast, episode, publication date, and
 source URL. Entities take their name and kind from the graph. Missing Postgres
 claims, theses, and episodes are dropped with their edges.
 
-The four visual types are Thesis (ink), Claim (gray, sized by signal), Entity
-(aqua), and Episode (yellow). SUPPORTS edges are blue; CHALLENGES are red and
-dashed; both have arrowheads and width by strength. ABOUT and IN_EPISODE are
-gray hairlines. Passage nodes and MENTIONS are omitted; claim-to-passage-to-episode
+The four visual types are Thesis (pale violet with a soft halo), Claim (gray, sized
+by signal), Entity (violet), and Episode (a hollow ring). SUPPORTS edges are violet;
+CHALLENGES are muted red and dashed; both have arrowheads and width by strength.
+ABOUT and IN_EPISODE are dim hairlines. Colors are Nocturne tokens, listed in
+`graphStyle.js`; the canvas resolves them once with `getComputedStyle`. With a
+node selected, unrelated nodes fade to 25% and links that don't touch it to 12%. Passage nodes and MENTIONS are omitted; claim-to-passage-to-episode
 paths become IN_EPISODE. A text legend accompanies every canvas.
 
 ## API and limits
