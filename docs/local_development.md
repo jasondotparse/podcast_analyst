@@ -126,6 +126,12 @@ a quote against Postgres; expand and reset; try literal markup in evidence; open
 while ingestion runs; check at 375 px; ask chat for thesis challenges and open its
 card. See [graph design](knowledge_graph_design.md) for the recorded checks.
 
+Verified November 11, 2026 in Chrome: overview, claim details, expansion, Reset,
+and the full-width 375 x 800 layout with stacked details. Beta's authenticated
+API, graph counts, 401 protection, and final frontend assets were checked over
+HTTPS; the beta browser remained at sign-in. Full notes and remaining manual
+checks are in the graph design document.
+
 ## VS Code run configurations
 
 Open **Run and Debug**, choose a configuration, and press **F5**:
