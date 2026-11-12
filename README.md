@@ -32,21 +32,23 @@ app** for HMR development, or **serve front end** when the backend is already ru
 - [x] Conversational thesis capture: Codex helps the user sharpen a thesis, then saves it with `add_thesis` (Postgres + graph).
 - [x] watched sources / scheduled discovery & ingestion (RSS watchers)
 - [x] Thesis reflection and alerts: `rank → reflect → project_graph → notify`; Decisions assessments, stance edges, chat subscriptions, and SES email for challenges with strength ≥75 and signal ≥60 ([design](docs/etl_design.md#thesis-reflection-and-alerts)).
-- [ ] Process 10 real episodes
-
-XXX PO REQUIREMENTS COMPLETE AT THIS POINT XXX
-
-- [ ] build "suggested prompts" new users can use these UI elements to auto-populate a prompt into the chat box. The same as 'suggested prompts' in ChatGPT, but hardcoded.
-- [ ] build a "architecture overview" tool to allow the agent to read its own code on GitHub - this will be the best way to explain to folks how it works under the hood. Literally just ask it! One of the suggested prompts can just be a 'Explain how you work at a high level'. Will require the creation of a github service account / API key. Readonly, scoped to the podcast_analyst repo. 
-- [ ] UI nice-to-haves
-	 - in the chat history, it should show more than just user input and agent final_response. It should also display thinking / using tools events as UI elements so the user isn't just sitting there waiting for the agent to reply
-	 - graph visualization - ladybugDB already has a graph visualizer tool. We should just deploy and iframe this within our web app. 
-	 - onboarding modal when a new browser is detected that explains how the app works
-   - clean up the UI to make it more polished. The buttons on the top of the view should go on a sidebar on the left. 
 - [x] support reflection in both directions, not just ingestion:
   	- New podcast ingested: Evaluate its claims against existing theses. (Done) 
   	- New thesis created: Evaluate existing claims against the new thesis.
+- [ ] Process 10 real episodes
+- [ ] update readme.md & docs with your product vision, tradeoffs made, etc. 
+
+XXX PO REQUIREMENTS COMPLETE AT THIS POINT XXX
+
+- [x] build "suggested prompts" new users can use these UI elements to auto-populate a prompt into the chat box. The same as 'suggested prompts' in ChatGPT, but hardcoded.
+- [x] left hand cabinet with the following buttons: 1) show thesis (when clicked, the cabinet opens from the left and shows which thesis are in the db) 2) show podcasts (when clicked, shows which podcast rss feeds we're subbed to) 3) show subscriptions (when clicked, shows which emails get notified and for what thesis) 4) show recent ingestions status (self explanatory - show the podcast name and its ingestion time / status complete or failed.) 5) show knowledge graph (this one's just a placeholder)
+- [ ] graph visualization
+- [ ] build a "architecture overview" tool to allow the agent to read its own code on GitHub - this will be the best way to explain to folks how it works under the hood. Literally just ask it! One of the suggested prompts can just be a 'Explain how you work at a high level'. Will require the creation of a github service account / API key. Readonly, scoped to the podcast_analyst repo. 
+- [ ] in the chat history, it should show more than just user input and agent final_response. It should also display thinking / using tools events as UI elements so the user isn't just sitting there waiting for the agent to reply
+- [ ] clean up the UI to make it more polished. The buttons on the top of the view should go on a sidebar on the left. 
 - [ ] later: a novelty / non-consensus axis on the 'signal' measure - guest credibility as a property of the speaker rather than each claim
+- [ ] a 'new user' onboarding screen (can just be 'new session' onboarding screen for demo purposes, if we boost session lifespan to like 1 day). This should be a few pages that teach the user how to use the agent - can be a single index.html deployed to newuser.podcastanalyst.com
+- [ ] exact same thing for actually describing *how it works under the hood*. deployed to howitworks.podcastanalyst.com
 - [ ] Prod env deployment.
 
 ## Watching podcasts (RSS)
