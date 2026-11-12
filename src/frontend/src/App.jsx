@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { post } from './api.js'
 import DbCabinet from './components/DbCabinet.jsx'
 import PipelineStatus from './components/PipelineStatus.jsx'
-import UploadPodcastButton from './components/UploadPodcastButton.jsx'
 import GraphCard from './components/graph/GraphCard.jsx'
 
 const SUGGESTED_PROMPTS = [
@@ -129,14 +128,10 @@ export default function App() {
 
   return (
     <main className="chat">
-      <DbCabinet graphRequest={graphRequest} />
+      <DbCabinet graphRequest={graphRequest} onUploaded={(job) => setIngestionJobId(job.job_id)} />
       {ingestionJobId && <PipelineStatus key={ingestionJobId} jobId={ingestionJobId} onDismiss={clearIngestion} />}
       <header>
         <h1>Podcast Analyst</h1>
-        <div className="header-actions">
-          <UploadPodcastButton onUploaded={(job) => setIngestionJobId(job.job_id)} />
-          <form action="/api/logout" method="post"><button type="submit" className="secondary">Sign out</button></form>
-        </div>
         <p role="status">{busy ? 'Codex is replying…' : connected ? 'Ready' : 'Connecting to Codex…'}</p>
       </header>
       <section className={`chat-content${isEmpty ? ' is-empty' : ''}`} aria-label="Research chat">
