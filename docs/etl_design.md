@@ -34,7 +34,8 @@ Background worker: one in-process asyncio task, one job at a time (oldest pendin
      │ any exception      → job 'failed',  error = message
   each step: read input from Postgres → write output to Postgres (or Ladybug)
 
-GET /api/ingestions/{job_id} → {status, current_step, error}   (the client polls)
+GET /api/ingestions/{job_id} → {status, current_step, error, ...}   (the client polls)
+GET /api/ingestions/active   → the running job, else the oldest pending one, else null
 ```
 
 The runner is a plain list of async functions:
@@ -311,7 +312,10 @@ means the sweep will not repair them automatically. Manually re-project affected
 - `audio`: an `.mp3` file of up to 300 MB (`MAX_AUDIO_BYTES` in `main.py`).
 
 Every ingestion endpoint returns the job as
-`{job_id, episode_id, status, current_step, error}`. Uploads return `202` (new job), `409`
+`{job_id, episode_id, status, current_step, error, podcast_name, title}` (the last two
+label the episode for the UI). `GET /api/ingestions/active` returns the job the worker is
+running, else the next pending one, else `null`, whatever its source: an upload, another
+tab, or a watcher. The UI's status bar polls it. Uploads return `202` (new job), `409`
 (the episode already exists; the body is its existing job), `413` (audio over the limit), or
 `422` (invalid input: missing metadata, both or neither file, or audio not named `.mp3`).
 `GET /api/ingestions/{job_id}` and `POST /api/ingestions/{job_id}/retry` return `404` for
@@ -552,7 +556,8 @@ WatcherService.run: one in-process asyncio task, every 60 s
   `httpx2` (already installed for `openai`) does the HTTP.
 
 **Limitations (deliberately deferred):**
-- No UI or API to list, pause, or remove feeds. Ask Codex (it can read `watch_sources`),
+- Watcher jobs show in the UI's status bar like uploads, but there is no UI or API to list,
+  pause, or remove feeds. Ask Codex (it can read `watch_sources`),
   or set `is_active = false` in SQL.
 - Episodes that leave a feed before they are queued are missed. An episode whose
   `pubDate` is earlier than `ingest_since` is never ingested, and undated episodes are ignored.

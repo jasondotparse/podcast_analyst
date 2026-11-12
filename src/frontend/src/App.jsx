@@ -3,6 +3,7 @@ import { ArrowUpRightIcon, BellSimpleIcon, BookmarkSimpleIcon, BroadcastIcon, Gr
 import { post } from './api.js'
 import DbCabinet from './components/DbCabinet.jsx'
 import PipelineStatus from './components/PipelineStatus.jsx'
+import useActiveIngestion from './hooks/useActiveIngestion.js'
 import GraphCard from './components/graph/GraphCard.jsx'
 import MarkdownMessage from './components/MarkdownMessage.jsx'
 import ToolActivity from './components/ToolActivity.jsx'
@@ -76,6 +77,8 @@ export default function App() {
   const openGraph = (graph, selectedId) => setGraphRequest({ graph, selectedId, key: crypto.randomUUID() })
   // Stable, so PipelineStatus's hide timer is not reset by chat re-renders.
   const clearIngestion = useCallback(() => setIngestionJobId(null), [])
+  // Show jobs this page did not start too, e.g. an episode an RSS watcher queued.
+  useActiveIngestion(!ingestionJobId, setIngestionJobId)
   const sessionRequest = useRef(null)
   const bottom = useRef(null)
   // Follow new output only while the reader is at the bottom, or right after they send.
