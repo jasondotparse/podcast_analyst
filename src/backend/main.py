@@ -25,6 +25,7 @@ from .clients.postgres_client import PostgresClient
 from .clients.transcription_client import TranscriptionClient
 from .codex_config import sync_codex_config, tool_specs
 from .db.db import migrate_postgres, open_graph
+from .graph_view import GraphView
 from .ingestion.claim_extractor import ClaimExtractor
 from .ingestion.claim_ranker import ClaimRanker
 from .ingestion.thesis_reflector import ThesisReflector
@@ -66,6 +67,7 @@ async def lifespan(app: FastAPI):
     embedder = EmbeddingClient(openai)
     tools = AgentTools(db, graph, embedder)
     app.state.catalog = CatalogService(db)
+    app.state.graph_view = GraphView(db, graph)
 
     home = Path(os.environ.get("PODCAST_CODEX_HOME", ROOT / ".local" / "codex")).expanduser().resolve()
     sync_codex_config(ROOT / "codex", home)
@@ -238,6 +240,22 @@ async def catalog_subscriptions(catalog: Catalog):
 @app.get("/api/catalog/ingestions")
 async def catalog_ingestions(catalog: Catalog):
     return await catalog.ingestions()
+
+
+@app.get("/api/graph")
+async def get_graph(request: Request, thesis_id: UUID | None = None):
+    view = await request.app.state.graph_view.theses(thesis_id)
+    if view is None:
+        raise HTTPException(404, "Unknown thesis.")
+    return view
+
+
+@app.get("/api/graph/neighbors")
+async def get_graph_neighbors(node_id: UUID, request: Request):
+    view = await request.app.state.graph_view.neighbors(node_id)
+    if view is None:
+        raise HTTPException(404, "Unknown graph node.")
+    return view
 
 
 @app.get("/ready")

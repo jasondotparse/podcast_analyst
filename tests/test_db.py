@@ -19,6 +19,38 @@ DATABASE_URL = os.environ.get("DATABASE_URL") or dotenv_values(ROOT / ".env").ge
 
 
 class GraphSchemaTests(unittest.TestCase):
+    def test_visual_queries_order_cap_and_derive_episode_connections(self):
+        with tempfile.TemporaryDirectory() as directory:
+            graph = GraphClient(open_graph(Path(directory) / "graph.lbug"))
+            self.addCleanup(graph.close)
+            conn = ladybug.Connection(graph.database)
+            for cypher in (
+                "CREATE (:Thesis {id: 't'}), (:Entity {id: 'e', name: 'Optics', kind: 'technology'}), "
+                "(:Episode {id: 'ep'}), (:Passage {id: 'p'})",
+                "MATCH (t:Thesis), (e:Entity) CREATE (t)-[:ABOUT]->(e)",
+                "MATCH (ep:Episode), (p:Passage) CREATE (ep)-[:CONTAINS]->(p)",
+            ):
+                conn.execute(cypher)
+            for claim, signal, strength in [('low', 20, 30), ('high', 80, 90), ('null', None, 50)]:
+                conn.execute("MATCH (t:Thesis), (p:Passage), (e:Entity) "
+                             "CREATE (c:Claim {id: $id, signal: $signal})-[:SUPPORTS {strength: $strength}]->(t), "
+                             "(c)-[:EVIDENCED_BY]->(p), (c)-[:ABOUT]->(e)",
+                             {"id": claim, "signal": signal, "strength": strength})
+            self.assertEqual(graph.thesis_neighborhood(None, 2), ['t', 'e', 'high', 'null', 'ep'])
+            self.assertEqual(graph.thesis_neighborhood('t', 1), ['t', 'e', 'high', 'ep'])
+            self.assertEqual(graph.thesis_neighborhood('missing', 2), [])
+            self.assertEqual(graph.neighbor_ids('t', 60), ['e', 'high', 'low', 'null'])
+            self.assertEqual(graph.neighbor_ids('e', 2), ['t', 'high'])
+            self.assertEqual(graph.neighbor_ids('ep', 60), ['high', 'low', 'null'])
+            self.assertEqual(graph.neighbor_ids('high', 60), ['e', 'ep', 't'])
+            for missing in ['p', 'unknown']:
+                self.assertIsNone(graph.neighbor_ids(missing, 60))
+            self.assertEqual(graph.view_nodes(['e']), [['e', 'Entity', 'Optics', 'technology']])
+            self.assertEqual({tuple(row) for row in graph.view_edges(['high', 'ep', 't'])},
+                             {('high', 't', 'SUPPORTS', 90), ('high', 'ep', 'IN_EPISODE', None)})
+            self.assertEqual(graph.view_edges([]), [])
+            self.assertEqual(graph.view_nodes([]), [])
+
     def test_schema_is_idempotent_and_data_survives_reopen(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "ladybug" / "graph.lbug"

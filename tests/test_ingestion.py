@@ -28,6 +28,7 @@ from src.backend.ingestion.thesis_reflector import ThesisReflector
 from src.backend.ingestion.notifier import Notifier, render_alert
 from src.backend.ingestion.models import Claim, Episode, EpisodeMetadata, IngestionJob
 from src.backend.main import app
+from src.backend.graph_view import GraphView, MAX_NODES
 from tests.test_db import DATABASE_URL
 
 
@@ -117,6 +118,22 @@ class EmailTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body.count('<script>untrusted</script>'), 10)
         self.assertIn('https://example.com', body)
         self.assertIn('https://app.example.com/app/', body)
+
+
+class GraphEndpointTests(unittest.TestCase):
+    def test_graph_routes_validate_ids_and_report_unknown_nodes(self):
+        app.state.app_password = None
+        app.state.graph_view = SimpleNamespace(theses=AsyncMock(return_value=None),
+                                               neighbors=AsyncMock(return_value=None))
+        client = TestClient(app)  # No lifespan / external services.
+        for path in ['/api/graph?thesis_id=bad', '/api/graph/neighbors?node_id=bad', '/api/graph/neighbors']:
+            self.assertEqual(client.get(path).status_code, 422)
+        for path in [f'/api/graph?thesis_id={uuid4()}', f'/api/graph/neighbors?node_id={uuid4()}']:
+            self.assertEqual(client.get(path).status_code, 404)
+        payload = {'nodes': [], 'links': [], 'truncated': False}
+        app.state.graph_view.theses.return_value = payload
+        self.assertEqual(client.get('/api/graph').json(), payload)
+        self.assertIsNone(app.state.graph_view.theses.call_args.args[0])
 
 
 class IngestionEndpointTests(unittest.TestCase):
@@ -299,6 +316,56 @@ class PostgresBackedTests(unittest.IsolatedAsyncioTestCase):
         await self.db.execute("UPDATE claims SET signal = NULL WHERE text = 'Power is a constraint.'")
         await ranker.rank(self.episode)
         self.assertEqual(openai.decisions.create.await_count, 3)
+
+    async def test_graph_view_labels_details_stale_nodes_and_caps(self):
+        await self.extractor.write_claim(self.episode, {
+            "text": "Lasers <b>ship</b> next year.", "evidence_quote": "Lasers ship next year.", "speaker": "Anders",
+            "entities": [{"name": "Sivers", "kind": "company"}]})
+        await self.db.execute("UPDATE episodes SET published_at = '2026-11-01', source_url = 'https://example.com'")
+        await self.db.execute("UPDATE claims SET signal = 81")
+        thesis, entities = await self.db.add_thesis("Optics ships soon.", [('Sivers', 'company')])
+        (claim,) = await self.db.one("SELECT id FROM claims")
+        (passage,) = await self.db.one("SELECT id FROM passages LIMIT 1")
+        await self.db.save_assessments([(claim, thesis, 'challenges', 88)])
+        with tempfile.TemporaryDirectory() as directory:
+            graph = GraphClient(open_graph(Path(directory) / "graph.lbug"))
+            self.addCleanup(graph.close)
+            graph.project_thesis(thesis, entities)
+            graph.project_episode(await self.db.episode_graph(self.episode))
+            view = GraphView(self.db, graph)
+            overview = await view.theses()
+            nodes = {node['id']: node for node in overview['nodes']}
+            self.assertEqual(nodes[str(claim)]['label'], 'Lasers <b>ship</b> next year.')
+            self.assertEqual(nodes[str(claim)]['signal'], 81)
+            self.assertEqual(nodes[str(claim)]['detail'], dict(quote='Lasers ship next year.', speaker='Anders',
+                podcast='Chips', episode='Optics', published_at='2026-11-01', source_url='https://example.com'))
+            self.assertEqual(nodes[str(thesis)]['label'], 'Optics ships soon.')
+            self.assertEqual(nodes[str(self.episode)]['label'], 'Optics')
+            self.assertEqual({link['type'] for link in overview['links']}, {'CHALLENGES', 'ABOUT', 'IN_EPISODE'})
+            self.assertFalse(overview['truncated'])
+            self.assertIsNone(await view.theses(uuid4()))
+            self.assertIsNone(await view.neighbors(passage))
+            self.assertIsNone(await view.neighbors(uuid4()))
+            self.assertNotIn(str(passage), {node['id'] for node in (await view.subgraph([str(passage), str(claim)]))['nodes']})
+            self.assertEqual(len((await view.subgraph([str(claim), str(claim)]))['nodes']), 1)
+            with patch('src.backend.graph_view.MAX_THESIS_CLAIMS', 0):
+                capped = await view.theses()
+                self.assertTrue(capped['truncated'])
+                self.assertNotIn('Claim', [node['type'] for node in capped['nodes']])
+            with patch('src.backend.graph_view.MAX_NEIGHBORS', 1):
+                capped = await view.neighbors(claim)
+                self.assertTrue(capped['truncated'])
+                self.assertEqual(len(capped['nodes']), 2)
+            ids = [str(entities[0][0])] + [str(uuid4()) for _ in range(MAX_NODES)]
+            self.assertTrue((await view.subgraph(ids))['truncated'])
+            # Postgres can change independently of a stale graph projection.
+            await self.db.execute("UPDATE claims SET signal = 72")
+            self.assertEqual((await view.subgraph([str(claim)]))['nodes'][0]['signal'], 72)
+            await self.db.execute("DELETE FROM claims")
+            stale = await view.theses(thesis)
+            self.assertNotIn(str(claim), {node['id'] for node in stale['nodes']})
+            self.assertFalse(any(link['source'] == str(claim) for link in stale['links']))
+            self.assertIsNone(await view.neighbors(claim))
 
     async def test_project_graph_carries_signal_onto_claim_nodes(self):
         await self.extractor.write_claim(self.episode, {

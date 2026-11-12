@@ -97,15 +97,40 @@ a drawer, with **Close** at its top, which fetches its list fresh every time it 
 | Podcasts | Names of the active RSS feeds being watched | `GET /api/catalog/podcasts` |
 | Subscriptions | One line per alert subscription: email → thesis | `GET /api/catalog/subscriptions` |
 | Ingestions | The 20 most recently updated jobs: podcast, episode, status, time, and any error | `GET /api/catalog/ingestions` |
-| Knowledge graph | A placeholder | — |
+| Show knowledge graph | Theses and linked evidence; expandable connections | `GET /api/graph` |
 
-The endpoints are read-only and go through `CatalogService` (`src/backend/catalog_service.py`);
+The list endpoints are read-only and go through `CatalogService` (`src/backend/catalog_service.py`);
 the SQL is in `PostgresClient`'s catalog section. The buttons and how each one renders a row are
 defined in `src/frontend/src/components/cabinetViews.jsx`.
 
 Verified locally and on beta in headless Chromium: each list matched the database's row counts
 (beta: 3 theses, 3 feeds, 1 subscription, 14 jobs), **Close** closed the drawer, there were no
 console errors, and the endpoints return 401 without a login.
+
+### Knowledge graph
+
+**Show knowledge graph** in the left cabinet opens a panel covering 75% of the
+screen (full width below 700 px). It starts with every thesis, its entities,
+stance claims, and source episodes. Pick one thesis, select a node for its quote,
+speaker, source, and signal, or use **Show connections** to add neighbors. **Reset**
+reloads the current view. **Escape**, **Close**, or the cabinet button closes it
+and restores focus; chat and its event stream stay mounted.
+
+Components live in `src/frontend/src/components/graph/`; only `GraphCanvas.jsx`
+imports the lazy-loaded, exactly pinned `react-force-graph-2d` library. Evidence
+appears as plain text, and only http(s) source URLs become links. Keyboard users
+can select from the node list and walk the connection buttons.
+
+Verification checklist: compare stance-edge counts with a chat graph query; inspect
+a quote against Postgres; expand and reset; try literal markup in evidence; open
+while ingestion runs; check at 375 px; ask chat for thesis challenges and open its
+card. See [graph design](knowledge_graph_design.md) for the recorded checks.
+
+Verified November 11, 2026 in Chrome: overview, claim details, expansion, Reset,
+and the full-width 375 x 800 layout with stacked details. Beta's authenticated
+API, graph counts, 401 protection, and final frontend assets were checked over
+HTTPS; the beta browser remained at sign-in. Full notes and remaining manual
+checks are in the graph design document.
 
 ## VS Code run configurations
 

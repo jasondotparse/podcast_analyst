@@ -219,6 +219,8 @@ Most useful notifications include:
 | `POST /api/sessions` | Start a new Codex thread and return an app session ID |
 | `POST /api/sessions/{id}/turns` | Submit prompt using `turn/start`; return accepted turn metadata |
 | `GET /api/sessions/{id}/events` | Stream session's agent notifications using SSE |
+| `GET /api/graph?thesis_id=<uuid>` | All theses or one thesis, stance claims, thesis entities, and source episodes |
+| `GET /api/graph/neighbors?node_id=<uuid>` | One visual node and up to 60 neighbors, with all edges among them |
 | `POST /api/sessions/{id}/interrupt` | Interrupt its active turn |
 | `GET /health` | Process liveness |
 | `GET /ready` | Harness initialized and ready to serve new requests |
