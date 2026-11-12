@@ -22,6 +22,16 @@ const SUGGESTED_PROMPTS = [
     label: 'Conduct research',
     text: `What are the top 3 most high signal claims that have been made against my thesis "Nvidia's data center revenue will keep growing more than 40% a year through 2027"?`,
   },
+  {
+    label: 'Connect my theses',
+    text: 'How are my Nvidia, AWS, and optical-interconnect theses connected? Limit each stage to at most 3 claims. '
+      + 'Investigate in stages: start with the strongest evidence supporting and challenging my Nvidia growth thesis. '
+      + 'Use the companies and technologies in those claims to find related evidence from other podcast episodes. '
+      + 'Then trace how that evidence supports or challenges my AWS-capex and optical-interconnect theses. '
+      + 'Show the graph connections as you go, then summarize the shared assumptions, disagreements, and strongest '
+      + 'source quotes with speakers, episodes, and signal scores. Distinguish sharing an entity from actually '
+      + 'supporting a thesis, and repeated claims within one episode from independent sources.',
+  },
 ]
 
 export default function App() {
