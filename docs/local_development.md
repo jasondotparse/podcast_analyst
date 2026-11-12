@@ -106,6 +106,15 @@ FastAPI; breakpoints in `src/backend/main.py` work in the backend debugger.
 open the UI. The chat creates a fresh session when the page opens; reload the
 page after restarting the backend. Wait for **Ready** before sending a message.
 
+An empty chat centers the message input beneath a welcome heading, with three
+hardcoded suggested prompts below it: save a Microsoft thesis, request email
+alerts for that thesis, and follow the a16z podcast. Each card shows a label and
+a shortened preview; selecting it fills and focuses the input with the full prompt
+without sending, so it can be edited first. The alert example intentionally refers
+to an existing Microsoft thesis. After the first message is submitted, the cards
+and welcome heading disappear and the input moves to the bottom of the chat.
+The cards stack vertically on narrow screens.
+
 Stop with **Shift+F5**. Stopping a session launched by the full-stack compound
 stops both sessions. Stop existing servers before switching launch modes: the
 backend uses port 8000, and Vite uses port 5173. Vite fails visibly if 5173 is
@@ -182,6 +191,11 @@ Node or `node_modules`.
 
 The current chat harness's live streaming tests are recorded in
 [local_codex_chat.md](local_codex_chat.md). For the password-protected beta release, follow [AWS deployment](aws_deployment.md).
+
+Suggested prompts were checked locally in Chrome on November 11, 2026: all three
+cards filled and focused the input without sending; the cards stacked at 390 px
+width; editing and sending a test message hid the welcome area, moved the input
+to the bottom, and received a live reply. The frontend build passed.
 
 References: [Vite server options](https://vite.dev/config/server-options.html),
 [VS Code compound launches](https://code.visualstudio.com/docs/debugtest/debugging-configuration#_compound-launch-configurations),
