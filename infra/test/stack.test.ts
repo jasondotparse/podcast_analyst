@@ -52,6 +52,16 @@ test('beta and prod use separate hostnames', () => {
   template('prod').hasResourceProperties('AWS::Route53::RecordSet', { Name: 'example.com.' });
 });
 
+test('prod has a 32 GiB root disk while beta keeps its 16 GiB disk', () => {
+  for (const [stage, size] of [['beta', 16], ['prod', 32]] as const) {
+    template(stage).hasResourceProperties('AWS::EC2::Instance', {
+      BlockDeviceMappings: [Match.objectLike({ Ebs: {
+        VolumeSize: size, VolumeType: 'gp3', Encrypted: true, DeleteOnTermination: true,
+      } })],
+    });
+  }
+});
+
 test('DKIM token names are absolute, without appending the hosted zone twice', () => {
   const records = Object.values(template().findResources('AWS::Route53::RecordSet'))
     .filter(record => record.Properties.Type === 'CNAME');
