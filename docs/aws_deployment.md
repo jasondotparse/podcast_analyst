@@ -315,6 +315,14 @@ replacement deletes the databases and requires explicit owner approval.
 
 ## Validation
 
+The **chat tool activity release** (`3efeac42a4db-20261112T125411-d8c1ce`, no migrations) was
+deployed to beta on **November 12, 2026** with `./scripts/deploy.py beta` only. Beta served the
+local build's asset hashes. In headless Chromium via the login page, one research turn showed
+*Thinking…*, then live `vector_search` and `postgres_database_query` rows that finished as
+succeeded with durations. An expanded row showed the exact arguments and returned payload. The
+answer rendered as Markdown (heading, bold, list, table) with no stray markup, no running
+spinners left, no page overflow, and no console errors.
+
 The **Nocturne restyle release** (`c6370906881a-20261112T030213-7ed711`, frontend only) was
 deployed to beta on **November 11, 2026** with `./scripts/deploy.py beta` only. Beta served the
 same CSS and JS asset hashes as the local build. In headless Chromium via the login page, home,

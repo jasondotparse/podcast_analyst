@@ -171,5 +171,105 @@ class SessionTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.harness.sessions['one'].events)
 
 
+class ToolActivityTests(unittest.TestCase):
+    def setUp(self):
+        self.harness = ChatHarness(Path('/tmp'))
+        self.harness.client.api_key = 'sk-test-key'
+        for name in ('one', 'two'):
+            session = ChatSession(thread_id=f'thread-{name}')
+            self.harness.sessions[name] = session
+            self.harness.by_thread[session.thread_id] = session
+        self.harness.background['background'] = (SimpleNamespace(done=lambda: True), None)
+
+    def events(self, name='one'):
+        return [event[1:] for event in self.harness.sessions[name].events]
+
+    def notify(self, method, item, thread='thread-one', **extra):
+        self.harness.notification(method, {'threadId': thread, 'turnId': 'turn-1', 'item': item, **extra})
+
+    def test_dynamic_lifecycle_and_isolation(self):
+        item = {'type': 'dynamicToolCall', 'id': 'call-42', 'namespace': None, 'tool': 'vector_search',
+                'arguments': {'query': 'Azure growth', 'limit': 5}, 'status': 'inProgress',
+                'contentItems': None, 'success': None, 'durationMs': None}
+        self.notify('item/started', item, startedAtMs=1000)
+        content = [{'type': 'inputText', 'text': '[{"episode": "Example"}]'}]
+        self.notify('item/completed', {**item, 'status': 'completed', 'contentItems': content,
+                                       'success': True, 'durationMs': 340}, completedAtMs=1340)
+        started, completed = self.events()
+        self.assertEqual(started[0], 'tool')
+        self.assertEqual(started[1], {
+            'item_id': 'call-42', 'turn_id': 'turn-1', 'kind': 'dynamicToolCall', 'phase': 'started',
+            'name': 'vector_search', 'arguments': {'query': 'Azure growth', 'limit': 5}, 'result': None,
+            'status': 'running', 'started_at_ms': 1000, 'completed_at_ms': None, 'duration_ms': None,
+            'approximate_times': False, 'truncated': False})
+        self.assertEqual(completed[1]['phase'], 'completed')
+        self.assertEqual(completed[1]['status'], 'succeeded')
+        self.assertEqual(completed[1]['result'], {'contentItems': content, 'success': True})
+        self.assertEqual((completed[1]['started_at_ms'], completed[1]['completed_at_ms'],
+                          completed[1]['duration_ms']), (1000, 1340, 340))
+        # Thread isolation: another chat and a background ingestion thread see nothing.
+        self.notify('item/started', item, thread='background', startedAtMs=1000)
+        self.assertEqual(self.events('two'), [])
+        self.assertEqual(len(self.events()), 2)
+
+    def test_reasoning_and_other_items_are_not_forwarded(self):
+        reasoning = {'type': 'reasoning', 'id': 'r-1', 'summary': ['secret plan'], 'content': []}
+        self.notify('item/started', reasoning)
+        self.notify('item/completed', reasoning)
+        self.harness.notification('item/reasoning/textDelta', {'threadId': 'thread-one', 'itemId': 'r-1', 'delta': 'x'})
+        self.harness.notification('item/reasoning/summaryTextDelta', {'threadId': 'thread-one', 'itemId': 'r-1', 'delta': 'x'})
+        self.notify('item/started', {'type': 'plan', 'id': 'p-1', 'text': 'plan'})
+        self.notify('item/started', {'type': 'agentMessage', 'id': 'm-1', 'text': ''})
+        self.assertEqual(self.events(), [])
+
+    def test_agent_messages_still_stream_once(self):
+        self.harness.notification('item/agentMessage/delta', {'threadId': 'thread-one', 'itemId': 'm-1', 'delta': 'Hi'})
+        self.notify('item/completed', {'type': 'agentMessage', 'id': 'm-1', 'text': 'Hi there'})
+        self.assertEqual(self.events(), [('delta', {'item_id': 'm-1', 'text': 'Hi'}),
+                                         ('message', {'item_id': 'm-1', 'text': 'Hi there'})])
+
+    def test_web_search_without_results_is_not_fabricated(self):
+        item = {'type': 'webSearch', 'id': 'ws-1', 'query': 'Azure capex',
+                'action': {'type': 'search', 'query': 'Azure capex', 'queries': None}, 'results': None}
+        self.notify('item/completed', item, completedAtMs=2000)
+        [(_, tool)] = self.events()
+        self.assertEqual(tool['name'], 'web_search')
+        self.assertEqual(tool['arguments']['query'], 'Azure capex')
+        self.assertIsNone(tool['result'])
+        self.assertEqual(tool['status'], 'succeeded')
+        # A completion with no earlier start is self-sufficient.
+        self.assertEqual((tool['phase'], tool['completed_at_ms'], tool['started_at_ms']), ('completed', 2000, None))
+
+    def test_command_and_mcp_projection(self):
+        self.notify('item/completed', {
+            'type': 'commandExecution', 'id': 'cmd-1', 'command': 'ls  -la', 'cwd': '/w', 'status': 'declined',
+            'aggregatedOutput': 'x' * 50_000, 'exitCode': None, 'durationMs': 5}, completedAtMs=10)
+        self.notify('item/completed', {
+            'type': 'mcpToolCall', 'id': 'mcp-1', 'server': 'docs', 'tool': 'search', 'status': 'failed',
+            'arguments': {'q': 'x'}, 'result': None, 'error': {'message': 'boom'}, 'durationMs': None})
+        (_, command), (_, mcp) = self.events()
+        self.assertEqual((command['name'], command['status'], command['arguments']),
+                         ('command_execution', 'declined', {'command': 'ls  -la', 'cwd': '/w'}))
+        self.assertTrue(command['truncated'])
+        self.assertEqual(len(command['result']['aggregatedOutput']), 40_000)
+        self.assertEqual((command['started_at_ms'], command['duration_ms']), (5, 5))
+        self.assertEqual((mcp['name'], mcp['status']), ('docs.search', 'failed'))
+        self.assertEqual(mcp['result'], {'result': None, 'error': {'message': 'boom'}})
+        self.assertTrue(mcp['approximate_times'])
+
+    def test_failed_dynamic_tool_and_redaction(self):
+        self.notify('item/completed', {
+            'type': 'dynamicToolCall', 'id': 'call-1', 'namespace': 'podcast', 'tool': 'postgres_database_query',
+            'arguments': {'sql': 'SELECT 1', 'headers': {'Authorization': 'Bearer abc'}, 'note': 'key sk-test-key'},
+            'status': 'completed', 'contentItems': [{'type': 'inputText', 'text': 'Error: bad sk-test-key'}],
+            'success': False, 'durationMs': 3}, completedAtMs=10)
+        [(_, tool)] = self.events()
+        self.assertEqual((tool['name'], tool['status']), ('podcast.postgres_database_query', 'failed'))
+        self.assertEqual(tool['arguments'], {'sql': 'SELECT 1', 'headers': {'Authorization': '[redacted]'},
+                                             'note': 'key [redacted]'})
+        self.assertEqual(tool['result']['contentItems'][0]['text'], 'Error: bad [redacted]')
+        self.assertFalse(tool['truncated'])
+
+
 if __name__ == '__main__':
     unittest.main()

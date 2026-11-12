@@ -4,6 +4,8 @@ import { post } from './api.js'
 import DbCabinet from './components/DbCabinet.jsx'
 import PipelineStatus from './components/PipelineStatus.jsx'
 import GraphCard from './components/graph/GraphCard.jsx'
+import MarkdownMessage from './components/MarkdownMessage.jsx'
+import ToolActivity from './components/ToolActivity.jsx'
 
 const SUGGESTED_PROMPTS = [
   {
@@ -39,12 +41,35 @@ const SUGGESTED_PROMPTS = [
   },
 ]
 
+// Terminal row states for tools still running when their turn ends; no result is synthesized.
+const ORPHAN_STATUS = { interrupted: 'interrupted', failed: 'failed' }
+
+// Upsert one tool snapshot by item ID, keeping its position. A late start never regresses a completed row.
+function upsertTool(previous, payload) {
+  const id = `tool:${payload.item_id}`
+  const next = {
+    id, role: 'tool', itemId: payload.item_id, turnId: payload.turn_id, kind: payload.kind, phase: payload.phase,
+    name: payload.name, arguments: payload.arguments, result: payload.result, status: payload.status,
+    startedAtMs: payload.started_at_ms, completedAtMs: payload.completed_at_ms, durationMs: payload.duration_ms,
+    approximateTimes: payload.approximate_times, truncated: payload.truncated,
+  }
+  const existing = previous.find((message) => message.id === id)
+  if (!existing) return [...previous, next]
+  if (existing.phase === 'completed' && next.phase === 'started') return previous
+  const startedAtMs = next.startedAtMs ?? existing.startedAtMs
+  const durationMs = next.durationMs
+    ?? (startedAtMs != null && next.completedAtMs != null ? next.completedAtMs - startedAtMs : null)
+  return previous.map((message) => message.id === id ? { ...existing, ...next, startedAtMs, durationMs } : message)
+}
+
 export default function App() {
   const [sessionId, setSessionId] = useState(null)
   const [connected, setConnected] = useState(false)
   const [busy, setBusy] = useState(false)
   const [draft, setDraft] = useState('')
   const [messages, setMessages] = useState([])
+  // What the current turn last showed: 'thinking' between steps, 'text' while the answer streams.
+  const [activity, setActivity] = useState('thinking')
   const [error, setError] = useState('')
   const [ingestionJobId, setIngestionJobId] = useState(null)
   const [graphRequest, setGraphRequest] = useState(null)
@@ -53,8 +78,12 @@ export default function App() {
   const clearIngestion = useCallback(() => setIngestionJobId(null), [])
   const sessionRequest = useRef(null)
   const bottom = useRef(null)
+  // Follow new output only while the reader is at the bottom, or right after they send.
+  const followOutput = useRef(true)
   const messageInput = useRef(null)
   const isEmpty = messages.length === 0
+  const toolRunning = messages.some((message) => message.role === 'tool' && message.status === 'running')
+  const thinking = busy && !toolRunning && activity !== 'text'
 
   useEffect(() => {
     let active = true
@@ -72,6 +101,8 @@ export default function App() {
       })
       const updateAssistant = (event, replace) => {
         const { item_id, text } = JSON.parse(event.data)
+        // A completed message may be followed by more tool calls before the turn ends.
+        setActivity(replace ? 'thinking' : 'text')
         setMessages((previous) => {
           const existing = previous.find((message) => message.id === item_id)
           if (!existing) return [...previous, { id: item_id, role: 'assistant', text }]
@@ -87,8 +118,17 @@ export default function App() {
         setMessages((previous) => previous.some((message) => message.id === call_id)
           ? previous : [...previous, { id: call_id, role: 'graph', graph }])
       })
+      stream.addEventListener('tool', (event) => {
+        const payload = JSON.parse(event.data)
+        setActivity('thinking')
+        setMessages((previous) => upsertTool(previous, payload))
+      })
       stream.addEventListener('completed', (event) => {
         const result = JSON.parse(event.data)
+        // One turn runs at a time, so any tool still running belonged to the turn that just ended.
+        const status = ORPHAN_STATUS[result.status] ?? 'ended'
+        setMessages((previous) => previous.map((message) => message.role === 'tool' && message.status === 'running'
+          ? { ...message, status } : message))
         setBusy(false)
         if (result.status !== 'completed') setError(result.error || `Turn ${result.status}.`)
       })
@@ -112,8 +152,8 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    bottom.current?.scrollIntoView({ block: 'end' })
-  }, [messages])
+    if (followOutput.current) bottom.current?.scrollIntoView({ block: 'end' })
+  }, [messages, thinking])
 
   async function sendMessage(event) {
     event.preventDefault()
@@ -121,6 +161,8 @@ export default function App() {
     if (!message || !connected || busy) return
     setMessages((previous) => [...previous, { id: crypto.randomUUID(), role: 'user', text: message }])
     setDraft('')
+    setActivity('thinking')
+    followOutput.current = true
     setBusy(true)
     setError('')
     try {
@@ -150,15 +192,20 @@ export default function App() {
               <p>Track investment theses, find podcast evidence, and follow new episodes.</p>
             </div>
           ) : (
-            <ol className="messages" aria-label="Conversation">
+            <ol className="messages" aria-label="Conversation" onScroll={(event) => {
+              const list = event.currentTarget
+              followOutput.current = list.scrollHeight - list.scrollTop - list.clientHeight < 100
+            }}>
               {messages.map((message) => (
                 <li key={message.id} className={`message ${message.role}`}>
-                  {message.role === 'graph' ? <GraphCard graph={message.graph} onOpen={openGraph} /> : <>
-                    <span className="speaker">{message.role === 'user' ? 'You' : 'Codex'}</span>
-                    <p>{message.text}</p>
-                  </>}
+                  {message.role === 'graph' ? <GraphCard graph={message.graph} onOpen={openGraph} />
+                    : message.role === 'tool' ? <ToolActivity tool={message} /> : <>
+                      <span className="speaker">{message.role === 'user' ? 'You' : 'Codex'}</span>
+                      {message.role === 'user' ? <p>{message.text}</p> : <MarkdownMessage text={message.text} />}
+                    </>}
                 </li>
               ))}
+              {thinking && <li className="message thinking" role="status">Thinking…</li>}
               <li ref={bottom} aria-hidden="true" />
             </ol>
           )}

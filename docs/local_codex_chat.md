@@ -125,7 +125,23 @@ you want to avoid that shutdown message.
    Codex turn and returns 202 once accepted.
 4. SSE `delta` events append assistant text. The `message` event reconciles the
    completed item's full text by item ID, so the final answer is not duplicated.
-5. SSE `completed` releases the busy guard; `fatal` reports a lost runtime/session.
+   Assistant text renders as GitHub-flavored Markdown (`react-markdown` + `remark-gfm`)
+   with raw HTML skipped, images dropped, and unsafe link URLs stripped; user text stays plain.
+5. SSE `tool` events show tool activity. `item/started` and `item/completed`
+   notifications for `dynamicToolCall`, `mcpToolCall`, `webSearch`, and
+   `commandExecution` items become a snapshot keyed by `item_id`: `name`,
+   `arguments`, `result` (completion only; `null` when Codex exposes none, as is
+   common for web search), `status` (`running`, `succeeded`, `failed`, `declined`),
+   Codex's `started_at_ms`/`completed_at_ms`/`duration_ms`, and `truncated`. The UI
+   upserts one collapsed **Using tools** row per call; expanding it shows the exact
+   arguments and payload. Payloads are redacted (the API key and obvious credential
+   keys) and native output is capped at 40,000 characters for display only; nothing
+   is logged or stored. Reasoning items and other item types are never forwarded.
+   While a turn is busy and neither a tool nor answer text is active, the UI shows a
+   plain **Thinking…** status. A tool still running when its turn ends is shown as
+   interrupted, failed, or ended without completion. The chat auto-scrolls only while
+   the reader is near the bottom (or just sent a message), so expanded rows can be read.
+6. SSE `completed` releases the busy guard; `fatal` reports a lost runtime/session.
 
 The single stdout reader matches RPC responses by request ID and routes
 notifications by thread ID. It never waits for an entire turn to complete before
@@ -145,11 +161,15 @@ the backend and reload the page; failed turns are never automatically replayed.
 
 The offline tests cover out-of-order RPC responses, nonblocking rejection of
 unsupported server requests, disconnects, early notifications, busy guards,
-thread isolation, terminal statuses, and bounded event history.
+thread isolation, terminal statuses, bounded event history, and tool-activity
+projection (lifecycle, isolation, reasoning exclusion, web search without results,
+redaction, and display truncation).
 
 Live local tests verified initialization/thread creation, progressive text events,
 completed-item reconciliation, and a same-thread follow-up that retained context.
 The built UI was also checked in Chrome on port 8000 while a reply was streaming.
+Tool rows, expansion, web search without results, Markdown rendering, and the
+no-jump scroll were checked in Chrome on a live turn.
 Shutdown verification confirmed that the backend, Codex child, and Vite processes
 exit and release both local ports.
 
