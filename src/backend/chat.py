@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import re
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -13,6 +14,7 @@ from .clients.codex_client import CodexAppServerClient, CodexError
 
 
 log = logging.getLogger(__name__)
+NODE_UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.IGNORECASE)
 
 
 @dataclass
@@ -59,12 +61,13 @@ CHAT_INSTRUCTIONS = (
 
 class ChatHarness:
     def __init__(self, workspace: Path, model: str | None = None, tools: list[dict] | None = None,
-                 call_tool=None):
+                 call_tool=None, graph_view=None):
         self.workspace = workspace
         self.model = model
         # Dynamic tools advertised to every chat thread, and the handler that runs them.
         self.tools = tools or []
         self.chat_tool_handler = call_tool
+        self.graph_view = graph_view
         self.sessions: dict[str, ChatSession] = {}
         self.by_thread: dict[str, ChatSession] = {}
         # Background (pipeline) threads: thread ID -> (turn-completed future, tool handler).
@@ -157,8 +160,20 @@ class ChatHarness:
         if task:
             return self.call_tool(task[1], params)
         if params.get("threadId") in self.by_thread and self.chat_tool_handler:
-            return self.call_tool(self.chat_tool_handler, params)
+            return self.chat_tool_call(self.by_thread[params["threadId"]], params)
         return None
+
+    async def chat_tool_call(self, session: ChatSession, params: dict) -> dict:
+        result = await self.call_tool(self.chat_tool_handler, params)
+        if params["tool"] == "graph_query" and result["success"] and self.graph_view:
+            try:
+                text = params["arguments"].get("cypher", "") + result["contentItems"][0]["text"]
+                view = await self.graph_view.subgraph([value.lower() for value in NODE_UUID.findall(text)])
+                if view["links"]:
+                    session.emit("graph", {"call_id": params["callId"], **view})
+            except Exception:  # A preview must never fail the tool call.
+                log.warning("Graph preview failed", exc_info=True)
+        return result
 
     async def call_tool(self, handler, params: dict) -> dict:
         try:

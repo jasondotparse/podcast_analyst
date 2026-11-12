@@ -42,9 +42,10 @@ XXX PO REQUIREMENTS COMPLETE AT THIS POINT XXX
 
 - [x] build "suggested prompts" new users can use these UI elements to auto-populate a prompt into the chat box. The same as 'suggested prompts' in ChatGPT, but hardcoded.
 - [x] Left-hand cabinet lists theses, watched podcasts, email subscriptions, and recent ingestion status.
-- [x] [Knowledge graph](docs/knowledge_graph_design.md): thesis overview, source evidence, and connection expansion.
+- [x] [Knowledge graph](docs/knowledge_graph_design.md): thesis overview, source evidence, connection expansion, and graph-query cards in chat.
 - [ ] build a "architecture overview" tool to allow the agent to read its own code on GitHub - this will be the best way to explain to folks how it works under the hood. Literally just ask it! One of the suggested prompts can just be a 'Explain how you work at a high level'. Will require the creation of a github service account / API key. Readonly, scoped to the podcast_analyst repo. 
 - [ ] in the chat history, it should show more than just user input and agent final_response. It should also display thinking / using tools events as UI elements so the user isn't just sitting there waiting for the agent to reply
+  - [x] Successful graph queries show graph cards above the answer; general tool/thinking activity remains later work.
 - [ ] clean up the UI to make it more polished. The buttons on the top of the view should go on a sidebar on the left. 
 - [ ] later: a novelty / non-consensus axis on the 'signal' measure - guest credibility as a property of the speaker rather than each claim
 - [ ] a 'new user' onboarding screen (can just be 'new session' onboarding screen for demo purposes, if we boost session lifespan to like 1 day). This should be a few pages that teach the user how to use the agent - can be a single index.html deployed to newuser.podcastanalyst.com

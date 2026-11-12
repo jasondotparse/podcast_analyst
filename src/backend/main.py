@@ -74,7 +74,7 @@ async def lifespan(app: FastAPI):
     workspace = (ROOT / ".local" / "agent-workspace").resolve()
     # Chat threads get the research tools and add_thesis.
     harness = ChatHarness(workspace, model=os.environ.get("CODEX_MODEL"),
-                          tools=tool_specs(*CHAT_TOOLS), call_tool=tools.call)
+                          tools=tool_specs(*CHAT_TOOLS), call_tool=tools.call, graph_view=app.state.graph_view)
     app.state.harness = harness
     await harness.client.start(api_key, home, workspace)
 

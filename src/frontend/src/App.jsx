@@ -3,6 +3,7 @@ import { post } from './api.js'
 import DbCabinet from './components/DbCabinet.jsx'
 import PipelineStatus from './components/PipelineStatus.jsx'
 import UploadPodcastButton from './components/UploadPodcastButton.jsx'
+import GraphCard from './components/graph/GraphCard.jsx'
 
 const SUGGESTED_PROMPTS = [
   {
@@ -27,6 +28,8 @@ export default function App() {
   const [messages, setMessages] = useState([])
   const [error, setError] = useState('')
   const [ingestionJobId, setIngestionJobId] = useState(null)
+  const [graphRequest, setGraphRequest] = useState(null)
+  const openGraph = (graph, selectedId) => setGraphRequest({ graph, selectedId, key: crypto.randomUUID() })
   // Stable, so PipelineStatus's hide timer is not reset by chat re-renders.
   const clearIngestion = useCallback(() => setIngestionJobId(null), [])
   const sessionRequest = useRef(null)
@@ -60,6 +63,11 @@ export default function App() {
       }
       stream.addEventListener('delta', (event) => updateAssistant(event, false))
       stream.addEventListener('message', (event) => updateAssistant(event, true))
+      stream.addEventListener('graph', (event) => {
+        const { call_id, ...graph } = JSON.parse(event.data)
+        setMessages((previous) => previous.some((message) => message.id === call_id)
+          ? previous : [...previous, { id: call_id, role: 'graph', graph }])
+      })
       stream.addEventListener('completed', (event) => {
         const result = JSON.parse(event.data)
         setBusy(false)
@@ -107,7 +115,7 @@ export default function App() {
 
   return (
     <main className="chat">
-      <DbCabinet />
+      <DbCabinet graphRequest={graphRequest} />
       {ingestionJobId && <PipelineStatus key={ingestionJobId} jobId={ingestionJobId} onDismiss={clearIngestion} />}
       <header>
         <h1>Podcast Analyst</h1>
@@ -127,8 +135,10 @@ export default function App() {
           <ol className="messages" aria-label="Conversation">
             {messages.map((message) => (
               <li key={message.id} className={`message ${message.role}`}>
-                <span className="speaker">{message.role === 'user' ? 'You' : 'Codex'}</span>
-                <p>{message.text}</p>
+                {message.role === 'graph' ? <GraphCard graph={message.graph} onOpen={openGraph} /> : <>
+                  <span className="speaker">{message.role === 'user' ? 'You' : 'Codex'}</span>
+                  <p>{message.text}</p>
+                </>}
               </li>
             ))}
             <li ref={bottom} aria-hidden="true" />

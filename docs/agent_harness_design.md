@@ -207,6 +207,7 @@ Most useful notifications include:
 | `item/started` | Show activity/tool start, if relevant |
 | `item/completed` | Record authoritative completed item |
 | `turn/completed` | Mark success/failure/interruption; release busy guard |
+| `graph` (application event) | Show a graph-query preview card, deduplicated by `call_id`; open it in the cabinet |
 
 **Do not append an item's completed full text after already appending its deltas.** Treat the completed item as authoritative state/reconciliation, not another delta.
 
@@ -283,6 +284,12 @@ Do not confuse Codex's `callId` with the JSON-RPC `id` used to answer the reques
 
 `add_thesis`, `add_subscription`, and `register_rss_to_watcher` are the chat agent's write tools. `AgentTools.call` serializes results to JSON and caps them at 200 rows / 40,000 characters.
 A handler exception is returned to the model as a failed tool result so it can correct itself.
+
+After a successful chat-thread `graph_query`, `ChatHarness.chat_tool_call` scans the
+Cypher and tool output for UUIDs and calls the shared `GraphView.subgraph`. A result
+with links emits `{call_id, nodes, links, truncated}` as a `graph` SSE event before
+returning the tool result. Background threads never emit cards; preview errors only
+log a warning. REST and SSE include the same source details. See [graph view](knowledge_graph_design.md).
 
 Dynamic tools are **experimental**, even when Codex itself is a stable release. We accept that tradeoff to avoid a separate MCP service for a small demonstration app.
 

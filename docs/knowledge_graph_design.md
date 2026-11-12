@@ -1,6 +1,6 @@
 # Knowledge graph view
 
-Cabinet view implemented November 11, 2026 from the supplied knowledge-graph design. This is a
+Implemented November 11, 2026 from the supplied knowledge-graph design. This is a
 read-only app view using the backend's existing Ladybug handle, with no schema,
 pipeline, container, or infrastructure changes. Ladybug Explorer is not embedded:
 it cannot share the running writer's database file and cannot supply Postgres labels.
@@ -48,7 +48,7 @@ Thesis/episode labels are always drawn; other labels appear above 2x zoom. The f
 settled layout fits the canvas. ResizeObserver supplies dimensions. Below 700 px,
 the drawer fills the screen and the detail panel stacks below the canvas.
 
-The follow-up chat-card PR adds this path: `ChatHarness.chat_tool_call` scans a successful `graph_query`'s Cypher and output
+`ChatHarness.chat_tool_call` scans a successful `graph_query`'s Cypher and output
 for UUIDs, then calls `subgraph`. A nonempty link set emits `graph` with `call_id`
 and the shared payload before the tool result returns. Background threads, failures,
 and linkless results emit no card. A preview exception only logs a warning.
@@ -61,14 +61,19 @@ keyboard alternative to the canvas. Escape closes and restores trigger focus.
 
 ## Verification
 
-- Backend: 61 tests passed against disposable Postgres databases and temporary
+- Backend: 63 tests passed against disposable Postgres databases and temporary
   Ladybug files, including ordering/caps, derived edges, canonical labels/signals,
-  stale rows, hidden Passages, UUID/status/auth checks, and authentication.
+  stale rows, hidden Passages, UUID/status/auth checks, and chat preview isolation.
 - Frontend: production build passed; GraphCanvas is a separate ~69 KB gzip chunk.
 - Local Chrome: overview rendered 93 nodes / 233 links (71 challenges, 18 supports,
   83 ABOUT, 61 IN_EPISODE); claim evidence matched Postgres. Expanding the selected
   claim added three entities (96 / 236); Reset restored 93 / 233. A single-thesis
   API view contained 47 nodes; its claim neighborhood contained eight.
+- Live local chat: graph_query produced a four-node / three-link SSE preview before
+  the final answer; its total stance count (89) matched the overview. Introductory
+  assistant messages may precede a preview. In the browser, a five-node / three-link
+  card opened the same subgraph, showed a claim quote, and restored focus to its
+  button on Escape while the answer continued streaming.
 - A temporary React render check verified escaped markup, omitted javascript:
   sources, allowed https sources, textContent tooltips, isolated canvas copies,
   and link deduplication with object endpoints. No frontend test runner was added.
@@ -79,7 +84,9 @@ keyboard alternative to the canvas. Escape closes and restores trigger focus.
   56 nodes / 119 links (26 challenges, 21 supports, 33 ABOUT, 39 IN_EPISODE),
   single-thesis view 26 nodes, claim neighborhood six nodes. Anonymous reads
   returned 401. Final JS and repaired mobile stylesheet were verified over HTTPS.
-  Final overview API response: 278 ms; time to first canvas draw was not measured.
+  A real chat graph_query emitted a four-node / three-link preview before its final
+  answer, whose stance count (47) matched the overview. Final overview API response:
+  278 ms; time to first canvas draw was not measured.
 - Remaining manual checks: literal-markup tooltip hover, opening during a new
   ingestion, and beta browser rendering (the test browser remained at sign-in).
   Untrusted-text rendering was checked separately with React as described above.

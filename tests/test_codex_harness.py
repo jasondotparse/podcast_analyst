@@ -4,6 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 from fastapi import HTTPException
 
@@ -129,6 +130,45 @@ class SessionTests(unittest.IsolatedAsyncioTestCase):
             session.emit('delta', {'text': str(index)})
         self.assertEqual(len(session.events), 512)
         self.assertEqual(session.sequence, 600)
+
+    async def test_chat_graph_preview_and_background_isolation(self):
+        thesis, claim = str(uuid4()), str(uuid4())
+        payload = {'nodes': [{'id': thesis}, {'id': claim}],
+                   'links': [{'source': claim, 'target': thesis, 'type': 'CHALLENGES'}], 'truncated': False}
+        self.harness.chat_tool_handler = AsyncMock(return_value=json.dumps({'id': claim}))
+        self.harness.graph_view = SimpleNamespace(subgraph=AsyncMock(return_value=payload))
+        params = {'tool': 'graph_query', 'threadId': 'thread-one', 'callId': 'call-1',
+                  'arguments': {'cypher': f"MATCH (t:Thesis {{id: '{thesis.upper()}'}}) RETURN t"}}
+        result = await self.harness.server_request('item/tool/call', params)
+        self.assertTrue(result['success'])
+        self.harness.graph_view.subgraph.assert_awaited_once_with([thesis, claim])
+        self.assertEqual(list(self.harness.sessions['one'].events)[0][1:], ('graph', {'call_id': 'call-1', **payload}))
+        self.assertFalse(self.harness.sessions['two'].events)
+
+        self.harness.graph_view.subgraph.reset_mock()
+        self.harness.background['background'] = (asyncio.get_running_loop().create_future(), self.harness.chat_tool_handler)
+        result = await self.harness.server_request('item/tool/call', {**params, 'threadId': 'background'})
+        self.assertTrue(result['success'])
+        self.harness.graph_view.subgraph.assert_not_awaited()
+
+    async def test_preview_failure_empty_result_and_failed_tool_do_not_emit(self):
+        self.harness.chat_tool_handler = AsyncMock(return_value='[]')
+        self.harness.graph_view = SimpleNamespace(subgraph=AsyncMock(return_value={'nodes': [], 'links': []}))
+        params = {'tool': 'graph_query', 'threadId': 'thread-one', 'callId': 'call-1', 'arguments': {'cypher': 'RETURN 1'}}
+        self.assertTrue((await self.harness.server_request('item/tool/call', params))['success'])
+        self.harness.graph_view.subgraph.side_effect = RuntimeError('preview broke')
+        with self.assertLogs('src.backend.chat', level='WARNING') as logs:
+            result = await self.harness.server_request('item/tool/call', params)
+        self.assertTrue(result['success'])
+        self.assertEqual(result['contentItems'][0]['text'], '[]')
+        self.assertIn('Graph preview failed', logs.output[0])
+        self.harness.graph_view.subgraph.reset_mock()
+        self.harness.chat_tool_handler.side_effect = ValueError('query broke')
+        self.assertFalse((await self.harness.server_request('item/tool/call', params))['success'])
+        self.harness.chat_tool_handler.side_effect = None
+        await self.harness.server_request('item/tool/call', {**params, 'tool': 'postgres_database_query'})
+        self.harness.graph_view.subgraph.assert_not_awaited()
+        self.assertFalse(self.harness.sessions['one'].events)
 
 
 if __name__ == '__main__':
