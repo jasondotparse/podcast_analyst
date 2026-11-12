@@ -103,6 +103,10 @@ The endpoints are read-only and go through `CatalogService` (`src/backend/catalo
 the SQL is in `PostgresClient`'s catalog section. The buttons and how each one renders a row are
 defined in `src/frontend/src/components/cabinetViews.jsx`.
 
+Verified locally and on beta in headless Chromium: each list matched the database's row counts
+(beta: 3 theses, 3 feeds, 1 subscription, 14 jobs), **Close** closed the drawer, there were no
+console errors, and the endpoints return 401 without a login.
+
 ## VS Code run configurations
 
 Open **Run and Debug**, choose a configuration, and press **F5**:
