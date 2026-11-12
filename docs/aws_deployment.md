@@ -315,6 +315,15 @@ replacement deletes the databases and requires explicit owner approval.
 
 ## Validation
 
+The **suggested prompts and clarification release** (`b569e30d8282-20261112T004809-a1f09f`)
+was deployed from merged `main` to beta on **November 11, 2026**. In Chrome through
+the password login, all three prompt cards filled and focused the input without
+sending; sending the first message hid the welcome area and moved the input down.
+A Google/Azure clarification followed by "Google / GCP!" completed in 2.31 s and
+2.18 s respectively. The beta Codex trace confirmed the new developer instruction
+and no async-question, sleep, or write-tool calls in either turn. The UI returned
+to Ready and enabled Send for the next draft. No test thesis or subscription was saved.
+
 The **thesis alert release** (`ef75aaf67954-20261111T132124-ec0a64`) was deployed to beta on
 **November 11, 2026** after the SES client fix. `007_thesis_assessments` applied and the idle
 sweep backfilled existing claims. A beta UI upload of a synthetic optics interview generated
