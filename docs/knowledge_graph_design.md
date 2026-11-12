@@ -71,11 +71,22 @@ keyboard alternative to the canvas. Escape closes and restores trigger focus.
   API view contained 47 nodes; its claim neighborhood contained eight.
 - Live local chat: graph_query produced a four-node / three-link SSE preview before
   the final answer; its total stance count (89) matched the overview. Introductory
-  assistant messages may precede a preview.
+  assistant messages may precede a preview. In the browser, a five-node / three-link
+  card opened the same subgraph, showed a claim quote, and restored focus to its
+  button on Escape while the answer continued streaming.
 - A temporary React render check verified escaped markup, omitted javascript:
   sources, allowed https sources, textContent tooltips, isolated canvas copies,
   and link deduplication with object endpoints. No frontend test runner was added.
-- Browser automation failed with a tool timeout/options error after the desktop
-  checks. The 375 px layout, tooltip hover, chat-card opening, and simultaneous
-  ingestion browser checks remain unverified; no new ingestion was needed for
-  the read-only local checks.
+- Local Chrome at 375 x 800: the drawer filled the viewport, the thesis picker
+  remained readable, and details stacked below the canvas. The first check exposed
+  a compressed picker; giving its label a full toolbar row fixed it.
+- Beta combined release `ffe5b40080e2-20261112T013414-fe48be`: authenticated overview
+  56 nodes / 119 links (26 challenges, 21 supports, 33 ABOUT, 39 IN_EPISODE),
+  single-thesis view 26 nodes, claim neighborhood six nodes. Anonymous reads
+  returned 401. Final JS and repaired mobile stylesheet were verified over HTTPS.
+  A real chat graph_query emitted a four-node / three-link preview before its final
+  answer, whose stance count (47) matched the overview. Final overview API response:
+  278 ms; time to first canvas draw was not measured.
+- Remaining manual checks: literal-markup tooltip hover, opening during a new
+  ingestion, and beta browser rendering (the test browser remained at sign-in).
+  Untrusted-text rendering was checked separately with React as described above.
