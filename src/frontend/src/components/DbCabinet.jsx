@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import CabinetPanel from './CabinetPanel.jsx'
+import UploadPodcastButton from './UploadPodcastButton.jsx'
 import { CABINET_VIEWS } from './cabinetViews.jsx'
 import './DbCabinet.css'
 
-// A left-hand rail of buttons, minimized until one is clicked; each opens a drawer
-// listing part of what the database holds.
-export default function DbCabinet({ graphRequest }) {
+// A left-hand rail: Upload podcast at the top, Sign out at the bottom, and between them
+// buttons that each open a drawer listing part of what the database holds.
+export default function DbCabinet({ graphRequest, onUploaded }) {
   const [openId, setOpenId] = useState(null)
   const [initialGraph, setInitialGraph] = useState(null)
   const returnFocus = useRef(null)
@@ -34,7 +35,7 @@ export default function DbCabinet({ graphRequest }) {
   return (
     <aside className="cabinet" aria-label="Database cabinet">
       <nav className="cabinet-rail">
-        <p className="cabinet-heading">Database</p>
+        <UploadPodcastButton className="cabinet-action" onUploaded={onUploaded} />
         {CABINET_VIEWS.map((candidate) => (
           <button key={candidate.id} type="button" className="cabinet-tab"
             ref={candidate.id === 'graph' ? graphButton : null}
@@ -48,6 +49,9 @@ export default function DbCabinet({ graphRequest }) {
             {candidate.label}
           </button>
         ))}
+        <form className="cabinet-signout" action="/api/logout" method="post">
+          <button type="submit" className="secondary cabinet-action">Sign out</button>
+        </form>
       </nav>
       {view && <CabinetPanel view={view} onClose={close} graphRequest={initialGraph} />}
     </aside>

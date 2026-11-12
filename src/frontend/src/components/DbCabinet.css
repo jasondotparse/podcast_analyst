@@ -17,14 +17,12 @@ body { padding-left: var(--cabinet-rail); }
   background: #e9edf3;
   border-right: 1px solid #dde2e9;
 }
-.cabinet-heading {
-  margin: 0 10px 8px;
-  color: #596779;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-}
+.cabinet-action { align-self: stretch; padding: 9px 4px; border-radius: 10px; font-size: 14px; white-space: nowrap; }
+.cabinet-rail > .cabinet-action { margin-bottom: 8px; }
+/* Pin Sign out to the bottom; override the chat's global form layout. */
+.cabinet-signout { margin-top: auto; padding: 0; border: 0; }
+.cabinet-signout .cabinet-action { flex: 1; background: white; border: 1px solid #dde2e9; }
+.cabinet-signout .cabinet-action:hover { background: #dde4ee; }
 .cabinet-tab {
   align-self: stretch;
   padding: 9px 10px;

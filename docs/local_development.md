@@ -43,7 +43,7 @@ and delete `.local/ladybug/`. See [the database design](database_design.md#imple
 
 ### Ingest a transcript or MP3
 
-In the UI, **Upload podcast** opens a form: drop (or choose) a `.txt` transcript or an
+In the UI, **Upload podcast** (top of the left cabinet) opens a form: drop (or choose) a `.txt` transcript or an
 `.mp3` recording (up to 300 MB), fill in the podcast and episode fields, and submit. An
 MP3 is first transcribed with OpenAI `gpt-transcribe` (about a minute for a 42-minute
 episode), and the status bar shows "Transcribing audio…" meanwhile. Optional fields include
@@ -88,7 +88,8 @@ appears in the backend log (`src.backend.ingestion.watcher_service: Watcher queu
 
 ### Browse the database (cabinet)
 
-The rail on the left of the page (`DbCabinet`) lists what the database holds. Each button opens
+The rail on the left of the page (`DbCabinet`) has **Upload podcast** at the top, **Sign out**
+at the bottom, and between them buttons listing what the database holds. Each button opens
 a drawer, with **Close** at its top, which fetches its list fresh every time it opens:
 
 | Button | Shows | Endpoint |
