@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { SignOutIcon } from '@phosphor-icons/react'
+import { CompassIcon, SignOutIcon } from '@phosphor-icons/react'
 import CabinetPanel from './CabinetPanel.jsx'
 import UploadPodcastButton from './UploadPodcastButton.jsx'
 import { CABINET_VIEWS } from './cabinetViews.jsx'
 import './DbCabinet.css'
 
-// A left-hand rail: Upload podcast at the top, Sign out at the bottom, and between them
+// A left-hand rail: Upload podcast at the top, Onboarding and Sign out at the bottom, and between them
 // buttons that each open a drawer listing part of what the database holds.
 export default function DbCabinet({ graphRequest, onUploaded }) {
   const [openId, setOpenId] = useState(null)
@@ -54,9 +54,12 @@ export default function DbCabinet({ graphRequest, onUploaded }) {
             </button>
           ))}
         </div>
-        <form className="cabinet-signout" action="/api/logout" method="post">
-          <button type="submit" className="btn btn-secondary cabinet-action"><SignOutIcon size={15} aria-hidden="true" />Sign out</button>
-        </form>
+        <div className="cabinet-footer">
+          <a className="btn btn-secondary cabinet-action" href="/app/onboarding"><CompassIcon size={15} aria-hidden="true" />Onboarding</a>
+          <form className="cabinet-signout" action="/api/logout" method="post">
+            <button type="submit" className="btn btn-secondary cabinet-action"><SignOutIcon size={15} aria-hidden="true" />Sign out</button>
+          </form>
+        </div>
       </nav>
       {view && <CabinetPanel view={view} onClose={close} graphRequest={initialGraph} />}
     </aside>

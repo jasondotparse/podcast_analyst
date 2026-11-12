@@ -118,6 +118,15 @@ class EmailTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body.count('<script>untrusted</script>'), 10)
         self.assertIn('https://example.com', body)
         self.assertIn('https://app.example.com/app/', body)
+        self.assertIn('Signal: 80/100; challenge strength: 90/100', body)
+
+
+class OnboardingRouteTests(unittest.TestCase):
+    def test_onboarding_redirects_into_the_app(self):
+        app.state.app_password = None
+        response = TestClient(app).get('/onboarding', follow_redirects=False)
+        self.assertEqual(response.status_code, 307)
+        self.assertEqual(response.headers['location'], '/app/onboarding')
 
 
 class GraphEndpointTests(unittest.TestCase):
