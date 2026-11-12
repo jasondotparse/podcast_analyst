@@ -204,8 +204,8 @@ Most useful notifications include:
 | --- | --- |
 | `turn/started` | Show active/working state |
 | `item/agentMessage/delta` | Append streaming assistant text |
-| `item/started` | Show activity/tool start, if relevant |
-| `item/completed` | Record authoritative completed item |
+| `item/started` | Tool items (dynamic, MCP, web search, command) become a `tool` SSE snapshot |
+| `item/completed` | Record authoritative completed item; tool items emit a completed `tool` snapshot |
 | `turn/completed` | Mark success/failure/interruption; release busy guard |
 | `graph` (application event) | Show a graph-query preview card, deduplicated by `call_id`; open it in the cabinet |
 

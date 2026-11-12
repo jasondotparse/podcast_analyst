@@ -1,8 +1,10 @@
 """Session routing and a small bounded SSE event log; Codex owns conversation history."""
 
 import asyncio
+import json
 import logging
 import re
+import time
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -15,6 +17,12 @@ from .clients.codex_client import CodexAppServerClient, CodexError
 
 log = logging.getLogger(__name__)
 NODE_UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.IGNORECASE)
+# Codex items shown as tool-activity rows. Reasoning and every other item type are never forwarded.
+TOOL_KINDS = {"dynamicToolCall", "mcpToolCall", "webSearch", "commandExecution"}
+TOOL_STATUS = {"inProgress": "running", "completed": "succeeded", "failed": "failed", "declined": "declined"}
+SECRET_KEYS = {"authorization", "api_key", "apikey", "password", "secret", "access_token", "cookie"}
+# Dynamic tool output is already capped by AgentTools; native output (command, MCP, search) is capped here.
+UI_PAYLOAD_CHARS = 40_000
 
 
 @dataclass
@@ -193,7 +201,13 @@ class ChatHarness:
         session = self.by_thread.get(params.get("threadId"))
         if session is None:
             return
-        if method == "turn/started":
+        item = params.get("item") or {}
+        if method in ("item/started", "item/completed") and item.get("type") in TOOL_KINDS:
+            try:
+                session.emit("tool", self.project_tool_item(method, params))
+            except Exception:  # A UI projection must never disturb the turn.
+                log.warning("Tool activity projection failed for a %s item", item.get("type"))
+        elif method == "turn/started":
             session.active_turn_id = params["turn"]["id"]
             session.emit("started", {})
         elif method == "item/agentMessage/delta":
@@ -212,6 +226,67 @@ class ChatHarness:
                 "status": turn["status"],
                 "error": "Codex could not complete this turn." if turn.get("error") else None,
             })
+
+    def project_tool_item(self, method: str, params: dict) -> dict:
+        """A UI snapshot of one tool item: what Codex exposed, redacted, with native output capped."""
+        item, started = params["item"], method == "item/started"
+        kind = item["type"]
+        if kind == "dynamicToolCall":
+            name = f"{item['namespace']}.{item['tool']}" if item.get("namespace") else item.get("tool")
+            arguments = item.get("arguments")
+            result = {"contentItems": item.get("contentItems"), "success": item.get("success")}
+        elif kind == "mcpToolCall":
+            name = f"{item.get('server')}.{item.get('tool')}"
+            arguments = item.get("arguments")
+            result = {"result": item.get("result"), "error": item.get("error")}
+        elif kind == "webSearch":
+            name = "web_search"
+            arguments = {"query": item.get("query"), "action": item.get("action")}
+            result = item.get("results")  # Often null: Codex does not always expose search results.
+        else:
+            name = "command_execution"
+            arguments = {"command": item.get("command"), "cwd": item.get("cwd")}
+            result = {"aggregatedOutput": item.get("aggregatedOutput"), "exitCode": item.get("exitCode")}
+        if started:
+            status = "running"
+        else:
+            status = TOOL_STATUS.get(item.get("status"), "succeeded")
+            if kind == "dynamicToolCall" and item.get("success") is False:
+                status = "failed"
+            if kind == "mcpToolCall" and item.get("error"):
+                status = "failed"
+        truncated = False
+        if started:
+            result = None
+        elif kind != "dynamicToolCall" and result is not None:
+            output = result.get("aggregatedOutput") if kind == "commandExecution" else None
+            if output and len(output) > UI_PAYLOAD_CHARS:
+                result, truncated = {**result, "aggregatedOutput": output[:UI_PAYLOAD_CHARS]}, True
+            elif len(text := json.dumps(result)) > UI_PAYLOAD_CHARS:
+                result, truncated = text[:UI_PAYLOAD_CHARS], True
+        now = int(time.time() * 1000)
+        stamp = params.get("startedAtMs" if started else "completedAtMs")
+        duration = item.get("durationMs")
+        completed_at = None if started else stamp or now
+        started_at = (stamp or now) if started else (completed_at - duration if duration is not None else None)
+        return {
+            "item_id": item["id"], "turn_id": params.get("turnId"), "kind": kind,
+            "phase": "started" if started else "completed", "name": name,
+            "arguments": self.redact(arguments), "result": self.redact(result), "status": status,
+            "started_at_ms": started_at, "completed_at_ms": completed_at, "duration_ms": duration,
+            # True when Codex sent no timestamp and the backend's receipt time stands in.
+            "approximate_times": stamp is None, "truncated": truncated,
+        }
+
+    def redact(self, value):
+        if isinstance(value, dict):
+            return {key: "[redacted]" if str(key).lower() in SECRET_KEYS else self.redact(item)
+                    for key, item in value.items()}
+        if isinstance(value, list):
+            return [self.redact(item) for item in value]
+        if isinstance(value, str) and self.client.api_key:
+            return value.replace(self.client.api_key, "[redacted]")
+        return value
 
     def disconnected(self, message: str):
         for done, _ in self.background.values():
