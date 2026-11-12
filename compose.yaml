@@ -9,6 +9,7 @@ services:
       PODCAST_LADYBUG_PATH: /var/lib/podcast-analyst/ladybug/graph.lbug
       PODCAST_REQUIRE_AUTH: "1"
       PODCAST_PUBLIC_ORIGIN: https://${APP_DOMAIN:-localhost}
+      PODCAST_ALERT_SENDER: alerts@${APP_DOMAIN}
     env_file:
       - path: ./runtime.env
         format: raw

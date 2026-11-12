@@ -67,7 +67,7 @@ class PostgresMigrationTests(unittest.IsolatedAsyncioTestCase):
     async def test_migrations_apply_once_and_enforce_the_design(self):
         self.assertEqual(await migrate_postgres(self.url), ["001_initial", "002_ingestion", "003_thesis_entities",
                                                             "004_episode_audio", "005_rss_watchers",
-                                                            "006_claim_signal"])
+                                                            "006_claim_signal", "007_thesis_assessments"])
         self.assertEqual(await migrate_postgres(self.url), [])
 
         async with await psycopg.AsyncConnection.connect(self.url, autocommit=True) as conn:
@@ -99,6 +99,18 @@ class PostgresMigrationTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(psycopg.errors.CheckViolation):
                 await conn.execute("UPDATE claims SET signal = 101")
             self.assertEqual(await one("SELECT signal FROM claims"), (None,))  # Unranked until the rank step.
+            (claim_id,) = await one("SELECT id FROM claims")
+            (thesis,) = await one("INSERT INTO theses (description) VALUES ('Optics') RETURNING id")
+            for stance, strength in [('invalid', 50), ('supports', -1), ('challenges', 101)]:
+                with self.assertRaises(psycopg.errors.CheckViolation):
+                    await conn.execute("INSERT INTO thesis_assessments VALUES (%s, %s, %s, %s)",
+                                       (claim_id, thesis, stance, strength))
+            await conn.execute("INSERT INTO thesis_assessments VALUES (%s, %s, 'unrelated', 0)", (claim_id, thesis))
+            with self.assertRaises(psycopg.errors.UniqueViolation):
+                await conn.execute("INSERT INTO thesis_assessments VALUES (%s, %s, 'supports', 25)", (claim_id, thesis))
+            await conn.execute("DELETE FROM claims")
+            self.assertEqual(await one("SELECT count(*) FROM thesis_assessments"), (0,))
+
 
 
 if __name__ == "__main__":

@@ -18,6 +18,8 @@ from ..clients.transcription_client import TranscriptionClient
 from .claim_extractor import ClaimExtractor
 from .claim_ranker import ClaimRanker
 from .models import EpisodeMetadata, IngestionJob
+from .notifier import Notifier
+from .thesis_reflector import ThesisReflector
 
 
 log = logging.getLogger(__name__)
@@ -25,6 +27,7 @@ log = logging.getLogger(__name__)
 MODEL = "gpt-6-luna"
 EMBEDDING_BATCH = 64
 PASSAGE_WORDS, OVERLAP_WORDS = 750, 250
+SWEEP_CLAIMS = 50  # Yield to newly queued episodes between small backfill batches.
 
 
 def choice(name: str, instructions: str) -> dict:
@@ -58,7 +61,8 @@ def split_passages(text: str) -> list[str]:
 
 class IngestionService:
     def __init__(self, db: PostgresClient, graph: GraphClient, openai: AsyncOpenAI, embedder: EmbeddingClient,
-                 extractor: ClaimExtractor, transcriber: TranscriptionClient, ranker: ClaimRanker):
+                 extractor: ClaimExtractor, transcriber: TranscriptionClient, ranker: ClaimRanker,
+                 reflector: ThesisReflector, notifier: Notifier):
         self.db = db
         self.graph = graph
         self.openai = openai
@@ -66,8 +70,10 @@ class IngestionService:
         self.extractor = extractor
         self.transcriber = transcriber
         self.ranker = ranker
+        self.reflector = reflector
+        self.notifier = notifier
         self.steps = [self.transcribe, self.screen, self.chunk, self.embed, self.extract_claims, self.rank,
-                      self.project_graph]
+                      self.reflect, self.project_graph, self.notify]
 
     # ---- Requests ---------------------------------------------------------
 
@@ -102,8 +108,21 @@ class IngestionService:
             job = await self.db.next_pending_job()
             if job:
                 await self.run_job(job)
-            else:
+            elif not await self.sweep():
                 await asyncio.sleep(poll_seconds)
+
+    async def sweep(self) -> bool:
+        """Connect existing claims to new theses while idle; never sends email."""
+        try:
+            claims = await self.reflector.reflect(limit=SWEEP_CLAIMS)
+            if claims:
+                self.graph.project_stances(claims, await self.db.stance_edges(claims))
+                log.info("Thesis sweep assessed and projected %s claims", len(claims))
+            return bool(claims)
+        except Exception:
+            log.exception("Thesis sweep failed; committed assessments may need manual graph re-projection")
+            await asyncio.sleep(60)  # An API outage must not spin the idle loop.
+            return False
 
     async def run_job(self, job: IngestionJob) -> None:
         try:
@@ -167,3 +186,9 @@ class IngestionService:
 
     async def project_graph(self, episode_id: UUID) -> None:
         self.graph.project_episode(await self.db.episode_graph(episode_id))
+
+    async def reflect(self, episode_id: UUID) -> None:
+        await self.reflector.reflect(episode_id)
+
+    async def notify(self, episode_id: UUID) -> None:
+        await self.notifier.notify(episode_id)

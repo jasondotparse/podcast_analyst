@@ -16,3 +16,5 @@ CREATE REL TABLE IF NOT EXISTS MENTIONS(FROM Passage TO Entity);
 // Claim.signal (0-100, from Postgres claims.signal) lets traversals rank claims without a
 // SQL round trip. ALTER rather than a column in CREATE so existing graphs gain it too.
 ALTER TABLE Claim ADD IF NOT EXISTS signal INT64;
+ALTER TABLE SUPPORTS ADD IF NOT EXISTS strength INT64;
+ALTER TABLE CHALLENGES ADD IF NOT EXISTS strength INT64;

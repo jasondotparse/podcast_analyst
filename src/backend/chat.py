@@ -34,6 +34,9 @@ class ChatSession:
 
 
 CHAT_INSTRUCTIONS = (
+    "Claims are automatically assessed against each active thesis: thesis_assessments in Postgres and "
+    "SUPPORTS/CHALLENGES edges with strength 0-100 in the graph; treat these as leads and read the claim "
+    "and quote before relying on them. add_subscription sets up email alerts. "
     "You are the Podcast Analyst research assistant. Answer from the ingested podcast data using your tools: "
     "vector_search finds relevant transcript passages; postgres_database_query reads claims, episodes, and "
     "metadata; graph_query follows links between episodes, passages, claims, entities, and theses; "

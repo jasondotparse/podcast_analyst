@@ -46,6 +46,18 @@ test('releases have immutable tags and survive stack deletion', () => {
 });
 
 test('beta and prod use separate hostnames', () => {
+  template('beta').hasResourceProperties('AWS::SES::EmailIdentity', { EmailIdentity: 'beta.example.com' });
+  template('prod').hasResourceProperties('AWS::SES::EmailIdentity', { EmailIdentity: 'example.com' });
   template('beta').hasResourceProperties('AWS::Route53::RecordSet', { Name: 'beta.example.com.' });
   template('prod').hasResourceProperties('AWS::Route53::RecordSet', { Name: 'example.com.' });
+});
+
+test('DKIM token names are absolute, without appending the hosted zone twice', () => {
+  const records = Object.values(template().findResources('AWS::Route53::RecordSet'))
+    .filter(record => record.Properties.Type === 'CNAME');
+  if (records.length !== 3) throw new Error('Expected three DKIM CNAMEs');
+  for (const record of records) {
+    const parts = record.Properties.Name['Fn::Join'][1];
+    if (parts.at(-1) !== '.') throw new Error('DKIM name must end with only a dot');
+  }
 });

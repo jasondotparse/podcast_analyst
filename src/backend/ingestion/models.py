@@ -1,6 +1,6 @@
 """Values passed between the API, the ingestion service, and the database clients."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from uuid import UUID
 
@@ -71,6 +71,7 @@ class EpisodeGraph:
     passage_ids: list[UUID]
     claims: list[tuple[UUID, UUID, int | None]]  # (claim_id, passage_id, signal)
     entity_links: list[EntityLink]
+    stances: list[tuple[UUID, UUID, str, int]] = field(default_factory=list)
 
 
 @dataclass

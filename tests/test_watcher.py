@@ -142,7 +142,7 @@ class WatcherTests(unittest.IsolatedAsyncioTestCase):
         self.enterContext(patch.object(feed_client, "resolve", fake_resolve))
         self.web = FakeWeb({f"https://cdn.example.com/ep{n}.mp3": f"ID3 ep{n}".encode() for n in range(1, 10)})
         self.ingestion = IngestionService(self.db, graph=None, openai=None, embedder=None, extractor=None,
-                                          transcriber=None, ranker=None)
+                                          transcriber=None, ranker=None, reflector=None, notifier=None)
         self.watcher = WatcherService(self.db, FeedClient(httpx2.MockTransport(self.web)), self.ingestion,
                                       max_audio_bytes=1000)
 

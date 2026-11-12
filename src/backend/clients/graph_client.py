@@ -5,6 +5,9 @@ import real_ladybug as ladybug
 from ..ingestion.models import EpisodeGraph
 
 
+EDGE_MIN_STRENGTH = 25  # Keep weak relevant connections available for research recall.
+
+
 class GraphClient:
     def __init__(self, database: ladybug.Database):
         self.database = database  # Keep a reference; Ladybug loses writes if the Database is collected.
@@ -27,6 +30,20 @@ class GraphClient:
                          "MERGE (c)-[:ABOUT]->(n) MERGE (p)-[:MENTIONS]->(n)",
                          {"c": str(link.claim_id), "p": str(link.passage_id), "n": str(link.entity_id),
                           "name": link.name, "kind": link.kind})
+        self.project_stances([row[0] for row in graph.claims], graph.stances)
+
+    def project_stances(self, claim_ids: list, edges: list) -> None:
+        """Replace stance edges from Postgres, so a changed stance never leaves its opposite behind."""
+        if not claim_ids:
+            return
+        conn = ladybug.Connection(self.database)
+        conn.execute("MATCH (c:Claim)-[r:SUPPORTS|CHALLENGES]->(:Thesis) WHERE c.id IN $ids DELETE r",
+                     {"ids": list(map(str, claim_ids))})
+        for claim_id, thesis_id, stance, strength in edges:
+            if stance in ("supports", "challenges") and strength >= EDGE_MIN_STRENGTH:
+                conn.execute(f"MERGE (c:Claim {{id: $c}}) MERGE (t:Thesis {{id: $t}}) "
+                             f"MERGE (c)-[r:{stance.upper()}]->(t) SET r.strength = $strength",
+                             {"c": str(claim_id), "t": str(thesis_id), "strength": strength})
 
     def project_thesis(self, thesis_id, entities: list[tuple]) -> None:
         """Mirror a thesis and its (id, name, kind) entities as (Thesis)-[:ABOUT]->(Entity)."""

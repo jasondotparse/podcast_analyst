@@ -17,12 +17,15 @@ from starlette.testclient import TestClient
 
 from src.backend.agent_tools import AgentTools
 from src.backend.clients.graph_client import GraphClient
+from src.backend.clients.email_client import EmailClient
 from src.backend.clients.postgres_client import PostgresClient
 from src.backend.clients.transcription_client import TranscriptionClient
 from src.backend.db.db import migrate_postgres, open_graph
 from src.backend.ingestion.claim_extractor import ClaimExtractor
 from src.backend.ingestion.claim_ranker import RUBRIC, ClaimRanker, signal_score
 from src.backend.ingestion.ingestion_service import OVERLAP_WORDS, IngestionService, split_passages
+from src.backend.ingestion.thesis_reflector import ThesisReflector
+from src.backend.ingestion.notifier import Notifier, render_alert
 from src.backend.ingestion.models import Claim, Episode, EpisodeMetadata, IngestionJob
 from src.backend.main import app
 from tests.test_db import DATABASE_URL
@@ -59,6 +62,8 @@ def fake_decisions(scores_by_claim: dict):
     def answer(name, score):
         if score is None:
             return SimpleNamespace(type="refusal", name=name)
+        if isinstance(score, str):
+            return SimpleNamespace(type="choice", name=name, choice=score)
         return SimpleNamespace(type="score", name=name, score=score, confidence=0.9)
 
     async def create(model, questions, input):
@@ -90,6 +95,28 @@ class TranscriptionClientTests(unittest.IsolatedAsyncioTestCase):
     async def test_audio_ffmpeg_cannot_read_raises_its_error(self):
         with self.assertRaisesRegex(RuntimeError, "ffmpeg could not read the audio: .+"):  # Wording varies by version.
             await TranscriptionClient(openai=None).transcribe(b"This is not audio.")
+
+
+class EmailTests(unittest.IsolatedAsyncioTestCase):
+    async def test_ses_sends_only_plain_text_to_one_recipient(self):
+        with patch('src.backend.clients.email_client.boto3.client') as client:
+            client.return_value = SimpleNamespace(send_email=unittest.mock.Mock())
+            await EmailClient('alerts@example.com').send('reader@example.com', 'Evidence', '<quote>')
+            client.assert_called_once_with('sesv2', region_name='us-east-1')
+            args = client.return_value.send_email.call_args.kwargs
+            self.assertEqual(args['Destination'], {'ToAddresses': ['reader@example.com']})
+            self.assertEqual(args['Content']['Simple']['Body'], {'Text': {'Data': '<quote>', 'Charset': 'UTF-8'}})
+        self.assertFalse(EmailClient(None).enabled)
+
+    def test_renderer_caps_at_ten_and_preserves_untrusted_quotes(self):
+        claim = dict(text='Claim', evidence_quote='<script>untrusted</script>', speaker='Speaker',
+                     podcast='Show', episode='Episode', published_at='2026-11-10', source_url='https://example.com',
+                     signal=80, strength=90)
+        subject, body = render_alert('Thesis', [claim] * 12, 'https://app.example.com/')
+        self.assertIn('challenges', subject)
+        self.assertEqual(body.count('<script>untrusted</script>'), 10)
+        self.assertIn('https://example.com', body)
+        self.assertIn('https://app.example.com/app/', body)
 
 
 class IngestionEndpointTests(unittest.TestCase):
@@ -193,7 +220,7 @@ class PostgresBackedTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_submit_queues_once_and_returns_the_existing_job_for_a_duplicate(self):
         service = IngestionService(self.db, graph=None, openai=None, embedder=None, extractor=None, transcriber=None,
-                                   ranker=None)
+                                   ranker=None, reflector=None, notifier=None)
         metadata = EpisodeMetadata(podcast_name="Chips", podcast_description="Semiconductor news", title="Packaging")
         job, created = await service.submit(metadata, "Advanced packaging is the bottleneck.")
         self.assertTrue(created)
@@ -206,7 +233,7 @@ class PostgresBackedTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_submit_audio_stores_it_untranscribed_and_dedupes_on_its_bytes(self):
         service = IngestionService(self.db, graph=None, openai=None, embedder=None, extractor=None, transcriber=None,
-                                   ranker=None)
+                                   ranker=None, reflector=None, notifier=None)
         metadata = EpisodeMetadata(podcast_name="Chips", title="Memristors")
         job, created = await service.submit(metadata, audio=b"ID3 audio bytes")
         self.assertTrue(created)
@@ -220,7 +247,7 @@ class PostgresBackedTests(unittest.IsolatedAsyncioTestCase):
     async def test_transcribe_skips_existing_transcripts_and_saves_new_ones(self):
         transcriber = SimpleNamespace(transcribe=AsyncMock(return_value="Memristors reach pilot customers by 2030."))
         service = IngestionService(self.db, graph=None, openai=None, embedder=None, extractor=None,
-                                   transcriber=transcriber, ranker=None)
+                                   transcriber=transcriber, ranker=None, reflector=None, notifier=None)
         metadata = EpisodeMetadata(podcast_name="Chips", title="Memristors")
         text_job, _ = await service.submit(metadata, transcript="Already a transcript.")
         audio_job, _ = await service.submit(metadata, audio=b"ID3 audio bytes")
@@ -236,7 +263,7 @@ class PostgresBackedTests(unittest.IsolatedAsyncioTestCase):
     async def test_transcribe_fails_when_the_audio_has_no_speech(self):
         transcriber = SimpleNamespace(transcribe=AsyncMock(return_value=" \n"))
         service = IngestionService(self.db, graph=None, openai=None, embedder=None, extractor=None,
-                                   transcriber=transcriber, ranker=None)
+                                   transcriber=transcriber, ranker=None, reflector=None, notifier=None)
         job, _ = await service.submit(EpisodeMetadata(podcast_name="Chips", title="Silence"), audio=b"ID3 silence")
         with self.assertRaisesRegex(ValueError, "no text"):
             await service.transcribe(job.episode_id)
@@ -315,3 +342,133 @@ class PostgresBackedTests(unittest.IsolatedAsyncioTestCase):
                     await self.tools.call("add_thesis", empty)
             self.assertEqual(await self.db.all("SELECT count(*) FROM theses"), [(1,)])
             self.tools.graph.close()
+
+    async def reflection_fixture(self):
+        for index in range(6):
+            await self.extractor.write_claim(self.episode, {
+                "text": f"Claim {index}", "evidence_quote": "Lasers ship next year.", "speaker": "Anders Storm",
+                "entities": [{"name": "Sivers", "kind": "company"}]})
+        return (await self.db.add_thesis("Optics ships this year.", []))[0]
+
+    async def test_reflect_pairs_once_inactive_theses_and_refusals(self):
+        thesis = await self.reflection_fixture()
+        second, _ = await self.db.add_thesis("Power is plentiful.", [])
+        inactive, _ = await self.db.add_thesis("Inactive", [])
+        await self.db.execute("UPDATE theses SET is_active = false WHERE id = %s", inactive)
+        scores = {f"Claim {i}": {f"stance:{thesis}": "challenges", f"strength:{thesis}": 3,
+                                f"stance:{second}": None, f"strength:{second}": None} for i in range(6)}
+        api = fake_decisions(scores)
+        reflector = ThesisReflector(self.db, api)
+        self.assertEqual(len(await reflector.reflect(self.episode)), 6)
+        self.assertEqual(await reflector.reflect(self.episode), [])
+        self.assertEqual(api.decisions.create.await_count, 6)
+        for call in api.decisions.create.call_args_list:
+            self.assertEqual(len(call.kwargs['questions']), 4)
+        self.assertEqual(await self.db.all("SELECT stance, strength, count(*) FROM thesis_assessments "
+                                           "GROUP BY stance, strength ORDER BY stance"),
+                         [('challenges', 75, 6), ('unrelated', 0, 6)])
+        self.assertIn('unrelated', await self.query("SELECT * FROM thesis_assessments"))
+
+    async def test_sweep_new_thesis_across_episodes_limit_edges_and_failure(self):
+        await self.reflection_fixture()
+        await self.db.execute("UPDATE theses SET is_active = false")
+        job = await self.db.create_episode_job(EpisodeMetadata(podcast_name='Chips', title='Second'),
+                                               'txt', 'Lasers ship next year.', 'second')
+        await self.db.insert_passages(job.episode_id, ['Lasers ship next year.'])
+        await self.extractor.write_claim(job.episode_id, {
+            'text': 'Claim 6', 'evidence_quote': 'Lasers ship next year.', 'speaker': None, 'entities': []})
+        thesis, _ = await self.db.add_thesis('New thesis after ingestion', [])
+        api = fake_decisions({f'Claim {i}': {f'stance:{thesis}': 'supports', f'strength:{thesis}': 1}
+                              for i in range(7)})
+        with tempfile.TemporaryDirectory() as directory:
+            graph = GraphClient(open_graph(Path(directory) / 'graph.lbug'))
+            service = IngestionService(self.db, graph, None, None, None, None, None,
+                                       ThesisReflector(self.db, api), None)
+            with patch('src.backend.ingestion.ingestion_service.SWEEP_CLAIMS', 2):
+                self.assertTrue(await service.sweep())
+                self.assertEqual(api.decisions.create.await_count, 2)
+                while await service.sweep():
+                    pass
+            self.assertEqual(graph.read_only_query('MATCH ()-[r:SUPPORTS]->() RETURN count(r) AS n', 10), [{'n': 7}])
+            self.assertEqual(await self.db.one('SELECT count(*) FROM alerts'), (0,))
+            service.reflector.reflect = AsyncMock(side_effect=RuntimeError('API unavailable'))
+            with patch('src.backend.ingestion.ingestion_service.asyncio.sleep', new_callable=AsyncMock) as sleep:
+                self.assertFalse(await service.sweep())
+                sleep.assert_awaited_once_with(60)
+            graph.close()
+
+    async def test_stance_edges_threshold_and_flip(self):
+        thesis = await self.reflection_fixture()
+        ids = [row[0] for row in await self.db.all('SELECT id FROM claims ORDER BY text')]
+        await self.db.save_assessments([(c, thesis, stance, strength) for c, stance, strength in
+            zip(ids, ['supports', 'supports', 'challenges', 'challenges', 'unrelated', 'unrelated'],
+                [24, 25, 0, 80, 0, 100])])
+        with tempfile.TemporaryDirectory() as directory:
+            graph = GraphClient(open_graph(Path(directory) / 'graph.lbug'))
+            graph.project_episode(await self.db.episode_graph(self.episode))
+            self.assertEqual(graph.read_only_query('MATCH ()-[r:SUPPORTS|CHALLENGES]->() '
+                                                   'RETURN r.strength AS strength ORDER BY strength', 10),
+                             [{'strength': 25}, {'strength': 80}])
+            await self.db.execute("UPDATE thesis_assessments SET stance = 'challenges' WHERE claim_id = %s", ids[1])
+            graph.project_episode(await self.db.episode_graph(self.episode))
+            self.assertEqual(graph.read_only_query('MATCH ()-[r:SUPPORTS]->() RETURN count(r) AS n', 10), [{'n': 0}])
+            self.assertEqual(graph.read_only_query('MATCH ()-[r:CHALLENGES]->() RETURN count(r) AS n', 10), [{'n': 2}])
+            graph.close()
+
+    async def test_subscriptions_validate_normalize_and_dedupe(self):
+        thesis, _ = await self.db.add_thesis('Optics', [])
+        inactive, _ = await self.db.add_thesis('Inactive', [])
+        await self.db.execute('UPDATE theses SET is_active = false WHERE id = %s', inactive)
+        for _ in range(2):
+            self.assertEqual(await self.tools.add_subscription(' Analyst@Example.COM ', [str(thesis)]),
+                             {'email': 'analyst@example.com', 'subscribed_to': ['Optics']})
+        self.assertEqual(await self.db.one('SELECT count(*) FROM subscriptions'), (1,))
+        for bad_id in (str(inactive), str(uuid4()), 'not-a-uuid'):
+            with self.assertRaisesRegex(ValueError, bad_id):
+                await self.tools.add_subscription('test@example.com', [str(thesis), bad_id])
+        for email in ('missing-at', 'a@b', 'a@b.c\nBcc: x@y.com'):
+            with self.assertRaisesRegex(ValueError, 'Invalid email'):
+                await self.tools.add_subscription(email, [str(thesis)])
+        with self.assertRaisesRegex(ValueError, 'at least one'):
+            await self.tools.add_subscription('a@b.com', [])
+        self.assertEqual(await self.db.one('SELECT count(*) FROM subscriptions'), (1,))
+
+    async def test_notify_gates_recipients_retry_disabled_and_failure(self):
+        thesis = await self.reflection_fixture()
+        ids = [row[0] for row in await self.db.all('SELECT id FROM claims ORDER BY text')]
+        for c, stance, strength, signal in zip(ids, ['challenges'] * 5 + ['supports'],
+                                              [75, 100, 74, 100, 100, 100], [60, 90, 100, 59, None, 100]):
+            await self.db.save_assessments([(c, thesis, stance, strength)])
+            await self.db.execute('UPDATE claims SET signal = %s WHERE id = %s', signal, c)
+        email = SimpleNamespace(enabled=True, send=AsyncMock())
+        notifier = Notifier(self.db, email, 'http://127.0.0.1:8000')
+        await notifier.notify(self.episode)  # No subscribers.
+        self.assertEqual(await self.db.one('SELECT count(*) FROM alerts'), (0,))
+        for address in ('a@example.com', 'b@example.com'):
+            await self.tools.add_subscription(address, [str(thesis)])
+        await self.db.execute('UPDATE theses SET is_active = false')
+        await notifier.notify(self.episode)
+        self.assertEqual(await self.db.one('SELECT count(*) FROM alerts'), (0,))
+        await self.db.execute('UPDATE theses SET is_active = true')
+        email.enabled = False
+        with self.assertLogs('src.backend.ingestion.notifier', level='INFO'):
+            await notifier.notify(self.episode)
+            await notifier.notify(self.episode)
+        email.send.assert_not_awaited()
+        self.assertEqual(await self.db.one('SELECT status, sent_at FROM alerts'), ('pending', None))
+        email.enabled = True
+        email.send.side_effect = RuntimeError('SES denied')
+        with self.assertRaisesRegex(RuntimeError, 'SES denied'):
+            await notifier.notify(self.episode)
+        self.assertEqual(await self.db.one('SELECT status FROM alerts'), ('failed',))
+        email.send.reset_mock(side_effect=True)
+        await notifier.notify(self.episode)
+        await notifier.notify(self.episode)
+        self.assertEqual([c.args[0] for c in email.send.call_args_list], ['a@example.com', 'b@example.com'])
+        body = email.send.call_args.args[2]
+        for text in ('Optics ships this year.', 'Lasers ship next year.', 'Anders Storm', 'http://127.0.0.1:8000/app/'):
+            self.assertIn(text, body)
+        self.assertLess(body.index('Claim 1'), body.index('Claim 0'))
+        self.assertEqual(await self.db.one('SELECT status, sent_at IS NOT NULL, jsonb_array_length(matches) FROM alerts'),
+                         ('sent', True, 2))
+        self.assertEqual(await self.db.one('SELECT count(*) FROM alerts'), (1,))

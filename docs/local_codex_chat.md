@@ -70,7 +70,7 @@ read-only commands anywhere the sandbox allows reading; see
 [etl_design.md](etl_design.md#verification). Live web search is enabled through `codex/config.toml`; no podcast-specific
 tools are advertised.
 Chat threads get three read-only research tools (`vector_search`, `graph_query`,
-`postgres_database_query`) and two write tools, `add_thesis` and `register_rss_to_watcher`; ingestion extraction threads get `postgres_database_query`,
+`postgres_database_query`) and three write tools, `add_thesis`, `add_subscription`, and `register_rss_to_watcher`; ingestion extraction threads get `postgres_database_query`,
 `write_claim`, and the `extract-claims` skill. Tool definitions live in `codex/tools/`.
 Other server RPC requests receive an explicit error instead of hanging.
 
