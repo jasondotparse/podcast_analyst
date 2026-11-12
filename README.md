@@ -35,23 +35,23 @@ app** for HMR development, or **serve front end** when the backend is already ru
 - [x] support reflection in both directions, not just ingestion:
   	- New podcast ingested: Evaluate its claims against existing theses. (Done) 
   	- New thesis created: Evaluate existing claims against the new thesis.
-- [ ] Process 10 real episodes
-- [ ] update readme.md & docs with your product vision, tradeoffs made, etc. 
 
 XXX PO REQUIREMENTS COMPLETE AT THIS POINT XXX
 
 - [x] build "suggested prompts" new users can use these UI elements to auto-populate a prompt into the chat box. The same as 'suggested prompts' in ChatGPT, but hardcoded.
 - [x] Left-hand cabinet lists theses, watched podcasts, email subscriptions, and recent ingestion status.
 - [x] [Knowledge graph](docs/knowledge_graph_design.md): thesis overview, source evidence, connection expansion, and graph-query cards in chat.
+- [x] Successful graph queries show graph cards above the answer; general tool/thinking activity remains later work.
+- [ ] clean up the UI to make it more polished and the colors more appealing.
+- [ ] in the chat history, it should show more than just user input and agent final_response. It should also display thinking / using tools events as UI elements so the user isn't just sitting there waiting for the agent to reply. It should also render markown correctly. Right now the model keeps appending * and backtick characters everywhere which looks odd in the inline chat view. 
 - [ ] build a "architecture overview" tool to allow the agent to read its own code on GitHub - this will be the best way to explain to folks how it works under the hood. Literally just ask it! One of the suggested prompts can just be a 'Explain how you work at a high level'. Will require the creation of a github service account / API key. Readonly, scoped to the podcast_analyst repo. 
-  - [x] No tool needed: the chat instructions point the agent at this public repo, so it answers "how do you work?" by reading the raw README and linked docs over live web search and citing them. A suggested prompt for it is still to do.
-- [ ] in the chat history, it should show more than just user input and agent final_response. It should also display thinking / using tools events as UI elements so the user isn't just sitting there waiting for the agent to reply
-  - [x] Successful graph queries show graph cards above the answer; general tool/thinking activity remains later work.
-- [ ] clean up the UI to make it more polished. The buttons on the top of the view should go on a sidebar on the left. 
 - [ ] later: a novelty / non-consensus axis on the 'signal' measure - guest credibility as a property of the speaker rather than each claim
 - [ ] a 'new user' onboarding screen (can just be 'new session' onboarding screen for demo purposes, if we boost session lifespan to like 1 day). This should be a few pages that teach the user how to use the agent - can be a single index.html deployed to newuser.podcastanalyst.com
 - [ ] exact same thing for actually describing *how it works under the hood*. deployed to howitworks.podcastanalyst.com
+- [ ] testing 
 - [ ] Prod env deployment.
+- [ ] Process 10 real episodes
+- [ ] update readme.md & docs with your product vision, tradeoffs made, next steps for future development etc. 
 
 ## Watching podcasts (RSS)
 
