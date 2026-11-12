@@ -1,0 +1,97 @@
+:root { --cabinet-rail: 140px; }
+
+/* Keep the centered chat clear of the fixed rail. */
+body { padding-left: var(--cabinet-rail); }
+
+.cabinet { position: fixed; inset: 0 auto 0 0; z-index: 2; display: flex; }
+
+/* The rail sits above the drawer so the drawer slides out from behind it. */
+.cabinet-rail {
+  position: relative;
+  z-index: 1;
+  width: var(--cabinet-rail);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 24px 10px;
+  background: #e9edf3;
+  border-right: 1px solid #dde2e9;
+}
+.cabinet-heading {
+  margin: 0 10px 8px;
+  color: #596779;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.cabinet-tab {
+  align-self: stretch;
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: transparent;
+  color: #17212e;
+  font-size: 14px;
+  text-align: left;
+}
+.cabinet-tab:hover { background: #dde4ee; }
+.cabinet-tab[aria-pressed="true"] { background: #1767d4; color: white; }
+.cabinet-tab:focus-visible { outline: 2px solid #1767d4; outline-offset: 2px; }
+
+.cabinet-panel {
+  width: min(380px, calc(100vw - var(--cabinet-rail)));
+  display: flex;
+  flex-direction: column;
+  background: white;
+  border-right: 1px solid #dde2e9;
+  box-shadow: 12px 0 40px rgb(23 33 46 / 12%);
+  animation: cabinet-slide-in .2s ease-out;
+}
+@keyframes cabinet-slide-in { from { transform: translateX(-100%); } }
+@media (prefers-reduced-motion: reduce) { .cabinet-panel { animation: none; } }
+
+.cabinet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 20px 14px;
+  border-bottom: 1px solid #dde2e9;
+}
+.cabinet-header h2 { margin: 0; font-size: 17px; }
+.cabinet-header button { align-self: center; padding: 6px 12px; border-radius: 8px; font-size: 14px; }
+
+.cabinet-body { flex: 1; overflow-y: auto; padding: 4px 20px 20px; }
+.cabinet-note { color: #596779; font-size: 14px; }
+.cabinet-list { list-style: none; margin: 0; padding: 0; }
+.cabinet-list li {
+  padding: 12px 0;
+  border-bottom: 1px solid #edf0f4;
+  font-size: 14px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.cabinet-muted { color: #596779; }
+.cabinet-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.cabinet-error {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: #a62330;
+  font-size: 13px;
+}
+
+.cabinet-status {
+  flex-shrink: 0;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #e7ecf3;
+  color: #3b4a5c;
+  font-size: 12px;
+  font-weight: 600;
+}
+.cabinet-status.completed { background: #dff3e6; color: #17703d; }
+.cabinet-status.failed { background: #f9e1e3; color: #a62330; }
+.cabinet-status.skipped { background: #fbefd9; color: #8a5a00; }
+.cabinet-status.running, .cabinet-status.pending { background: #e1ecfb; color: #1767d4; }

@@ -53,6 +53,12 @@ class PostgresClient:
         async with await self.connect() as conn:
             return await (await conn.execute(query, params)).fetchall()
 
+    async def dicts(self, query: str, *params) -> list[dict]:
+        """Rows keyed by column name, ready to return as JSON."""
+        async with await self.connect() as conn, conn.cursor(row_factory=dict_row) as cursor:
+            await cursor.execute(query, params)
+            return await cursor.fetchall()
+
     # ---- Ingestion jobs ---------------------------------------------------
 
     async def find_job_by_source(self, content_hash: str, source_url: str | None) -> IngestionJob | None:
@@ -294,6 +300,27 @@ class PostgresClient:
             "SELECT 1 FROM episodes e JOIN podcasts p ON p.id = e.podcast_id "
             "WHERE (p.name = %s AND e.external_episode_id = %s) OR e.source_url = %s LIMIT 1",
             podcast_name, external_episode_id, source_url) is not None
+
+    # ---- Catalog (the UI's read-only cabinet) --------------------------------
+
+    async def list_theses(self) -> list[dict]:
+        return await self.dicts("SELECT id, description, is_active, created_at FROM theses ORDER BY created_at DESC")
+
+    async def list_watched_podcasts(self) -> list[dict]:
+        """Active RSS feeds by name; registration stores the feed's title in `description`."""
+        return await self.dicts("SELECT id, COALESCE(description, url) AS name FROM watch_sources WHERE is_active "
+                                "ORDER BY lower(COALESCE(description, url))")
+
+    async def list_subscriptions(self) -> list[dict]:
+        return await self.dicts("SELECT s.id, s.email, t.description AS thesis FROM subscriptions s "
+                                "JOIN theses t ON t.id = s.thesis_id ORDER BY s.email, s.created_at")
+
+    async def recent_ingestions(self, limit: int) -> list[dict]:
+        """The most recently updated jobs, with their podcast and episode."""
+        return await self.dicts(
+            "SELECT j.id, p.name AS podcast, e.title, j.status, j.current_step, j.error, j.updated_at "
+            "FROM ingestion_jobs j JOIN episodes e ON e.id = j.episode_id JOIN podcasts p ON p.id = e.podcast_id "
+            "ORDER BY j.updated_at DESC LIMIT %s", limit)
 
     # ---- Agent tools -----------------------------------------------------
 

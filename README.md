@@ -60,7 +60,7 @@ hosts only, timeouts and size caps) and saves it in `watch_sources`.
   When it is, it fetches the feeds not checked for an hour and queues **one** new episode, compared by
   RSS GUID against `episodes`. It uses the feed's transcript (plain text, WebVTT, or SRT) if there is
   one, otherwise the audio enclosure, through the existing ingestion path.
-- **Limitations:** no UI to list or remove feeds; episodes that drop out of a feed before they are
+- **Limitations:** no UI to remove feeds (the left-hand cabinet lists them); episodes that drop out of a feed before they are
   queued are missed; video-only feeds and HTML/JSON transcripts are not supported; and a failed
   job is not retried automatically.
 

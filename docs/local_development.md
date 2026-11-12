@@ -86,6 +86,27 @@ appears in the backend log (`src.backend.ingestion.watcher_service: Watcher queu
 `UPDATE watch_sources SET last_checked_at = NULL`. See the
 [watcher design](etl_design.md#rss-watchers).
 
+### Browse the database (cabinet)
+
+The rail on the left of the page (`DbCabinet`) lists what the database holds. Each button opens
+a drawer, with **Close** at its top, which fetches its list fresh every time it opens:
+
+| Button | Shows | Endpoint |
+|---|---|---|
+| Theses | Every thesis, newest first; inactive ones are marked | `GET /api/catalog/theses` |
+| Podcasts | Names of the active RSS feeds being watched | `GET /api/catalog/podcasts` |
+| Subscriptions | One line per alert subscription: email → thesis | `GET /api/catalog/subscriptions` |
+| Ingestions | The 20 most recently updated jobs: podcast, episode, status, time, and any error | `GET /api/catalog/ingestions` |
+| Knowledge graph | A placeholder | — |
+
+The endpoints are read-only and go through `CatalogService` (`src/backend/catalog_service.py`);
+the SQL is in `PostgresClient`'s catalog section. The buttons and how each one renders a row are
+defined in `src/frontend/src/components/cabinetViews.jsx`.
+
+Verified locally and on beta in headless Chromium: each list matched the database's row counts
+(beta: 3 theses, 3 feeds, 1 subscription, 14 jobs), **Close** closed the drawer, there were no
+console errors, and the endpoints return 401 without a login.
+
 ## VS Code run configurations
 
 Open **Run and Debug**, choose a configuration, and press **F5**:

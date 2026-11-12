@@ -29,3 +29,20 @@ export async function uploadTranscript(metadata, file) {
   if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Upload failed. Check the fields and try again.')
   return data
 }
+
+// Read-only lists for the left-hand cabinet.
+export function getTheses() {
+  return request('/api/catalog/theses')
+}
+
+export function getWatchedPodcasts() {
+  return request('/api/catalog/podcasts')
+}
+
+export function getSubscriptions() {
+  return request('/api/catalog/subscriptions')
+}
+
+export function getRecentIngestions() {
+  return request('/api/catalog/ingestions')
+}
