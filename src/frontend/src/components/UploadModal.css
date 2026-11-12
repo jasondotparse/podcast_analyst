@@ -1,27 +1,21 @@
+/* The native <dialog> only hosts the modal; its form is the visible .dialog panel. */
 .upload-modal {
   width: min(560px, calc(100vw - 32px));
-  max-height: calc(100dvh - 32px);
-  padding: 24px;
+  max-width: none;
+  max-height: none;
+  overflow: visible;
+  padding: 0;
   border: 0;
-  border-radius: 16px;
-  box-shadow: 0 20px 60px rgb(23 33 46 / 25%);
-  color: inherit;
+  background: transparent;
+  color: var(--color-text);
 }
-.upload-modal::backdrop { background: rgb(23 33 46 / 45%); }
-
-/* Override the chat's global form layout. */
-.upload-modal form { display: grid; gap: 14px; padding: 0; border: 0; }
-.upload-modal h2 { margin: 0; font-size: 20px; }
-.upload-modal label:not(.dropzone) { display: grid; gap: 6px; font-size: 14px; font-weight: 600; }
-.upload-modal input:not([type="file"]), .upload-modal textarea {
-  padding: 10px 12px;
-  border: 1px solid #bdc7d4;
-  border-radius: 10px;
-  font: inherit;
-  font-weight: 400;
+.upload-modal::backdrop {
+  background: color-mix(in srgb, var(--color-neutral-900) 50%, transparent);
+  backdrop-filter: blur(3px);
 }
-.upload-modal input:focus, .upload-modal textarea:focus { outline: 2px solid #1767d4; outline-offset: 1px; }
-.upload-modal textarea { resize: vertical; max-height: 200px; }
+.upload-modal .dialog { width: 100%; max-height: calc(100dvh - 32px); overflow-y: auto; gap: 14px; padding: 22px 24px; }
+.upload-modal .dialog-title { margin: 0 0 2px; }
+.upload-modal textarea.input { min-height: 0; max-height: 200px; }
+.upload-modal input[type="date"] { color-scheme: dark; }
 .upload-modal .error { margin: 0; }
-.upload-modal .actions { display: flex; justify-content: flex-end; gap: 12px; }
-button.secondary { background: #e7ecf3; color: #17212e; }
+.upload-modal .dialog-actions { margin-top: 6px; }

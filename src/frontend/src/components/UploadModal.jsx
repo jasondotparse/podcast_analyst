@@ -46,20 +46,41 @@ export default function UploadModal({ onClose, onUploaded }) {
   return (
     // Escape fires the dialog's close event.
     <dialog ref={dialog} className="upload-modal" aria-labelledby="upload-title" onClose={onClose}>
-      <form onSubmit={submit}>
-        <h2 id="upload-title">Upload podcast</h2>
+      <form className="dialog" onSubmit={submit}>
+        <h2 id="upload-title" className="dialog-title">Upload podcast</h2>
         <TranscriptDropzone file={file} onChange={setFile} />
-        <label>Podcast name<input name="podcast_name" required /></label>
-        <label>Podcast description<textarea name="podcast_description" rows={2} /></label>
-        <label>Episode title<input name="title" required /></label>
-        <label>Episode description<textarea name="description" rows={3} /></label>
-        <label>Episode URL<input name="source_url" type="url" placeholder="https://… (link to the original episode)" /></label>
-        <label>Guests<input name="guests" placeholder="Comma-separated, e.g. Bill Gates, Madhumita Murgia" /></label>
-        <label>Date<input name="published_at" type="date" /></label>
+        <div className="field">
+          <label htmlFor="upload-podcast-name">Podcast name</label>
+          <input id="upload-podcast-name" className="input" name="podcast_name" required />
+        </div>
+        <div className="field">
+          <label htmlFor="upload-podcast-description">Podcast description</label>
+          <textarea id="upload-podcast-description" className="input" name="podcast_description" rows={2} />
+        </div>
+        <div className="field">
+          <label htmlFor="upload-episode-title">Episode title</label>
+          <input id="upload-episode-title" className="input" name="title" required />
+        </div>
+        <div className="field">
+          <label htmlFor="upload-episode-description">Episode description</label>
+          <textarea id="upload-episode-description" className="input" name="description" rows={3} />
+        </div>
+        <div className="field">
+          <label htmlFor="upload-episode-url">Episode URL</label>
+          <input id="upload-episode-url" className="input" name="source_url" type="url" placeholder="https://… (link to the original episode)" />
+        </div>
+        <div className="field">
+          <label htmlFor="upload-guests">Guests</label>
+          <input id="upload-guests" className="input" name="guests" placeholder="Comma-separated, e.g. Bill Gates, Madhumita Murgia" />
+        </div>
+        <div className="field">
+          <label htmlFor="upload-date">Date</label>
+          <input id="upload-date" className="input" name="published_at" type="date" />
+        </div>
         {error && <p className="error" role="alert">{error}</p>}
-        <div className="actions">
-          <button type="button" className="secondary" onClick={onClose}>Cancel</button>
-          <button type="submit" disabled={!file || submitting}>{submitting ? 'Uploading…' : 'Submit'}</button>
+        <div className="dialog-actions">
+          <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+          <button type="submit" className="btn btn-primary" disabled={!file || submitting}>{submitting ? 'Uploading…' : 'Submit'}</button>
         </div>
       </form>
     </dialog>

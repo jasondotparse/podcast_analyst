@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { FileTextIcon, UploadSimpleIcon } from '@phosphor-icons/react'
 import './TranscriptDropzone.css'
 
 // A drop target (or click-to-choose) for a .txt transcript or an .mp3 recording.
@@ -31,6 +32,7 @@ export default function TranscriptDropzone({ file, onChange }) {
     >
       <input type="file" accept=".txt,.mp3,text/plain,audio/mpeg" className="visually-hidden"
         onChange={(event) => choose(event.target.files[0])} />
+      {file ? <FileTextIcon size={22} aria-hidden="true" /> : <UploadSimpleIcon size={22} aria-hidden="true" />}
       {file
         ? <span><strong>{file.name}</strong> · click or drop to replace</span>
         : <span>Drop a <strong>.txt</strong> transcript or <strong>.mp3</strong> audio file here, or click to choose one</span>}

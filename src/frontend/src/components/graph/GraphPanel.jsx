@@ -84,15 +84,15 @@ export default function GraphPanel({ initialGraph, initialSelectedId }) {
   return (
     <div className="graph-panel">
       <div className="graph-toolbar">
-        <label>Thesis <select value={thesisId} onChange={(event) => loadView(event.target.value)} disabled={loading}>
+        <label>Thesis <select className="input" value={thesisId} onChange={(event) => loadView(event.target.value)} disabled={loading}>
           {initialGraph && <option value="chat">Chat subgraph</option>}
           <option value="">All theses</option>
           {theses.map((node) => <option key={node.id} value={node.id}>{node.label}</option>)}
         </select></label>
-        <button type="button" className="secondary" onClick={() => loadView(thesisId)} disabled={loading}>Reset</button>
+        <button type="button" className="btn btn-secondary" onClick={() => loadView(thesisId)} disabled={loading}>Reset</button>
         <span role="status">{loading ? 'Loading graph…' : `${graph.nodes.length} nodes · ${graph.links.length} connections`}</span>
       </div>
-      {error && <p className="error" role="alert">{error} <button type="button" onClick={() => loadView(thesisId)}>Try again</button></p>}
+      {error && <p className="error" role="alert">{error} <button type="button" className="btn btn-secondary" onClick={() => loadView(thesisId)}>Try again</button></p>}
       {graph.truncated && <p className="graph-notice">View limited to keep the graph readable. Select a node to explore its connections, or reset.</p>}
       <div className="graph-workspace">
         <div className="graph-stage" ref={container}>

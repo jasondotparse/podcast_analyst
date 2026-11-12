@@ -1,52 +1,82 @@
-:root { --cabinet-rail: 140px; }
+:root { --cabinet-rail: 232px; }
 
-/* Keep the centered chat clear of the fixed rail. */
-body { padding-left: var(--cabinet-rail); }
-
-.cabinet { position: fixed; inset: 0 auto 0 0; z-index: 2; display: flex; }
-
-/* The rail sits above the drawer so the drawer slides out from behind it. */
+/* The rail is the shell's first grid column. It sits above the drawer, so the drawer slides
+   out from behind it. */
+.cabinet { min-width: 0; min-height: 0; }
 .cabinet-rail {
   position: relative;
-  z-index: 1;
-  width: var(--cabinet-rail);
+  z-index: 10;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 24px 10px;
-  background: #e9edf3;
-  border-right: 1px solid #dde2e9;
+  gap: 22px;
+  height: 100%;
+  overflow-y: auto;
+  padding: 22px 14px 18px;
+  background: var(--rule-y) no-repeat right / 1px 100%, var(--color-bg);
 }
-.cabinet-action { align-self: stretch; padding: 9px 4px; border-radius: 10px; font-size: 14px; white-space: nowrap; }
-.cabinet-rail > .cabinet-action { margin-bottom: 8px; }
-/* Pin Sign out to the bottom; override the chat's global form layout. */
-.cabinet-signout { margin-top: auto; padding: 0; border: 0; }
-.cabinet-signout .cabinet-action { flex: 1; background: white; border: 1px solid #dde2e9; }
-.cabinet-signout .cabinet-action:hover { background: #dde4ee; }
+.cabinet-brand { display: flex; align-items: center; gap: 10px; padding: 0 8px; font-size: 14px; font-weight: 500; letter-spacing: -0.01em; }
+.cabinet-brand-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px var(--color-accent-600);
+}
+.cabinet-brand-mark::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  box-shadow: 0 0 10px var(--color-accent);
+}
+.cabinet-action { justify-content: flex-start; gap: 9px; padding: 8px 10px; font-size: 13px; text-align: left; }
+.cabinet-action svg { flex: none; }
+.cabinet-tabs { display: flex; flex-direction: column; gap: 2px; }
+.cabinet-label { padding: 0 10px 8px; color: var(--color-neutral-600); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; }
 .cabinet-tab {
-  align-self: stretch;
-  padding: 9px 10px;
-  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: var(--radius-md);
   background: transparent;
-  color: #17212e;
-  font-size: 14px;
+  color: var(--color-neutral-400);
+  font: inherit;
+  font-size: 13.5px;
   text-align: left;
+  cursor: pointer;
 }
-.cabinet-tab:hover { background: #dde4ee; }
-.cabinet-tab[aria-pressed="true"] { background: #1767d4; color: white; }
-.cabinet-tab:focus-visible { outline: 2px solid #1767d4; outline-offset: 2px; }
+.cabinet-tab svg { flex: none; opacity: .85; }
+.cabinet-tab:hover { background: color-mix(in srgb, var(--color-text) 5%, transparent); color: var(--color-text); }
+.cabinet-tab[aria-pressed="true"] { background: color-mix(in srgb, var(--color-accent) 12%, transparent); color: var(--color-accent-200); }
+/* Pin Sign out to the bottom. */
+.cabinet-signout { display: flex; margin-top: auto; }
+.cabinet-signout .cabinet-action { flex: 1; color: var(--color-neutral-300); }
 
 .cabinet-panel {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: var(--cabinet-rail);
+  z-index: 9;
   width: min(380px, calc(100vw - var(--cabinet-rail)));
   display: flex;
   flex-direction: column;
-  background: white;
-  border-right: 1px solid #dde2e9;
-  box-shadow: 12px 0 40px rgb(23 33 46 / 12%);
-  animation: cabinet-slide-in .2s ease-out;
+  background: var(--color-surface);
+  box-shadow: 0 0 0 1px var(--color-neutral-800), 24px 0 60px rgb(0 0 0 / 45%);
+  transition: transform .22s cubic-bezier(.2, .7, .2, 1), width .22s ease;
 }
-@keyframes cabinet-slide-in { from { transform: translateX(-100%); } }
-@media (prefers-reduced-motion: reduce) { .cabinet-panel { animation: none; } }
+@starting-style {
+  .cabinet-panel { transform: translateX(calc(-100% - 24px)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cabinet-panel { transition: none; }
+}
 
 .cabinet-header {
   display: flex;
@@ -54,42 +84,55 @@ body { padding-left: var(--cabinet-rail); }
   justify-content: space-between;
   gap: 12px;
   padding: 20px 20px 14px;
-  border-bottom: 1px solid #dde2e9;
+  background: var(--rule-x) no-repeat bottom / 100% 1px;
 }
-.cabinet-header h2 { margin: 0; font-size: 17px; }
-.cabinet-header button { align-self: center; padding: 6px 12px; border-radius: 8px; font-size: 14px; }
+.cabinet-header h2 { margin: 0; font-size: 16px; letter-spacing: -0.01em; }
+.cabinet-header .btn { padding: 5px 10px; font-size: 12.5px; }
 
 .cabinet-body { flex: 1; overflow-y: auto; padding: 4px 20px 20px; }
-.cabinet-note { color: #596779; font-size: 14px; }
-.cabinet-list { list-style: none; margin: 0; padding: 0; }
+.cabinet-body > .error { margin: 12px 0; }
+.cabinet-note { margin: 12px 0; color: var(--color-neutral-500); font-size: 13.5px; }
+.cabinet-list { margin: 0; padding: 0; list-style: none; }
 .cabinet-list li {
-  padding: 12px 0;
-  border-bottom: 1px solid #edf0f4;
-  font-size: 14px;
-  line-height: 1.45;
+  padding: 13px 0;
+  font-size: 13.5px;
+  line-height: 1.5;
   overflow-wrap: anywhere;
+  background: var(--rule-row) no-repeat bottom / 100% 1px;
 }
-.cabinet-muted { color: #596779; }
+.cabinet-list strong { font-weight: 500; }
+.cabinet-list li:has(> .cabinet-inactive) { color: var(--color-neutral-400); }
+.cabinet-inactive { color: var(--color-neutral-600); }
+.cabinet-muted { color: var(--color-neutral-500); }
+.cabinet-podcast { display: flex; align-items: center; gap: 10px; }
+.cabinet-podcast svg { flex: none; color: var(--color-neutral-500); }
+.cabinet-job { display: flex; flex-direction: column; gap: 3px; line-height: 1.45; }
 .cabinet-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.cabinet-job-title { color: var(--color-neutral-400); }
+.cabinet-time { color: var(--color-neutral-600); font-size: 12px; }
 .cabinet-error {
   display: -webkit-box;
   overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
-  color: #a62330;
-  font-size: 13px;
+  color: var(--color-error-text);
+  font-size: 12.5px;
 }
 
-.cabinet-status {
-  flex-shrink: 0;
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: #e7ecf3;
-  color: #3b4a5c;
-  font-size: 12px;
-  font-weight: 600;
+.cabinet-status { flex: none; padding: 1px 8px; background: var(--color-neutral-800); color: var(--color-neutral-200); font-size: 11px; }
+.cabinet-status.running, .cabinet-status.pending { background: var(--color-accent-800); color: var(--color-accent-100); }
+.cabinet-status.skipped { background: transparent; color: var(--color-neutral-400); }
+.cabinet-status.failed { background: var(--color-error-tag-bg); color: var(--color-error-tag-text); }
+
+/* Narrow screens keep the rail but give the chat more of the width. */
+@media (max-width: 700px) {
+  :root { --cabinet-rail: 196px; }
 }
-.cabinet-status.completed { background: #dff3e6; color: #17703d; }
-.cabinet-status.failed { background: #f9e1e3; color: #a62330; }
-.cabinet-status.skipped { background: #fbefd9; color: #8a5a00; }
-.cabinet-status.running, .cabinet-status.pending { background: #e1ecfb; color: #1767d4; }
+@media (max-width: 500px) {
+  :root { --cabinet-rail: 156px; }
+  .cabinet-rail { gap: 18px; padding: 18px 8px 14px; }
+  .cabinet-brand { gap: 8px; padding: 0 4px; font-size: 13px; }
+  .cabinet-action { gap: 7px; padding: 8px; }
+  .cabinet-label { padding: 0 8px 6px; }
+  .cabinet-tab { gap: 8px; padding: 7px 8px; font-size: 13px; }
+}

@@ -2,16 +2,20 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 28px 16px;
-  border: 2px dashed #bdc7d4;
-  border-radius: 12px;
-  background: #f8fafc;
-  color: #596779;
+  gap: 8px;
+  padding: 22px 16px;
+  border: 1px dashed var(--color-neutral-700);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-bg) 50%, transparent);
+  color: var(--color-neutral-400);
+  font-size: 13.5px;
   text-align: center;
   cursor: pointer;
+  transition: background .15s, border-color .15s;
 }
-.dropzone.dragging, .dropzone:hover { border-color: #1767d4; background: #eef4fd; }
-.dropzone:focus-within { outline: 2px solid #1767d4; outline-offset: 1px; }
-.dropzone strong { color: #17212e; }
-.dropzone .error { margin: 0; }
+.dropzone:hover { border-color: var(--color-accent-600); }
+.dropzone.dragging { border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 10%, transparent); }
+.dropzone:has(input:focus-visible) { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.dropzone > svg { color: var(--color-accent); }
+.dropzone strong { color: var(--color-text); font-weight: 500; }
+.dropzone .error { margin: 0; font-size: 12.5px; }
