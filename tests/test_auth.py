@@ -48,7 +48,8 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_anonymous_ui_api_sse_and_wrong_password_are_blocked(self):
         for method, path, status in (("GET", "/app/", 303), ("POST", "/api/sessions", 401),
-                                     ("GET", "/api/sessions/unknown/events", 401), ("GET", "/ready", 401)):
+                                     ("GET", "/api/sessions/unknown/events", 401), ("GET", "/ready", 401),
+                                     ("GET", "/api/graph", 401), ("GET", "/api/graph/neighbors", 401)):
             response, _ = await self.request(method, path)
             self.assertEqual(response["status"], status, path)
         response, _ = await self.request("POST", "/api/login", {"password": "wrong"})

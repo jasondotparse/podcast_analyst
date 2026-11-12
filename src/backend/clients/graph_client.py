@@ -54,6 +54,60 @@ class GraphClient:
                          "n.kind = $kind MERGE (t)-[:ABOUT]->(n)",
                          {"t": str(thesis_id), "n": str(entity_id), "name": name, "kind": kind})
 
+    # Fixed read queries for the visual model. Passage paths become IN_EPISODE.
+    def _rows(self, cypher: str, params: dict) -> list:
+        return ladybug.Connection(self.database).execute(cypher, params).get_all()
+
+    def thesis_neighborhood(self, thesis_id: str | None, max_claims: int) -> list[str]:
+        theses = [row[0] for row in self._rows(
+            "MATCH (t:Thesis) WHERE $id IS NULL OR t.id = $id RETURN t.id ORDER BY t.id", {"id": thesis_id})]
+        if not theses:
+            return []
+        entities = self._rows("MATCH (t:Thesis)-[:ABOUT]->(e:Entity) WHERE t.id IN $ids "
+                              "RETURN DISTINCT e.id ORDER BY e.id", {"ids": theses})
+        claims = self._rows("MATCH (c:Claim)-[r:SUPPORTS|CHALLENGES]->(t:Thesis) WHERE t.id IN $ids "
+                            "RETURN c.id, max(r.strength) AS strength ORDER BY strength DESC, c.id LIMIT $n",
+                            {"ids": theses, "n": max_claims})
+        claim_ids = [row[0] for row in claims]
+        episodes = self._rows(
+            "MATCH (c:Claim)-[:EVIDENCED_BY]->(:Passage)<-[:CONTAINS]-(e:Episode) "
+            "WHERE c.id IN $ids RETURN DISTINCT e.id ORDER BY e.id", {"ids": claim_ids}) if claim_ids else []
+        return list(dict.fromkeys(theses + [row[0] for row in entities] + claim_ids + [row[0] for row in episodes]))
+
+    def neighbor_ids(self, node_id: str, limit: int) -> list[str] | None:
+        nodes = self.view_nodes([node_id])
+        if not nodes or nodes[0][1] == "Passage":
+            return None
+        rows = self._rows(
+            "MATCH (a)-[:ABOUT|SUPPORTS|CHALLENGES]-(b) WHERE a.id = $id "
+            "RETURN b.id AS id, label(b) AS type, b.signal AS signal UNION "
+            "MATCH (a:Claim)-[:EVIDENCED_BY]->(:Passage)<-[:CONTAINS]-(b:Episode) "
+            "WHERE a.id = $id OR b.id = $id "
+            "RETURN CASE WHEN a.id = $id THEN b.id ELSE a.id END AS id, "
+            "CASE WHEN a.id = $id THEN 'Episode' ELSE 'Claim' END AS type, "
+            "CASE WHEN a.id = $id THEN NULL ELSE a.signal END AS signal", {"id": node_id})
+        rows.sort(key=lambda row: (row[1] == "Claim", -(row[2] if row[2] is not None else -1), row[0]))
+        return list(dict.fromkeys(row[0] for row in rows))[:limit]
+
+    def view_nodes(self, ids: list[str]) -> list:
+        return self._rows("MATCH (n) WHERE n.id IN $ids RETURN n.id, label(n), n.name, n.kind",
+                          {"ids": ids}) if ids else []
+
+    def view_edges(self, ids: list[str]) -> list:
+        if not ids:
+            return []
+        params = {"ids": ids}
+        stances = self._rows(
+            "MATCH (a:Claim)-[r:SUPPORTS|CHALLENGES]->(b:Thesis) WHERE a.id IN $ids AND b.id IN $ids "
+            "RETURN a.id, b.id, label(r), r.strength", params)
+        about = self._rows("MATCH (a)-[:ABOUT]->(b:Entity) WHERE a.id IN $ids AND b.id IN $ids "
+                           "RETURN a.id, b.id", params)
+        episodes = self._rows(
+            "MATCH (a:Claim)-[:EVIDENCED_BY]->(:Passage)<-[:CONTAINS]-(b:Episode) "
+            "WHERE a.id IN $ids AND b.id IN $ids RETURN DISTINCT a.id, b.id", params)
+        return stances + [[a, b, "ABOUT", None] for a, b in about] + [
+            [a, b, "IN_EPISODE", None] for a, b in episodes]
+
     def read_only_query(self, cypher: str, max_rows: int) -> list[dict]:
         """Run one statement in a read-only transaction. Preparing it rejects multi-statement
         input, which could otherwise COMMIT out of the read-only transaction."""

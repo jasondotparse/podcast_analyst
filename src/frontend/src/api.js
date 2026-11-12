@@ -46,3 +46,11 @@ export function getSubscriptions() {
 export function getRecentIngestions() {
   return request('/api/catalog/ingestions')
 }
+
+export function getGraph(thesisId) {
+  return request(`/api/graph${thesisId ? `?thesis_id=${encodeURIComponent(thesisId)}` : ''}`)
+}
+
+export function getNeighbors(nodeId) {
+  return request(`/api/graph/neighbors?node_id=${encodeURIComponent(nodeId)}`)
+}

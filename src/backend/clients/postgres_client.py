@@ -322,6 +322,31 @@ class PostgresClient:
             "FROM ingestion_jobs j JOIN episodes e ON e.id = j.episode_id JOIN podcasts p ON p.id = e.podcast_id "
             "ORDER BY j.updated_at DESC LIMIT %s", limit)
 
+    # ---- Graph view ------------------------------------------------------
+
+    async def graph_labels(self, ids: list[str]) -> dict:
+        """Batch canonical labels and source details; no graph node is shown as a bare UUID."""
+        if not ids:
+            return {}
+        labels = {}
+        async with await self.connect() as conn, conn.cursor(row_factory=dict_row) as cursor:
+            for query in (
+                "SELECT c.id, c.text AS label, c.signal, c.evidence_quote AS quote, c.speaker, "
+                "pod.name AS podcast, e.title AS episode, e.published_at, e.source_url "
+                "FROM claims c JOIN passages p ON p.id = c.passage_id JOIN episodes e ON e.id = p.episode_id "
+                "JOIN podcasts pod ON pod.id = e.podcast_id WHERE c.id = ANY(%s::uuid[])",
+                "SELECT id, description AS label FROM theses WHERE id = ANY(%s::uuid[])",
+                "SELECT e.id, e.title AS label, pod.name AS podcast, e.published_at, e.source_url "
+                "FROM episodes e JOIN podcasts pod ON pod.id = e.podcast_id WHERE e.id = ANY(%s::uuid[])",
+            ):
+                await cursor.execute(query, (ids,))
+                for row in await cursor.fetchall():
+                    node_id, label, signal = str(row.pop("id")), row.pop("label"), row.pop("signal", None)
+                    if row.get("published_at"):
+                        row["published_at"] = row["published_at"].isoformat()
+                    labels[node_id] = (label, signal, row)
+        return labels
+
     # ---- Agent tools -----------------------------------------------------
 
     async def vector_search(self, embedding: list[float], limit: int) -> list[dict]:

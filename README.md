@@ -41,8 +41,8 @@ app** for HMR development, or **serve front end** when the backend is already ru
 XXX PO REQUIREMENTS COMPLETE AT THIS POINT XXX
 
 - [x] build "suggested prompts" new users can use these UI elements to auto-populate a prompt into the chat box. The same as 'suggested prompts' in ChatGPT, but hardcoded.
-- [x] left hand cabinet with the following buttons: 1) show thesis (when clicked, the cabinet opens from the left and shows which thesis are in the db) 2) show podcasts (when clicked, shows which podcast rss feeds we're subbed to) 3) show subscriptions (when clicked, shows which emails get notified and for what thesis) 4) show recent ingestions status (self explanatory - show the podcast name and its ingestion time / status complete or failed.) 5) show knowledge graph (this one's just a placeholder)
-- [ ] graph visualization
+- [x] Left-hand cabinet lists theses, watched podcasts, email subscriptions, and recent ingestion status.
+- [x] [Knowledge graph](docs/knowledge_graph_design.md): thesis overview, source evidence, and connection expansion.
 - [ ] build a "architecture overview" tool to allow the agent to read its own code on GitHub - this will be the best way to explain to folks how it works under the hood. Literally just ask it! One of the suggested prompts can just be a 'Explain how you work at a high level'. Will require the creation of a github service account / API key. Readonly, scoped to the podcast_analyst repo. 
 - [ ] in the chat history, it should show more than just user input and agent final_response. It should also display thinking / using tools events as UI elements so the user isn't just sitting there waiting for the agent to reply
 - [ ] clean up the UI to make it more polished. The buttons on the top of the view should go on a sidebar on the left. 

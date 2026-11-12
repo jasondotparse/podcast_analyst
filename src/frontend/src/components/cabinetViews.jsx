@@ -60,7 +60,7 @@ export const CABINET_VIEWS = [
   },
   {
     id: 'graph',
-    label: 'Knowledge graph',
-    placeholder: 'A knowledge graph view is coming soon.',
+    label: 'Show knowledge graph',
+    title: 'Knowledge graph',
   },
 ]
