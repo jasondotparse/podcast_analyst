@@ -24,7 +24,7 @@ beta.podcastanalystagent.com → Elastic IP → Caddy HTTPS → FastAPI containe
 
 The TypeScript CDK stack in `infra/` provisions one `t3.medium` EC2 instance
 (2 vCPUs, 4 GiB RAM),
-an encrypted 16 GiB root volume, a public subnet, an Elastic IP, an ECR repository,
+an encrypted root volume (16 GiB for beta, 32 GiB for prod), a public subnet, an Elastic IP, an ECR repository,
 an instance role, and a Route 53 A record in the existing domain's public hosted
 zone. There is no NAT gateway or load balancer. Only ports 80 and 443 accept
 inbound traffic. FastAPI's port 8000 is bound to loopback on the host.
@@ -197,6 +197,106 @@ The script does not run CDK or build anything on EC2. Docker builds React and
 packages it with FastAPI and the pinned native Codex binary. Code changes reuse Docker's dependency cache;
 Python/npm dependencies are reinstalled when their manifests or lockfiles change.
 Releases briefly restart the single app container; this is not zero-downtime hosting.
+
+## Prod deployment
+
+Prod is `https://podcastanalystagent.com`, stack `PodcastAnalyst-prod` in
+`us-east-1`. It uses the same `t3.medium`, Dockerfile, Compose/Caddy files, and
+scripts as beta, with a **32 GiB encrypted gp3 root disk**, its own ECR repository,
+password, SES identity, and databases. Beta's 16 GiB instance definition is unchanged.
+Both prod databases start **empty**; do not copy beta's databases.
+
+Run from the repository root on the Mac, with Docker Desktop running, AWS CLI
+signed in to the personal account, Node 22+, and the repo's Python 3.11+ `.venv`.
+Merge the prod changes through a feature PR, then release from clean, updated
+`main`: the deploy script builds the working tree as it is. Preserve unrelated
+local edits separately before releasing.
+
+1. Check the AWS account and DNS/SES prerequisites:
+
+   ```bash
+   export AWS_REGION=us-east-1
+   aws sts get-caller-identity
+   aws route53 list-resource-record-sets --hosted-zone-id Z04489987TVW4PC2RJF7 \
+     --query "ResourceRecordSets[?Name=='podcastanalystagent.com.']"
+   aws sesv2 list-email-identities --query 'EmailIdentities[].IdentityName'
+   ```
+
+   Expect only NS/SOA at the apex; an existing A record conflicts with CDK.
+   If CAA is present, it must allow `letsencrypt.org`. CDK must create the apex
+   SES identity and its DKIM records; delete a manually created apex identity
+   first. Leave beta's identity and DNS untouched.
+
+2. Set `PODCAST_PROD_PASSWORD` in the **gitignored** root `.env`: at least eight
+   characters, on one line. `OPENAI_API_KEY` must already be present. If the
+   password is absent, the secret-setup script generates and saves a random one.
+   Never commit or print either value.
+
+3. Create only the prod infrastructure, reviewing the diff before deploying:
+
+   ```bash
+   cd infra
+   npm ci
+   npm test
+   npm run cdk -- diff -c stage=prod
+   npm run cdk -- deploy -c stage=prod
+   cd ..
+   ```
+
+   The first diff should contain additions only and must not touch
+   `PodcastAnalyst-beta`. Expect `CREATE_COMPLETE` and
+   `AppUrl = https://podcastanalystagent.com`.
+
+4. Upload secrets, then release:
+
+   ```bash
+   .venv/bin/python scripts/configure_runtime.py prod
+   ./scripts/deploy.py prod
+   ```
+
+   Runtime setup uploads only the OpenAI key and prod password to SecureString
+   `/podcast-analyst/prod/runtime`, using runtime variable `PODCAST_APP_PASSWORD`.
+   Record the printed `Release:` tag. If first-time DNS/certificate issuance
+   outlasts the HTTPS check, wait a few minutes, then reuse the image:
+   `./scripts/deploy.py prod <release-tag>`.
+
+5. Verify SES and container access to instance-role credentials:
+
+   ```bash
+   INSTANCE_ID=$(aws cloudformation describe-stacks --stack-name PodcastAnalyst-prod \
+     --query "Stacks[0].Outputs[?OutputKey=='InstanceId'].OutputValue" --output text)
+   aws sesv2 get-email-identity --email-identity podcastanalystagent.com \
+     --query DkimAttributes.Status
+   aws ec2 describe-instances --instance-ids "$INSTANCE_ID" \
+     --query 'Reservations[0].Instances[0].MetadataOptions'
+   ```
+
+   Expect DKIM `SUCCESS`, `HttpTokens=required`, and
+   `HttpPutResponseHopLimit=2`. If the hop limit is 1, fix it live, avoiding a CDK
+   instance change: `aws ec2 modify-instance-metadata-options --instance-id "$INSTANCE_ID" --http-put-response-hop-limit 2 --http-tokens required`.
+
+6. In a private browser, verify a valid certificate and redirect to `/login`,
+   sign in with the prod password, and step through onboarding (all six images).
+   **Start researching →** must open chat; complete a turn and see **Ready**.
+   Open the database drawers (initially empty), then upload a transcript and
+   wait for successful ingestion. Record the release, date, and checks below,
+   and check off **Prod env deployment** in the README.
+
+Seed demo content by hand through the prod UI: save Nvidia and optical-interconnect
+theses for the suggested examples, register the desired feeds, and upload the
+chosen transcripts/MP3s (allow roughly four minutes per MP3). New theses are also
+assessed against existing claims. Do a full demo dry run. Email subscriptions are
+optional; beta and prod watching the same feed for the same inbox can send duplicate
+alerts. Do not send test email without explicit recipient approval.
+
+After the demo, change `PODCAST_PROD_PASSWORD` in `.env`, rerun runtime setup, and
+redeploy the current release tag. Login does not throttle guesses. Normal releases
+use `./scripts/deploy.py prod`; rollback uses `./scripts/deploy.py prod <older-tag>`.
+Prod adds another host, public IPv4, disk, and related service costs.
+
+**Storage warning:** changing the instance disk, AMI, or user data can replace the
+host and delete both databases. Always review `cdk diff` first. Destroying the prod
+stack also deletes both databases; never use destroy as a release step.
 
 ## Roll back or redeploy an existing image
 

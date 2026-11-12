@@ -180,6 +180,11 @@ Set `PODCAST_APP_PASSWORD` and `PODCAST_PUBLIC_ORIGIN=http://127.0.0.1:8000` to
 exercise login locally. Keep the beta password in `PODCAST_BETA_PASSWORD`, which
 is read only by the secret-setup script and does not enable local auth.
 
+Prod uses its own `PODCAST_PROD_PASSWORD` in the gitignored root `.env` (at least
+8 characters on one line). Upload it with `configure_runtime.py prod`, then
+release with `./scripts/deploy.py prod`; see the [prod runbook](aws_deployment.md#prod-deployment).
+Never put either stage's password in Git. Rotate the prod demo password after the demo.
+
 Cloud Compose requires password login and an explicit public origin. UI and API
 requests use a server-side login session; chat IDs are checked against its owner.
 An expired or logged-out SSE stream closes on its next check (at most the

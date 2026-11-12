@@ -14,6 +14,12 @@ The beta runtime implements this password/session gate.
 (2 vCPUs, 4 GiB RAM, Unlimited CPU credits). Its DNS and HTTPS are verified; see
 [the deployment guide](aws_deployment.md) for the recorded checks.
 
+**Prod:** `https://podcastanalystagent.com` uses the same image, Compose/Caddy files,
+and release scripts on its own `t3.medium`, with a 32 GiB root disk (beta stays at
+16 GiB). Its password, SES identity, and initially empty databases are separate.
+Follow the [prod runbook](aws_deployment.md#prod-deployment); never copy beta data
+or deploy a beta instance replacement to create prod.
+
 **Audience:** Engineer joining the project on day one.  
 **Immediate milestone:** **P−1: deploy a minimal React + FastAPI application to the owner's personal AWS account, securely accessible through a web browser, with fast repeatable deployments.**
 

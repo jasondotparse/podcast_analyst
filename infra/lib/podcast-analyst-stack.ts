@@ -70,7 +70,7 @@ export class PodcastAnalystStack extends Stack {
       userDataCausesReplacement: true,
       blockDevices: [{
         deviceName: '/dev/xvda',
-        volume: ec2.BlockDeviceVolume.ebs(16, {
+        volume: ec2.BlockDeviceVolume.ebs(props.stage === 'prod' ? 32 : 16, {
           volumeType: ec2.EbsDeviceVolumeType.GP3,
           encrypted: true,
           deleteOnTermination: true,

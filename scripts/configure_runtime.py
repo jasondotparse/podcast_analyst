@@ -26,8 +26,8 @@ def main():
         parser.error("Set OPENAI_API_KEY in the local .env first.")
     password_key = f"PODCAST_{args.stage.upper()}_PASSWORD"
     password = values.get(password_key) or secrets.token_urlsafe(24)
-    if len(password) < 16 or any(char in api_key + password for char in "\r\n"):
-        parser.error("Use a single-line API key and a single-line password of at least 16 characters.")
+    if len(password) < 8 or any(char in api_key + password for char in "\r\n"):
+        parser.error("Use a single-line API key and a single-line password of at least 8 characters.")
     if not values.get(password_key):
         set_key(env_file, password_key, password)
     env_file.chmod(0o600)
