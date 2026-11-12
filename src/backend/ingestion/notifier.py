@@ -22,7 +22,7 @@ def render_alert(thesis: str, claims: list[dict], app_url: str) -> tuple[str, st
                       f"{claim['podcast']} · {claim['episode']} · {claim['published_at'] or 'date unknown'}"])
         if claim['source_url']:
             lines.append(claim['source_url'])
-        lines.extend([f"Signal: {claim['signal']}/100; thesis strength: {claim['strength']}/100", ""])
+        lines.extend([f"Signal: {claim['signal']}/100; challenge strength: {claim['strength']}/100", ""])
     lines.append(f"Review the evidence and ask the agent about it: {app_url.rstrip('/')}/app/")
     return "Podcast Analyst: new evidence challenges your thesis", "\n".join(lines)
 

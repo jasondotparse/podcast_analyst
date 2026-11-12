@@ -54,9 +54,11 @@
 .cabinet-tab svg { flex: none; opacity: .85; }
 .cabinet-tab:hover { background: color-mix(in srgb, var(--color-text) 5%, transparent); color: var(--color-text); }
 .cabinet-tab[aria-pressed="true"] { background: color-mix(in srgb, var(--color-accent) 12%, transparent); color: var(--color-accent-200); }
-/* Pin Sign out to the bottom. */
-.cabinet-signout { display: flex; margin-top: auto; }
-.cabinet-signout .cabinet-action { flex: 1; color: var(--color-neutral-300); }
+/* Pin Onboarding and Sign out to the bottom. */
+.cabinet-footer { display: flex; flex-direction: column; gap: 8px; margin-top: auto; }
+.cabinet-footer .cabinet-action { color: var(--color-neutral-300); }
+.cabinet-signout { display: flex; }
+.cabinet-signout .cabinet-action { flex: 1; }
 
 .cabinet-panel {
   position: fixed;

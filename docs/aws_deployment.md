@@ -315,6 +315,11 @@ replacement deletes the databases and requires explicit owner approval.
 
 ## Validation
 
+The **onboarding release** (`0cbd607d434f-20261112T140139-ed4663`, no migrations) was deployed to
+beta on **November 12, 2026** with `./scripts/deploy.py beta` only. Beta served the local build's
+asset hashes, and the headless Chromium checks in
+[local_development.md](local_development.md#verified-behavior) passed through the login page.
+
 The **chat tool activity release** (`3efeac42a4db-20261112T125411-d8c1ce`, no migrations) was
 deployed to beta on **November 12, 2026** with `./scripts/deploy.py beta` only. Beta served the
 local build's asset hashes. In headless Chromium via the login page, one research turn showed

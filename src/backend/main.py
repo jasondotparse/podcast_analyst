@@ -269,6 +269,11 @@ async def root() -> RedirectResponse:
     return RedirectResponse("/app/")
 
 
+@app.get("/onboarding")
+async def onboarding() -> RedirectResponse:
+    return RedirectResponse("/app/onboarding")
+
+
 @app.get("/api/health")
 @app.get("/health")
 async def health() -> dict[str, str]:
@@ -276,6 +281,7 @@ async def health() -> dict[str, str]:
 
 
 @app.get("/app/")
+@app.get("/app/onboarding")
 async def index() -> FileResponse:
     index_html = FRONTEND_DIST / "index.html"
     if not index_html.is_file():
