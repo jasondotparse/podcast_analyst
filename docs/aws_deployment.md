@@ -459,6 +459,14 @@ prod password after the demo using the commands above.
 
 ### Beta release verification
 
+The **How it works release** (`adf82ce2abba-20261112T143420-161cba`, no migrations) was
+deployed to beta on **November 12, 2026** from merged PR #32 using `./scripts/deploy.py beta`.
+The app and database reported healthy. Authenticated HTTPS checks returned 200 for
+`/api/health`, `/ready`, and `/app/`; anonymous API access returned 401. The main UI and
+lazy-loaded walkthrough JS/CSS matched the local build byte-for-byte (SHA-256). Desktop
+interaction checks were performed locally before release; no beta chat turn, upload, or
+email test was triggered. SSM command: `84ca5280-e2c0-4780-94e6-93c3da18b8e4`.
+
 The **onboarding release** (`0cbd607d434f-20261112T140139-ed4663`, no migrations) was deployed to
 beta on **November 12, 2026** with `./scripts/deploy.py beta` only. Beta served the local build's
 asset hashes, and the headless Chromium checks in

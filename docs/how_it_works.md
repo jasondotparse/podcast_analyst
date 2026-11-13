@@ -57,5 +57,8 @@ FastAPI. All seven chapters, progress counts, chapter jumps, diagram selection, 
 pause, stepping, and Reset worked. Returning preserved an unsent chat draft; Escape restored
 focus to the cabinet button. The final built walkthrough was inspected at 1280 × 800 with
 the diagram, copy, and navigation visible together. No console errors were observed.
-The frontend production build and `git diff --check` passed. Beta deployment was not part
-of this change; desktop is the intended demo layout.
+The frontend production build and `git diff --check` passed. Desktop is the intended demo layout.
+
+After PR #32 merged, release `adf82ce2abba-20261112T143420-161cba` deployed to beta on
+November 12, 2026. Authenticated app/health/readiness checks passed, and the main UI and
+walkthrough JS/CSS hashes matched the local build. See [deployment verification](aws_deployment.md#validation).
