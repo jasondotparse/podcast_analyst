@@ -16,7 +16,13 @@ const STEP_LABELS = {
 }
 
 function describe(job) {
-  if (!job || job.status === 'pending') return 'Queued for ingestion'
+  const step = describeStep(job)
+  return job?.title ? `${job.podcast_name}: ${job.title} · ${step}` : step
+}
+
+function describeStep(job) {
+  if (!job) return 'Checking ingestion status…'  // Before the first poll; a job found on reload may be mid-run.
+  if (job.status === 'pending') return 'Queued for ingestion'
   if (job.status === 'completed') return 'Ingestion complete'
   if (job.status === 'skipped') return `Not ingested: ${job.error}`
   if (job.status === 'failed') return `Ingestion failed: ${job.error}`

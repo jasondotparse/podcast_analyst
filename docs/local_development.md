@@ -53,8 +53,11 @@ upload (`202`) and shows the server's error otherwise, for example a duplicate (
 A thin accent bar above the chat header then tracks that upload: the `usePipelineStatus` hook
 (`src/frontend/src/hooks/`) polls `GET /api/ingestions/{job_id}` every 2 s and fills one
 segment per pipeline step. The bar disappears after success; a rejected or failed job
-stays visible, in the error red with its reason, until dismissed. It tracks only the latest upload
-and is not restored after a page reload.
+stays visible, in the error red with its reason, until dismissed. The bar also shows jobs the page did
+not start, such as an episode an RSS watcher queued, or an upload from another tab or from
+before a reload. While no bar is showing, the `useActiveIngestion` hook polls
+`GET /api/ingestions/active` every 10 s. The bar shows one job at a time, labeled with its
+podcast and episode title.
 Components live in `src/frontend/src/components/`; API calls in `src/frontend/src/api.js`.
 
 With curl, upload a `.txt` transcript (field `transcript`) or an `.mp3` (field `audio`) and

@@ -17,6 +17,11 @@ export function getIngestion(jobId) {
   return request(`/api/ingestions/${jobId}`)
 }
 
+// The running (else next pending) ingestion job from any source, or null.
+export function getActiveIngestion() {
+  return request('/api/ingestions/active')
+}
+
 // Queues a .txt transcript or .mp3 recording for ingestion and resolves with its job once the server accepts it.
 export async function uploadTranscript(metadata, file) {
   const form = new FormData()

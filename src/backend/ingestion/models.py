@@ -24,6 +24,8 @@ class IngestionJob(BaseModel):
     status: str
     current_step: str | None = None
     error: str | None = None
+    podcast_name: str | None = None  # The episode's, for display.
+    title: str | None = None
 
 
 @dataclass
