@@ -459,6 +459,15 @@ prod password after the demo using the commands above.
 
 ### Beta release verification
 
+The **active-ingestion status release** (main `b86d2d7`, PR #36, no migrations) was deployed on
+**November 13, 2026 (UTC)**: beta `b86d2d782f87-20261113T003051-a5a0b4`, then prod
+`b86d2d782f87-20261113T003204-eb80c2` (prod has its own ECR repository, so beta's tag cannot be
+reused there). PR #15 had merged into a stacked branch and never reached main, so watcher-queued jobs
+showed no status bar on prod. On both stages, a signed-in `GET /api/ingestions/active` returned 200
+(`null` while idle) and an anonymous one returned 401. Prod was idle before the release, so no job was
+requeued. Locally, a newly registered Latent Space feed queued its newest episode within a minute and
+the bar showed it without an upload.
+
 The **How it works release** (`adf82ce2abba-20261112T143420-161cba`, no migrations) was
 deployed to beta on **November 12, 2026** from merged PR #32 using `./scripts/deploy.py beta`.
 The app and database reported healthy. Authenticated HTTPS checks returned 200 for
