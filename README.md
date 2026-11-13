@@ -43,7 +43,7 @@ Design priorities: *Simple data model*, Clear & well defined abstractions, and l
 * Single source of truth: postgres. That's it. the Graph is just a projection, not a competing source of truth
 * Avoid feature creep at all costs: wherever possible, just let the agent do the work that would otherwise require a bunch of new UI elements. Example: choose "subscribe to the a16z podcast" over a form that you make the user fill out. Just give the agent a tool (a few LOC) instead of a few hundred LOC for a new FE/BE feature. Every feature has to earn its right to exist by providing a ton of value to our end user: the analyst. 
 
-## Features left out due to time constraints
+## Future product improvements
 * timestamp attribution to quotes. this is not a feature of RSS, so it would not have been trivial to add and therefore did not make it into the v1 of the product, but it could be done using more sophisticated audio ingestion pipeline whereby the audio is chunked prior to transcription. 
 * evaluation for the ingestion process and for the agent retrieval / tool use itself. Didn't have time to build evals for v0 and didn't need to because it was working well enough for a proof of concept product. But to make the product maintainable it really would be necessay to prevent regreression after tool/skill/harness config changes. Or LLM changes, for that matter. 
 * guest identity attribution. Again - not a feature of RSS nor openai's gpt-transcribe, - so this would have been too much work to add in v0, but it would make claims more useful.
