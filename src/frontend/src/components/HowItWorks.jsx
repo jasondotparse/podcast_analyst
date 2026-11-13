@@ -7,11 +7,11 @@ import './HowItWorks.css'
 // These are explanatory traces, not live queries or API calls. Keep them aligned with /docs.
 const CHAPTERS = [
   {
-    label: 'Agent harness', title: 'A research agent, with the right tools.',
-    intro: 'Codex supplies the agent loop. Our app supplies the research procedures, data access, and interface. Follow a question from the browser to a tool call and back.',
+    label: 'Agent harness', title: 'A research agent powered by Codex App Server',
+    intro: 'Codex supplies the agent loop, we supply the research procedures, data access, and interface. Follow a question from the browser to a tool call and back by pressing play below.',
     points: [
-      ['One runtime, separate conversations', 'One FastAPI worker owns a long-lived Codex App Server subprocess. Each app session gets its own thread; one turn runs at a time per thread. Codex manages context and decides which tools to call.'],
-      ['Python does the application work', 'Dynamic tools are Python handlers inside FastAPI. SQL and Cypher exploration are read-only; saving theses, subscriptions, and RSS watchers uses dedicated, validated tools. Live web search can add outside context.'],
+      ['One runtime for everything', 'One FastAPI worker owns a long-lived Codex App Server subprocess. Each app session gets its own thread; one turn runs at a time per thread. Codex manages context and decides which tools to call.'],
+      ['Python does the application work', 'Dynamic tools are Python handlers inside FastAPI. No need for MCP! SQL and Cypher exploration are read-only agent tool calls. Seperate tools are used for saving theses, subscriptions, and RSS watchers.. Live web search can add outside context - we get this for free curtesy of openai with nothing more than a config.toml update.'],
     ],
     tools: ['vector_search', 'graph_query', 'postgres_database_query', 'add_thesis', 'add_subscription', 'register_rss_to_watcher'],
     note: 'Git-managed AGENTS.md and SKILL.md files teach research, feed discovery, and extraction behavior. The browser never receives the OpenAI key.',
@@ -27,8 +27,8 @@ const CHAPTERS = [
     ],
   },
   {
-    label: 'Data layer', title: 'Evidence is the foundation. Relationships add context.',
-    intro: 'A passage is the retrieval unit. A claim is an attributed assertion grounded in that passage. PostgreSQL holds the records; LadybugDB makes their relationships traversable.',
+    label: 'Data layer', title: 'Hybrid vector + graph RAG. Embedding-based retrieval grounds research in real quotes, then graph traversal adds context',
+    intro: 'passage = the atomic retrieval unit. Claim = an attributed assertion grounded in that passage. PostgreSQL holds the records, LadybugDB makes their relationships traversable.',
     points: [
       ['A source of truth with ordinary joins', 'PostgreSQL + pgvector stores podcasts, episodes, ordered passages, embeddings, claims, and entities. It also holds theses, assessments, ingestion jobs, watchers, subscriptions, and alert records.'],
       ['An interpretation you can trace back', 'Claims preserve the assertion, speaker when known, and exact quote. write_claim accepts evidence only when the quote appears in a real passage after whitespace normalization. LadybugDB uses the same UUIDs and can be rebuilt from Postgres.'],
@@ -45,8 +45,8 @@ const CHAPTERS = [
     ],
   },
   {
-    label: 'Ingestion', title: 'From a new episode to researchable evidence.',
-    intro: 'TXT uploads, MP3 uploads, and watched RSS/Atom feeds enter the same durable job pipeline. Python controls the stages; models perform the bounded tasks inside them.',
+    label: 'Ingestion', title: 'Construct a world model one podcast at a time',
+    intro: "TXT uploads, MP3 uploads, and watched RSS/Atom feeds enter the same durable job pipeline. It's just a list of python function that run in sequence.",
     points: [
       ['Fixed stages, visible progress', 'One in-process worker handles one episode at a time. Postgres records the current stage and outcome. Content hashes and source identifiers deduplicate episodes; retries reuse completed work. Partial claim extraction is cleared and rerun.'],
       ['Continuous monitoring, kept simple', 'Feeds are checked hourly while the pipeline is idle. Registration takes the newest episode, then later releases. New theses are also assessed against historical claims during idle time; that backfill does not send retrospective emails.'],
@@ -55,7 +55,7 @@ const CHAPTERS = [
     source: 'src/backend/ingestion/ingestion_service.py',
     nodes: [
       ['Acquire', 'Upload or RSS', 'An upload creates an episode and durable job, returning HTTP 202. MP3 audio is stored so processing can resume after a restart.', 'deduplicate → episode + ingestion_job'],
-      ['Transcribe + screen', 'Accept useful input', 'MP3s are converted with ffmpeg into 20-minute segments and transcribed with gpt-transcribe. Decisions then screens the transcript for relevance and prompt injection; rejection or refusal skips the job.', 'transcribe → screen'],
+      ['Transcribe + screen', 'Accept useful input', 'MP3s are converted with ffmpeg into 20-minute segments and transcribed with gpt-transcribe. Decisions API then screens the transcript for relevance and prompt injection; rejection or refusal skips the job.', 'transcribe → screen'],
       ['Chunk + embed', 'Make passages searchable', 'Split into roughly 750-word passages with 250-word overlap. Embed batches of up to 64 using text-embedding-3-large shortened to 1,536 dimensions.', 'chunk → embed'],
       ['Extract claims', 'Ground every assertion', 'A dedicated Codex thread reads the transcript through SQL and saves claims and entities through write_claim. Quotes must match a real passage.', 'extract_claims → validated Postgres records'],
       ['Rank + reflect', 'Judge signal and stance', 'Decisions scores claim specificity, materiality, and source standing, then assesses the claims against active theses. Results persist before graph publication.', 'rank → reflect'],
@@ -63,8 +63,8 @@ const CHAPTERS = [
     ],
   },
   {
-    label: 'Models + Decisions', title: 'Open-ended reasoning. Bounded decisions.',
-    intro: 'GPT-6-luna serves two different jobs: Codex uses it to research and extract; the backend calls the OpenAI Decisions API directly for typed choices and rubric scores.',
+    label: 'Models + Decisions', title: 'Decisions API & LLM use in ingestion pipeline',
+    intro: 'GPT-6-luna serves two different jobs in the app: both for driving the chat experience and ingesting new claims. The ingestion pipeline also calls the OpenAI Decisions API directly for typed choices and rubric scores.',
     points: [
       ['Codex handles the investigation', 'The configured default is gpt-6-luna with high reasoning effort. Its tool loop can explore evidence and synthesize a cited answer. Extraction uses a dedicated thread with a narrower set of tools.'],
       ['Decisions makes judgments explicit', 'Screening returns accept/reject choices. Ranking returns three rubric scores. Reflection returns supports/challenges/unrelated plus strength. Python turns these typed results into stored scores and pipeline decisions.'],
@@ -80,7 +80,7 @@ const CHAPTERS = [
     ],
   },
   {
-    label: 'Retrieval / RAG', title: 'Three ways to find evidence. One grounded answer.',
+    label: 'Retrieval / RAG', title: 'Vector retrieval to kick off research, graph traversal to ground it in context',
     intro: 'Retrieval-augmented generation gives the agent source material to reason from. Vectors find similar language, the graph follows relationships, and SQL verifies the underlying records.',
     points: [
       ['Complementary questions', 'Vector search asks “what sounds relevant?” Cypher asks “what connects?” SQL asks “what exactly was said, by whom, and in which episode?” Together they support investigation across episodes and investment theses.'],
@@ -97,8 +97,8 @@ const CHAPTERS = [
     ],
   },
   {
-    label: 'Infrastructure', title: 'One AWS host. A complete research system.',
-    intro: 'Beta runs in us-east-1 on one EC2 virtual machine. Containers keep delivery repeatable while the deployment stays small enough to understand end to end.',
+    label: 'Infrastructure', title: 'One AWS host - EC2 and docker do all the heavy lifting.',
+    intro: 'Beta & prod run in us-east-1 on one EC2 virtual machine. Containers keep delivery repeatable while the deployment stays small enough to understand end to end.',
     points: [
       ['A compact application stack', 'Caddy terminates HTTPS. FastAPI serves the built React UI, runs Codex and the ingestion worker, and owns embedded LadybugDB. PostgreSQL + pgvector runs in a private Compose container on the same host.'],
       ['Evidence-driven email', 'A subscribed thesis qualifies for an alert when a new challenge has strength ≥75 and claim signal ≥60. Postgres snapshots evidence and recipients; boto3 sends through SES. Alert records are deduplicated by episode and thesis, and sent alerts are skipped.'],
@@ -116,7 +116,7 @@ const CHAPTERS = [
     ],
   },
   {
-    label: 'Delivery / CI/CD', title: 'Infrastructure as code. Releases by command.',
+    label: 'Delivery / CI/CD', title: 'Infrastructure as code. Releases are python script invocations.',
     intro: 'CDK provisions the environment; a separate deployment script ships application changes. Today, releases are developer-triggered: there is no GitHub Actions CI or automatic push-to-main deployment.',
     points: [
       ['Provisioning is separate from shipping', 'TypeScript CDK synthesizes CloudFormation, conceptually like Bicep producing an Azure Resource Manager deployment. cdk diff and cdk deploy handle infrastructure changes; ordinary app releases do not rerun them.'],
