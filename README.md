@@ -70,28 +70,12 @@ Design priorities: *Simple data model*, Clear & well defined abstractions, and l
 * Persisting audio in PostgreSQL. We store uploaded MP3 bytes in PostgreSQL rather than introducing S3 as another storage dependency.
 
 ## How to run the app locally
+Open the repo in vscode. The easist way to run the app is via the preconfigured run configurations. 
 Use **serve built app** on port 8000, **run full stack
 app** for HMR development, or **serve front end** when the backend is already running.
 
-## Current progress
-
-- [x] Local React/FastAPI app with VS Code launch configurations and frontend HMR.
-- [x] Codex chat streams replies and uses live web search; config and agent instructions live in Git, with an app-owned `CODEX_HOME`.
-- [x] Beta deployed over HTTPS with password login, server-side sessions, persistent Codex state, and the ECR/SSM deploy workflow.
-- [x] PostgreSQL + pgvector and LadybugDB schemas on beta, with host-persisted storage and forward-only migrations ([database design](docs/database_design.md)).
-- [ ] **Next:** build the ingestion pipeline that can ingest one episode end-to-end: transcript → passages/embeddings → grounded claims → graph projection. (docs/diagrams/etl_pipeline.png)
-  - [x] handle .txt file transcript + podcast metadata ([ingestion design](docs/etl_design.md))
-  - [x] handle .mp3 file + podcast metadata (a `transcribe` step: ffmpeg segments → OpenAI `gpt-transcribe`)
-  - [x] watch podcasts via RSS: the `register-watcher-on-podcast` skill finds a feed, the `register_rss_to_watcher` tool validates and saves it, and an hourly watcher queues new episodes (transcript or audio) into the pipeline ([below](#watching-podcasts-rss))
-- [x] Claim ranking: a `rank` pipeline stage between claim extraction and graph projection scores each claim on specificity, materiality, and source standing (Decisions API, one call per claim) and derives `claims.signal` (0–100, their mean). Codex is told to lead with high-signal claims and may web-search to substantiate them ([design](docs/etl_design.md#claim-ranking)).
-  - [x] verify on beta with a real episode; retry older jobs to backfill scores
-- [x] Connect Codex database tools (`vector_search`, `graph_query`, `postgres_database_query`); cited answers verified locally.
-- [x] Conversational thesis capture: Codex helps the user sharpen a thesis, then saves it with `add_thesis` (Postgres + graph).
-- [x] watched sources / scheduled discovery & ingestion (RSS watchers)
-- [x] Thesis reflection and alerts: `rank → reflect → project_graph → notify`; Decisions assessments, stance edges, chat subscriptions, and SES email for challenges with strength ≥75 and signal ≥60 ([design](docs/etl_design.md#thesis-reflection-and-alerts)).
-- [x] support reflection in both directions, not just ingestion:
-  	- New podcast ingested: Evaluate its claims against existing theses. (Done) 
-  	- New thesis created: Evaluate existing claims against the new thesis.
+## Software development process
+* Codex and claude code were used for implementation and deployment, also for monitoring and debugging. Claude Design was used for app layout and styling.
 
 ## Watching podcasts (RSS)
 
