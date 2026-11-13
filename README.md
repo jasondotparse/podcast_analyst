@@ -45,16 +45,20 @@ XXX PO REQUIREMENTS COMPLETE AT THIS POINT XXX
 - [x] clean up the UI to make it more polished and the colors more appealing (dark Nocturne restyle).
 - [x] in the chat history, it should show more than just user input and agent final_response. It should also display thinking / using tools events as UI elements so the user isn't just sitting there waiting for the agent to reply. It should also render markown correctly. Right now the model keeps appending * and backtick characters everywhere which looks odd in the inline chat view. 
 - [x] [Onboarding](docs/local_development.md#onboarding): a six-page primer at `/app/onboarding`, shown on a browser's first visit and reopened from the rail's **Onboarding** button.
-- [ ] exact same thing for actually describing *how it works under the hood*. deployed to howitworks.podcastanalyst.com
-- [ ] testing 
+- [x] exact same thing for actually describing *how it works under the hood*. deployed to howitworks.podcastanalyst.com
 - [x] Prod env deployment: [podcastanalystagent.com](https://podcastanalystagent.com) ([verified release](docs/aws_deployment.md#prod-release-verification)).
-- [ ] Process 10 real episodes
+- [ ] Ingest 10 real episodes
+- [ ] more testing - tweak the prompt to make luna do a vector retrieval + graph traverse + postgres query each research question? Make a skill.md for research, perhaps? 
+- [ ] proofread and / or update copy in your 'how it works' section
 - [ ] update readme.md & docs with your product vision, tradeoffs made, next steps for future development etc. 
+  - [ ] include section 'product overview and vision' 
+  - [ ] include section 'high level design and data model' 
   - [ ] include section "features to add next": 1) a novelty / non-consensus axis on the 'signal' measure - guest credibility as a property of the speaker rather than each claim
-  - [ ] include section "ok how can we deploy this firmwide"
+  - [ ] include section "ok how can we deploy this firmwide" (EC2 -> ECS, Cognito auth or similar SSO / 2FA, observability & monitoring + alerts)
   - [ ] include section "stuff I was tempted to add but didn't"
-  - [ ] include section "cost breakdown"
+  - [ ] include section "cost breakdown" -> confront the concern they will have about costing a fortune to run.
   - [ ] include section "system design tradeoffs"
+  - [ ] include section "maintainabilty" - make it clear that this app is built in a way that make changes easy for a developer. This is not spaghetti code that's a nightmare to maintain. We did so many things for the sake of simplicity on this project - and those decisions should be called out. anyone can vibe code an AI slop app these days that sorta works for a demo. What we have is not that - it's maintainable, simple to understand and modify, without unnecessary complexity that is all to common in AI generated crap. 
 
 ## Watching podcasts (RSS)
 
