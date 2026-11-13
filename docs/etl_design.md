@@ -569,6 +569,12 @@ WatcherService.run: one in-process asyncio task, every 60 s
 
 ### Watcher verification
 
+**Prod, November 12, 2026 (Central):** a Chrome follow request registered No Priors,
+queued its newest Max Jaderberg episode within 18 seconds, and completed MP3 ingestion
+in about 3 minutes 36 seconds: 15 embedded passages, 39 ranked claims, 49 entities.
+Quotes, graph claim IDs, and two evidence-based research answers were verified.
+See [the test record](prod_no_priors_e2e.md), including an independent graph overview defect.
+
 Local, November 10, 2026 (unit tests: `tests/test_watcher.py`, mocked feeds and HTTP):
 
 - **Real feeds** parsed by `FeedClient`: Dwarkesh (145 episodes, 78 with WebVTT

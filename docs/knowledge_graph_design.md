@@ -14,6 +14,15 @@ Claims include verbatim quote, speaker, podcast, episode, publication date, and
 source URL. Entities take their name and kind from the graph. Missing Postgres
 claims, theses, and episodes are dropped with their edges.
 
+`GraphClient.view_nodes` looks up each node table explicitly, with parameterized
+IDs. Episode, Passage, Claim, and Thesis return NULL name/kind; Entity returns its
+stored properties. This avoids an untyped Ladybug 0.15.3 lookup observed on prod
+returning a different node ID/table for the requested thesis. Passage lookup is
+retained so the neighborhood endpoint can continue rejecting hidden passages.
+ABOUT-edge selection and neighborhood traversal also use explicit endpoint types;
+the remaining generic relationship lookup intermittently omitted thesis ABOUT
+edges on prod even after the node lookup was corrected.
+
 The four visual types are Thesis (pale violet with a soft halo), Claim (gray, sized
 by signal), Entity (violet), and Episode (a hollow ring). SUPPORTS edges are violet;
 CHALLENGES are muted red and dashed; both have arrowheads and width by strength.
@@ -62,6 +71,35 @@ React text; source links require http(s). Node and connection buttons provide a
 keyboard alternative to the canvas. Escape closes and restores trigger focus.
 
 ## Verification
+
+- Production fix verified November 12, 2026 (Central), release
+  `d77fd7dc5abc-20261113T012044-7f2f38`: the Amazon thesis now appears with six ABOUT
+  links and two SUPPORTS links. Overview/filter: 10 nodes / 10 links; thesis
+  neighborhood: 9 / 8. Three consecutive comparisons matched Postgres for every
+  displayed node and edge, including sample Entity/Claim/Episode neighborhoods.
+  No Priors retained all 39 claims and episode links. Chrome verified thesis and
+  claim details, expansion to 13 / 13, Reset to 10 / 10, and a live research answer
+  whose 11 / 11 graph card opened with the thesis intact. All 73 backend tests
+  passed after adding persisted relationship/neighborhood assertions. The same
+  code passed localhost and beta before this production release.
+- Explicit node lookup fix, November 12, 2026 (Central): all 73 backend tests passed,
+  including mixed node types after deletion/reopen, existing graph labels/edges,
+  caps, stale rows, and route checks. Localhost showed all five theses in 93 nodes /
+  233 links; beta showed all four theses in 60 nodes / 123 links. Every returned
+  node ID/type/label and displayed edge matched Postgres for the overview and each
+  thesis's filtered and neighborhood views. Signed-in Chrome checks covered thesis
+  selection, evidence, expansion, and Reset. Beta's AWS view expanded from 14 / 17
+  to 18 / 21 and reset to 14 / 17. Unknown/invalid routes and beta's anonymous 401
+  were checked. Beta release: `d77fd7dc5abc-20261113T011017-90d64e`.
+  The later production verification above also covers typed edge/neighborhood queries.
+- Prod observation, November 12, 2026 (Central): No Priors episode/claim neighborhoods matched
+  Postgres and its chat subgraph rendered correctly in the cabinet. With the prior implementation,
+  the All theses overview omitted an existing thesis and its stance/ABOUT edges,
+  although read-only queries confirmed them in both stores. Follow-up diagnosis
+  found `GraphClient.view_nodes`' untyped node lookup returning the wrong node for
+  the thesis UUID on prod; typed Thesis queries and Postgres labels were correct.
+  `GraphView.subgraph` consequently dropped the thesis and its incident links. See the
+  [end-to-end test record](prod_no_priors_e2e.md) for evidence and reproduction context.
 
 - Backend: 63 tests passed against disposable Postgres databases and temporary
   Ladybug files, including ordering/caps, derived edges, canonical labels/signals,

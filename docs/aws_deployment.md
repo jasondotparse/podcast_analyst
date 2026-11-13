@@ -418,6 +418,19 @@ replacement deletes the databases and requires explicit owner approval.
 
 ### Prod release verification
 
+The **complete typed graph lookup fix** was deployed on **November 12, 2026 (Central)**
+as `d77fd7dc5abc-20261113T012044-7f2f38` from the fix branch's working tree.
+SSM deployment `3a1deae2-67a8-4723-b7af-9b0bf5a74aa6` succeeded. The first node-only
+release exposed an intermittent omission in generic ABOUT-edge selection, so edge
+and neighborhood queries were made explicit too, retested locally (73 passing tests)
+and on beta, then deployed. Three consecutive production graph audits matched
+Postgres: the Amazon thesis, six ABOUT edges, and two SUPPORTS edges are present;
+the overview has 10 nodes / 10 links. No Priors' 39 claims remain intact. Chrome
+verified evidence, expansion, Reset, and a live research answer with a working graph
+preview. Runtime code checksum matched the tested source; app/db were healthy.
+No migrations or infrastructure changes. Full audit:
+`8eefcdf7-7373-4ae8-8137-fa4c20fe6f53`; see [the test record](prod_no_priors_e2e.md#production-follow-up-resolved).
+
 Prod was created and released on **November 12, 2026** from merged PR #33,
 clean main commit `b46a7af692b51566514aa65b659b0afa4176ab61`:
 
@@ -458,6 +471,24 @@ MP3 ingestion and a full seeded demo dry run were not repeated on prod. Rotate t
 prod password after the demo using the commands above.
 
 ### Beta release verification
+
+The **typed relationship/neighborhood follow-up** was deployed as
+`d77fd7dc5abc-20261113T011925-080cf5` on **November 12, 2026 (Central)** before the
+final production deployment. SSM `256e19a1-9b1a-42b1-aa91-121a0e003fa2` succeeded.
+Audit `2b63f1d1-f0ef-4f4d-a11c-b5dce12e030b` matched every returned node and edge
+against Postgres for the overview, all thesis-filtered/neighborhood views, and
+sample Entity/Claim/Episode neighborhoods. Counts stayed at 60 nodes / 123 links.
+
+The **explicit graph node lookup fix** was deployed to beta on **November 12, 2026
+(Central)** as `d77fd7dc5abc-20261113T011017-90d64e`, built from the working tree of
+`fix/explicit-graph-node-lookups` based on `d77fd7d`. SSM command
+`fc63c0a6-cbe5-41af-9c74-608e2e14ba7b` succeeded. No migrations or infrastructure
+changes were needed, and production was not deployed. All 73 backend tests passed.
+Localhost and beta graph nodes/edges matched Postgres across every thesis view;
+signed-in Chrome verified the rendered graph, evidence, expansion, and Reset.
+Beta retained four theses, 60 nodes, and 123 links, matching the pre-release counts.
+Canonical audit command: `138ef62a-61a3-4ddf-a644-65330a69237d`. See
+[graph verification](knowledge_graph_design.md#verification).
 
 The **active-ingestion status release** (main `b86d2d7`, PR #36, no migrations) was deployed on
 **November 13, 2026 (UTC)**: beta `b86d2d782f87-20261113T003051-a5a0b4`, then prod

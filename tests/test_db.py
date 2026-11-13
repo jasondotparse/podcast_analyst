@@ -3,6 +3,7 @@ import secrets
 import tempfile
 import unittest
 from pathlib import Path
+from uuid import uuid4
 
 from dotenv import dotenv_values
 import psycopg
@@ -19,6 +20,44 @@ DATABASE_URL = os.environ.get("DATABASE_URL") or dotenv_values(ROOT / ".env").ge
 
 
 class GraphSchemaTests(unittest.TestCase):
+    def test_node_lookup_preserves_types_and_ids_after_deletions_and_reopen(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "graph.lbug"
+            graph = GraphClient(open_graph(path))
+            conn = ladybug.Connection(graph.database)
+            expected = []
+            for count, kind in enumerate(("Episode", "Passage", "Claim", "Thesis", "Entity"), start=2):
+                ids = [str(uuid4()) for _ in range(count)]
+                for node_id in ids:
+                    properties = ", name: 'Amazon', kind: 'company'" if kind == "Entity" else ""
+                    conn.execute(f"CREATE (:{kind} {{id: $id{properties}}})", {"id": node_id})
+                conn.execute(f"MATCH (n:{kind} {{id: $id}}) DELETE n", {"id": ids[0]})
+                expected.append((ids[-1], kind, "Amazon" if kind == "Entity" else None,
+                                 "company" if kind == "Entity" else None))
+            selected = {kind: node_id for node_id, kind, _, _ in expected}
+            conn.execute("MATCH (c:Claim {id: $c}), (t:Thesis {id: $t}), (e:Entity {id: $e}) "
+                         "CREATE (c)-[:SUPPORTS {strength: 80}]->(t), (c)-[:ABOUT]->(e), (t)-[:ABOUT]->(e)",
+                         {"c": selected["Claim"], "t": selected["Thesis"], "e": selected["Entity"]})
+            graph.close()
+
+            graph = GraphClient(open_graph(path))
+            self.addCleanup(graph.close)
+            for row in expected:
+                self.assertEqual(graph.view_nodes([row[0]]), [list(row)])
+            selected = [row[0] for row in expected]
+            self.assertEqual({tuple(row) for row in graph.view_nodes([*selected, selected[0], str(uuid4())])},
+                             set(expected))
+            self.assertEqual(graph.view_nodes([str(uuid4())]), [])
+            by_type = {kind: node_id for node_id, kind, _, _ in expected}
+            self.assertEqual({tuple(row) for row in graph.view_edges(selected)}, {
+                (by_type["Claim"], by_type["Thesis"], "SUPPORTS", 80),
+                (by_type["Claim"], by_type["Entity"], "ABOUT", None),
+                (by_type["Thesis"], by_type["Entity"], "ABOUT", None),
+            })
+            for kind in ("Claim", "Thesis", "Entity"):
+                self.assertEqual(set(graph.neighbor_ids(by_type[kind], 60)),
+                                 {by_type[other] for other in ("Claim", "Thesis", "Entity") if other != kind})
+
     def test_visual_queries_order_cap_and_derive_episode_connections(self):
         with tempfile.TemporaryDirectory() as directory:
             graph = GraphClient(open_graph(Path(directory) / "graph.lbug"))
