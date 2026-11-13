@@ -20,7 +20,7 @@ const STEPS = [
   {
     title: 'Start with what you believe',
     body: <>Tell the agent your investment thesis in plain English. It’ll help you sharpen it, save it, and
-      check it right away against every claim it already has.</>,
+      add it to its internal knowledge graph.</>,
     tryText: 'New thesis: Microsoft captures enterprise AI spending through both Azure and its own apps.',
     image: thesisImage,
     alt: 'The agent confirming a newly saved Microsoft thesis, with the Theses drawer open.',
@@ -34,7 +34,7 @@ const STEPS = [
     alt: 'The Podcasts drawer open, listing the podcast feeds being watched for new episodes.',
   },
   {
-    title: 'A devil’s advocate in your inbox',
+    title: 'Real time alerts for high-signal claims against your thesis',
     body: <>Ask for email alerts on a thesis. When a new episode makes a credible, high-signal case against
       it, you’ll get the claims, who said them, and the exact quotes, plus a link to dig in with the
       agent.</>,
