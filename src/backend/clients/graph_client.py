@@ -78,20 +78,37 @@ class GraphClient:
         nodes = self.view_nodes([node_id])
         if not nodes or nodes[0][1] == "Passage":
             return None
-        rows = self._rows(
-            "MATCH (a)-[:ABOUT|SUPPORTS|CHALLENGES]-(b) WHERE a.id = $id "
-            "RETURN b.id AS id, label(b) AS type, b.signal AS signal UNION "
+        rows = []
+        # Use typed endpoints here too: untyped lookups can omit thesis links.
+        for source, target, relationship in (("Claim", "Entity", "ABOUT"), ("Thesis", "Entity", "ABOUT"),
+                                             ("Claim", "Thesis", "SUPPORTS|CHALLENGES")):
+            signal = "CASE WHEN a.id = $id THEN NULL ELSE a.signal END" if source == "Claim" else "NULL"
+            rows.extend(self._rows(
+                f"MATCH (a:{source})-[:{relationship}]->(b:{target}) WHERE a.id = $id OR b.id = $id "
+                "RETURN CASE WHEN a.id = $id THEN b.id ELSE a.id END, "
+                f"CASE WHEN a.id = $id THEN '{target}' ELSE '{source}' END, "
+                f"{signal}", {"id": node_id}))
+        rows.extend(self._rows(
             "MATCH (a:Claim)-[:EVIDENCED_BY]->(:Passage)<-[:CONTAINS]-(b:Episode) "
             "WHERE a.id = $id OR b.id = $id "
             "RETURN CASE WHEN a.id = $id THEN b.id ELSE a.id END AS id, "
             "CASE WHEN a.id = $id THEN 'Episode' ELSE 'Claim' END AS type, "
-            "CASE WHEN a.id = $id THEN NULL ELSE a.signal END AS signal", {"id": node_id})
+            "CASE WHEN a.id = $id THEN NULL ELSE a.signal END AS signal", {"id": node_id}))
         rows.sort(key=lambda row: (row[1] == "Claim", -(row[2] if row[2] is not None else -1), row[0]))
         return list(dict.fromkeys(row[0] for row in rows))[:limit]
 
     def view_nodes(self, ids: list[str]) -> list:
-        return self._rows("MATCH (n) WHERE n.id IN $ids RETURN n.id, label(n), n.name, n.kind",
-                          {"ids": ids}) if ids else []
+        if not ids:
+            return []
+        # Untyped ID lookups returned nodes from the wrong table on prod (Ladybug 0.15.3).
+        # Keep the table explicit; only Entity has name/kind properties.
+        rows = []
+        for kind in ("Episode", "Passage", "Claim", "Thesis"):
+            rows.extend(self._rows(
+                f"MATCH (n:{kind}) WHERE n.id IN $ids RETURN n.id, '{kind}', NULL, NULL", {"ids": ids}))
+        rows.extend(self._rows("MATCH (n:Entity) WHERE n.id IN $ids RETURN n.id, 'Entity', n.name, n.kind",
+                               {"ids": ids}))
+        return rows
 
     def view_edges(self, ids: list[str]) -> list:
         if not ids:
@@ -100,8 +117,10 @@ class GraphClient:
         stances = self._rows(
             "MATCH (a:Claim)-[r:SUPPORTS|CHALLENGES]->(b:Thesis) WHERE a.id IN $ids AND b.id IN $ids "
             "RETURN a.id, b.id, label(r), r.strength", params)
-        about = self._rows("MATCH (a)-[:ABOUT]->(b:Entity) WHERE a.id IN $ids AND b.id IN $ids "
-                           "RETURN a.id, b.id", params)
+        about = []
+        for kind in ("Claim", "Thesis"):
+            about.extend(self._rows(f"MATCH (a:{kind})-[:ABOUT]->(b:Entity) "
+                                    "WHERE a.id IN $ids AND b.id IN $ids RETURN a.id, b.id", params))
         episodes = self._rows(
             "MATCH (a:Claim)-[:EVIDENCED_BY]->(:Passage)<-[:CONTAINS]-(b:Episode) "
             "WHERE a.id IN $ids AND b.id IN $ids RETURN DISTINCT a.id, b.id", params)
