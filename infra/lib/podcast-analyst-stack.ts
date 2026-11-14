@@ -8,7 +8,7 @@ import {
 import { Construct } from 'constructs';
 
 export interface PodcastAnalystStackProps extends StackProps {
-  stage: 'beta' | 'prod';
+  stage: 'alpha' | 'beta' | 'prod';
   domainName: string;
 }
 
@@ -17,7 +17,7 @@ export class PodcastAnalystStack extends Stack {
     super(scope, id, props);
 
     const hostname = props.stage === 'prod'
-      ? props.domainName : `beta.${props.domainName}`;
+      ? props.domainName : `${props.stage}.${props.domainName}`;
     const zone = route53.HostedZone.fromLookup(this, 'Zone', {
       domainName: props.domainName,
       privateZone: false,

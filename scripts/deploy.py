@@ -109,7 +109,7 @@ def wait_for_command(command_id: str, instance_id: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("stage", choices=("beta", "prod"))
+    parser.add_argument("stage", choices=("alpha", "beta", "prod"))
     parser.add_argument("image_tag", nargs="?", help="Reuse an ECR tag for rollback; skip building")
     args = parser.parse_args()
     if args.image_tag and not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}", args.image_tag):
