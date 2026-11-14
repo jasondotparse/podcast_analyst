@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("stage", choices=("beta", "prod"))
+    parser.add_argument("stage", choices=("alpha", "beta", "prod"))
     args = parser.parse_args()
     env_file = ROOT / ".env"
     values = dotenv_values(env_file)
@@ -32,9 +32,11 @@ def main():
         set_key(env_file, password_key, password)
     env_file.chmod(0o600)
     name = f"/podcast-analyst/{args.stage}/runtime"
+    # Alpha-only experiments; see docs/etl_design.md#scheduled-thesis-digests.
+    experiments = "PODCAST_ENABLE_SCHEDULED_DIGESTS=1\n" if args.stage == "alpha" else ""
     payload = {
         "Name": name, "Type": "SecureString", "Tier": "Standard", "Overwrite": True,
-        "Value": f"OPENAI_API_KEY={api_key}\nPODCAST_APP_PASSWORD={password}\n",
+        "Value": f"OPENAI_API_KEY={api_key}\nPODCAST_APP_PASSWORD={password}\n{experiments}",
     }
     # A temporary 0600 file keeps values out of process arguments and SSM commands.
     with NamedTemporaryFile(mode="w", prefix="podcast-runtime-", suffix=".json") as temporary:

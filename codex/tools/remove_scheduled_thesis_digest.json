@@ -1,0 +1,13 @@
+{
+  "type": "function",
+  "name": "remove_scheduled_thesis_digest",
+  "description": "Cancel one scheduled thesis digest by its ID, so no more digest emails are sent for it. Find the ID first with postgres_database_query on cron_subscriptions (WHERE is_active), matching the user's description by email, cron, timezone, and theses. If several active digests plausibly match the request, ask the user which one to cancel. Cancelling an already cancelled digest is harmless (status 'already_cancelled'). Immediate email alerts are separate; see remove_subscription. Confirm to the user what was cancelled.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "subscription_id": {"type": "string", "description": "cron_subscriptions.id"}
+    },
+    "required": ["subscription_id"],
+    "additionalProperties": false
+  }
+}

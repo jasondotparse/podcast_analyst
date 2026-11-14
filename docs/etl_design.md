@@ -184,7 +184,9 @@ means currently active theses only; future theses need a new subscription. Email
 when `PODCAST_ALERT_SENDER` is unset: subject/body are logged and alerts stay pending. Retries
 may repeat these local logs, but never create a duplicate alert row. SES errors mark failed
 and fail the job visibly; retries skip sent alerts. Partial recipient failures may resend
-to recipients reached earlier in the same alert.
+to recipients reached earlier in the same alert. Alpha also offers scheduled digests, one email per
+cron occurrence with both supporting and challenging evidence; see
+[scheduled thesis digests](#scheduled-thesis-digests). They do not change this alert path.
 
 When idle, the worker assesses at most 50 claims across episodes and projects their stances,
 without notifying. This connects new theses to old evidence and backfills existing theses.
@@ -358,6 +360,8 @@ ingestion/models.py              EpisodeMetadata, IngestionJob, Episode, Claim, 
 
 RSS watchers sit beside this stack: `ingestion/watcher_service.py` (`WatcherService`) calls
 `IngestionService.submit`, `clients/feed_client.py`, and `PostgresClient`; see [RSS watchers](#rss-watchers).
+So do alpha's scheduled digests: `ingestion/digest_service.py` (`DigestService`) reads `PostgresClient` and
+sends through the same `EmailClient`; see [scheduled thesis digests](#scheduled-thesis-digests).
 
 - `src/backend/clients/codex_client.py`, `src/backend/chat.py`: the small harness changes above.
 - `codex/skills/extract-claims/SKILL.md`: the extraction instructions; tool definitions are in `codex/tools/`.
@@ -601,6 +605,108 @@ watcher logged `Watcher queued 'Designing for Agents — Zeno Rocha, Resend' …
 The episode went through the **transcript path** (its WebVTT transcript, `source_type` `txt`)
 and completed in about 5 minutes with 34 passages and 75 claims. With `last_checked_at` moved
 back two hours, the next tick logged `Watcher checked 1 feed(s); no new episodes`.
+
+## Scheduled thesis digests
+
+**Status:** alpha-only experiment, off unless `PODCAST_ENABLE_SCHEDULED_DIGESTS=1`. Implemented and
+verified locally (November 13, 2026); not yet deployed.
+
+Immediate alerts (above) email each strong challenge as an episode finishes. A digest is the
+quiet alternative: **one email per scheduled time** covering every new supporting *and*
+challenging claim for a chosen set of theses, e.g. "a daily digest at 2 PM Dubai time for my
+AI infrastructure theses". The two are independent, and an address can have both.
+
+```text
+chat: "Send me a daily thesis digest at 2 PM Dubai time, covering all my AI infrastructure theses."
+  └─ tool register_scheduled_thesis_digest(email, thesis_ids, cron "0 14 * * *", timezone "Asia/Dubai")
+       ├─ validate the address, the cron, the IANA timezone, and that every thesis is active
+       ├─ the same address + cron + timezone + set of theses already active? → return it ('already_registered')
+       ├─ INSERT cron_subscriptions(..., next_run_at = next occurrence, in UTC)
+       └─ return the schedule in local time + this address's immediate subscriptions to the same theses
+            → the agent offers to remove those (remove_subscription), only on explicit confirmation
+
+DigestService.run: one in-process asyncio task, every 60 s
+  for each active schedule with next_run_at <= now:
+    due = the latest occurrence <= now; next = the first occurrence > now
+    UPDATE next_run_at = next (only if still unchanged: each occurrence is claimed once)
+    due more than 10 minutes ago? → the app was down: 'skipped', nothing sent (no backfill)
+    no active theses left?        → 'skipped'
+    evidence = thesis_assessments recorded in [previous occurrence, due), stance supports|challenges
+    render one plain-text email → SES → 'sent' (+ last_delivered_at) | 'failed' | 'disabled'
+```
+
+- **Cron and timezone:** standard five-field cron (`minute hour day-of-month month day-of-week`),
+  parsed with [`cronsim`](https://pypi.org/project/cronsim/), evaluated in the subscriber's IANA
+  timezone (`zoneinfo`, with the `tzdata` package as a fallback), and stored with `next_run_at` in
+  UTC. Six-field (seconds) and `@daily`-style expressions, impossible dates (`0 0 30 2 *`), and
+  unknown zones are rejected; zone names are matched case-insensitively and saved in canonical form.
+  Daylight saving follows local time, like Debian cron: a daily 9 AM stays 9 AM (that day's window
+  is 23 or 25 hours), a local time skipped by spring-forward runs just after the jump, and a
+  repeated time runs once.
+- **Reporting window:** `[previous scheduled occurrence, this occurrence)`, computed from the cron,
+  never from `last_delivered_at`, so a late or failed send does not change what a period covers.
+  The first digest after registration starts at the previous scheduled time, even if that is
+  before registration. Weekly schedules use the previous weekly occurrence.
+- **Evidence:** `thesis_assessments.created_at` decides "new", not the episode's publish date, so an
+  old claim newly assessed against a new thesis counts. No strength or signal floor (unlike
+  alerts): every supports/challenges row in the window is counted, inactive or deleted theses are
+  left out, and `unrelated` is ignored. No pending-claim cache and no LLM call: the query runs at
+  delivery time against existing rows.
+- **Email:** `render_digest` is deterministic plain text, like `render_alert`. A header gives the
+  window in local time and counts; each selected active thesis follows, theses with the strongest
+  evidence first and "No new relevant evidence during this period." for the rest. Per thesis:
+  exact supporting/challenging counts, then at most five claims, strongest first (strength, then
+  signal), each with the app's assessment on its own line, apart from the speaker, verbatim quote,
+  podcast, episode, publish date, and source URL. It ends with the app link and the digest ID to
+  cancel. Sender and link come from `PODCAST_ALERT_SENDER` and `PODCAST_PUBLIC_ORIGIN`, like alerts.
+- **Cancelling:** "Stop sending me my daily Dubai digest." Codex finds the row through
+  `postgres_database_query` on `cron_subscriptions` (asking if several match) and calls
+  `remove_scheduled_thesis_digest`, which sets `is_active = false`. Rows are never deleted.
+- **Code:** `ingestion/digest_service.py` (`DigestService`, `render_digest`, and the cron helpers),
+  migration `008_cron_subscriptions.sql`, the three tools in `codex/tools/`, and their handlers in
+  `AgentTools`. Tests: `tests/test_digests.py` (mocked email, injected clock).
+
+**Enabling it (alpha only).** `main.py` creates the `DigestService`, starts its task beside the
+ingestion worker and watcher, and advertises the three tools only when
+`PODCAST_ENABLE_SCHEDULED_DIGESTS=1`. Otherwise nothing starts, chat threads never see the
+tools, and a call to one is refused ("Scheduled digests are not enabled"). The migration runs
+everywhere and leaves an empty table. In alpha, `./scripts/configure_runtime.py alpha` adds the
+flag to `/podcast-analyst/alpha/runtime`; rerun it, then deploy alpha (`./scripts/deploy.py alpha`)
+for the app to pick it up. Beta and prod runtime parameters never include it. Locally, add
+`PODCAST_ENABLE_SCHEDULED_DIGESTS=1` to `.env` or the environment; without `PODCAST_ALERT_SENDER`,
+each digest is logged and recorded as `disabled`.
+
+**Limitations (deliberate MVP choices):**
+- Best effort, at most one attempt per occurrence: `next_run_at` moves before the send, a failed
+  SES call is logged and marked `failed` but not retried, and a crash mid-send loses that email.
+- No backfill: occurrences more than 10 minutes late (the app was down) are skipped; only the next
+  future one is scheduled. No delivery history: `last_delivery_status`/`last_delivered_at` hold
+  only the latest outcome.
+- Thesis IDs are a plain `UUID[]` (no foreign key), and duplicates are prevented in the app, not by
+  a constraint. "All my AI theses" is resolved once, at registration; later theses need a new digest.
+- No minimum interval: an every-minute cron would send an email every minute. No UI; ask Codex.
+
+### Digest verification
+
+Local, November 13, 2026 (Central): real Codex chat and pipeline against a scratch database, with
+the flag on and no SES sender, so the digest was rendered to the log and recorded as `disabled`.
+
+- Saved two AI theses and a Costco thesis, set immediate alerts on both AI theses, and watched
+  Latent Space. Its newest episode (47 claims) was assessed `unrelated` to all three theses.
+- "Send me a daily thesis digest at 2 PM Dubai time, covering all my AI infrastructure theses."
+  Codex chose the two AI theses (not Costco) and registered `0 14 * * *` / `Asia/Dubai` (next run
+  10:00 UTC). It confirmed 2 PM Dubai and offered to remove the two overlapping immediate alerts.
+  After "yes", `remove_subscription` deleted exactly those two rows.
+- A synthetic test-fixture transcript was uploaded to create relevant evidence (9 supporting or
+  challenging assessments), and a second digest was registered for 10:42 PM Chicago. It fired at
+  22:42:31 with window Nov 12 10:42 PM to Nov 13 10:42 PM, both theses, all 9 claims strongest
+  first, quotes and source links, and no Latent Space or Costco rows. `next_run_at` advanced a day.
+- "Stop sending me my daily Dubai digest." Codex queried `cron_subscriptions` and cancelled only the
+  Dubai row (`is_active = false`); the Chicago digest stayed active.
+- Restarted without the flag: no digest worker log line, and Codex reported it had no tool to
+  schedule a digest.
+
+Not yet exercised: a real SES send (mocked in tests) and the alpha deployment.
 
 ## Later, without restructuring
 

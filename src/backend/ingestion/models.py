@@ -100,3 +100,14 @@ class WatchSource:
     id: UUID
     url: str
     ingest_since: datetime
+
+
+@dataclass
+class CronSubscription:
+    """A scheduled thesis digest (cron_subscriptions). next_run_at is the next scheduled occurrence, in UTC."""
+    id: UUID
+    email: str
+    cron: str
+    timezone: str
+    thesis_ids: list[UUID]
+    next_run_at: datetime
