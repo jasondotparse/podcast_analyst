@@ -40,7 +40,9 @@ configuration or ChatGPT login. To relocate this app's state, set
 Edit `codex/config.toml` for defaults and `codex/AGENTS.md` for the agent's global
 instructions. Skills belong in `codex/skills/<skill-name>/SKILL.md`: `extract-claims` is
 attached to the ingestion pipeline's extraction turns, and chat threads discover
-`register-watcher-on-podcast` on their own when a user asks to watch a podcast.
+`register-watcher-on-podcast` on their own when a user asks to watch a podcast, and
+`youtube-link-to-rss` when a user asks to follow a podcast from a YouTube link (it finds the
+show's RSS feed and offers to watch that instead).
 
 Each FastAPI startup copies those two files into the selected Codex home,
 overwriting the installed versions, and replaces its entire `skills/` directory.
