@@ -191,9 +191,10 @@ FastAPI; breakpoints in `src/backend/main.py` work in the backend debugger.
 open the UI. The chat creates a fresh session when the page opens; reload the
 page after restarting the backend. Wait for **Ready** before sending a message.
 
-An empty chat shows a left-aligned welcome heading and the message input, with five
+An empty chat shows a left-aligned welcome heading and the message input, with six
 hardcoded suggested prompts below it in a ruled grid (two columns when there is room): save a Microsoft thesis,
-request email alerts for that thesis, follow the a16z podcast, research the
+request email alerts for that thesis, **Schedule a digest** for it (daily at 2:15 PM Chicago; scheduled
+digests are alpha-only, so other environments decline it), follow the a16z podcast, research the
 strongest claims against an Nvidia data center thesis, and **Connect my theses**.
 The new graph prompt traces evidence between the Nvidia, AWS-capex, and optical
 theses, with at most three claims per stage. Each card shows a label and
@@ -305,6 +306,10 @@ grid at 1280 px and stacked at 390 px, with no horizontal scroll or console erro
 The fifth **Connect my theses** card was also checked locally in Chrome: selecting
 it filled and focused the composer without sending, including the three-claim
 limit near the start of the prompt. The frontend build passed.
+
+The sixth **Schedule a digest** card was checked on November 14, 2026 in headless Chromium: the six
+cards formed a 3x2 grid at 1280 px and stacked at 390 px, and selecting it filled and focused the
+composer with the full prompt without sending. The frontend build passed.
 
 The Nocturne restyle was checked on November 11, 2026 in headless Chromium against the
 design handoff's screenshots (924 x 540) and prototype (1440 x 900): home, a live chat

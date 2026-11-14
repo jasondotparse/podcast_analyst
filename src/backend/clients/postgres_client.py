@@ -7,11 +7,12 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
-from ..ingestion.models import (Claim, EntityLink, Episode, EpisodeGraph, EpisodeMetadata, IngestionJob, Signal,
-                                WatchSource)
+from ..ingestion.models import (Claim, CronSubscription, EntityLink, Episode, EpisodeGraph, EpisodeMetadata,
+                                IngestionJob, Signal, WatchSource)
 
 
 JOB_COLUMNS = "id, episode_id, status, current_step, error"
+CRON_COLUMNS = "id, email, cron, timezone, thesis_ids, next_run_at"  # In CronSubscription's field order.
 # Jobs with their episode's podcast name and title, so the UI can say what is being ingested.
 LABELED_JOBS = ("SELECT j.id, j.episode_id, j.status, j.current_step, j.error, p.name, e.title FROM ingestion_jobs j "
                 "JOIN episodes e ON e.id = j.episode_id JOIN podcasts p ON p.id = e.podcast_id")
@@ -286,6 +287,89 @@ class PostgresClient:
     async def set_alert_status(self, alert_id: UUID, status: str) -> None:
         await self.execute("UPDATE alerts SET status = %s, sent_at = CASE WHEN %s = 'sent' THEN now() ELSE NULL END "
                            "WHERE id = %s", status, status, alert_id)
+
+    async def remove_subscriptions(self, email: str, thesis_ids: list[UUID]) -> list[dict]:
+        """Delete this address's immediate subscriptions to these theses; returns the rows removed."""
+        return await self.dicts("DELETE FROM subscriptions s USING theses t WHERE t.id = s.thesis_id "
+                                "AND s.email = %s AND s.thesis_id = ANY(%s::uuid[]) "
+                                "RETURNING s.id AS subscription_id, s.thesis_id, t.description AS thesis",
+                                email, thesis_ids)
+
+    # ---- Scheduled thesis digests (alpha) -----------------------------------
+
+    async def active_theses(self, thesis_ids: list[UUID]) -> list[tuple[UUID, str]]:
+        """(id, description) of the active theses among these IDs, oldest first."""
+        return await self.all("SELECT id, description FROM theses WHERE is_active AND id = ANY(%s::uuid[]) "
+                              "ORDER BY created_at, id", thesis_ids)
+
+    async def immediate_subscriptions(self, email: str, thesis_ids: list[UUID]) -> list[dict]:
+        return await self.dicts("SELECT s.id AS subscription_id, s.thesis_id, t.description AS thesis "
+                                "FROM subscriptions s JOIN theses t ON t.id = s.thesis_id "
+                                "WHERE s.email = %s AND s.thesis_id = ANY(%s::uuid[]) ORDER BY t.created_at, s.id",
+                                email, thesis_ids)
+
+    async def add_cron_subscription(self, email: str, cron: str, timezone: str, thesis_ids: list[UUID],
+                                    next_run_at: datetime) -> tuple[CronSubscription, bool]:
+        """Insert a digest schedule, or return the active one with the same address, cron, timezone, and set
+        of theses. Returns (subscription, created)."""
+        async with await self.connect() as conn:
+            # Serialize registrations so two identical requests cannot both insert.
+            await conn.execute("LOCK TABLE cron_subscriptions IN SHARE ROW EXCLUSIVE MODE")
+            row = await (await conn.execute(
+                f"SELECT {CRON_COLUMNS} FROM cron_subscriptions WHERE is_active AND email = %s AND cron = %s "
+                "AND timezone = %s AND thesis_ids @> %s::uuid[] AND thesis_ids <@ %s::uuid[] "
+                "ORDER BY created_at LIMIT 1", (email, cron, timezone, thesis_ids, thesis_ids))).fetchone()
+            if row:
+                return CronSubscription(*row), False
+            row = await (await conn.execute(
+                "INSERT INTO cron_subscriptions (email, cron, timezone, thesis_ids, next_run_at) "
+                f"VALUES (%s, %s, %s, %s, %s) RETURNING {CRON_COLUMNS}",
+                (email, cron, timezone, thesis_ids, next_run_at))).fetchone()
+            return CronSubscription(*row), True
+
+    async def cancel_cron_subscription(self, subscription_id: UUID) -> dict | None:
+        """Deactivate a digest schedule; returns it with `was_active`, or None if the ID is unknown."""
+        async with await self.connect() as conn, conn.cursor(row_factory=dict_row) as cursor:
+            await cursor.execute("SELECT id AS subscription_id, email, cron, timezone, thesis_ids, "
+                                 "is_active AS was_active FROM cron_subscriptions WHERE id = %s FOR UPDATE",
+                                 (subscription_id,))
+            row = await cursor.fetchone()
+            if row:
+                await cursor.execute("UPDATE cron_subscriptions SET is_active = false WHERE id = %s",
+                                     (subscription_id,))
+            return row
+
+    async def due_cron_subscriptions(self, now: datetime) -> list[CronSubscription]:
+        rows = await self.all(f"SELECT {CRON_COLUMNS} FROM cron_subscriptions WHERE is_active AND next_run_at <= %s "
+                              "ORDER BY next_run_at, id", now)
+        return [CronSubscription(*row) for row in rows]
+
+    async def advance_cron_subscription(self, subscription_id: UUID, due_at: datetime, next_run_at: datetime,
+                                        status: str | None = None) -> bool:
+        """Move a due schedule to its next occurrence (optionally recording a status). False if it was cancelled
+        or already advanced, so an occurrence is claimed at most once."""
+        return await self.one("UPDATE cron_subscriptions SET next_run_at = %s, "
+                              "last_delivery_status = COALESCE(%s, last_delivery_status) "
+                              "WHERE id = %s AND is_active AND next_run_at = %s RETURNING id",
+                              next_run_at, status, subscription_id, due_at) is not None
+
+    async def set_cron_delivery(self, subscription_id: UUID, status: str, delivered_at: datetime | None = None):
+        await self.execute("UPDATE cron_subscriptions SET last_delivery_status = %s, "
+                           "last_delivered_at = COALESCE(%s, last_delivered_at) WHERE id = %s",
+                           status, delivered_at, subscription_id)
+
+    async def digest_evidence(self, thesis_ids: list[UUID], start: datetime, end: datetime) -> list[dict]:
+        """Supporting and challenging assessments recorded in [start, end) for these theses, with citations.
+        Recorded time (thesis_assessments.created_at), not publish time: an old claim newly assessed against
+        a new thesis is new evidence."""
+        return await self.dicts(
+            "SELECT a.thesis_id, a.stance, a.strength, c.id AS claim_id, c.text, c.evidence_quote, c.speaker, "
+            "c.signal, pod.name AS podcast, e.title AS episode, e.published_at, e.source_url "
+            "FROM thesis_assessments a JOIN claims c ON c.id = a.claim_id JOIN passages p ON p.id = c.passage_id "
+            "JOIN episodes e ON e.id = p.episode_id JOIN podcasts pod ON pod.id = e.podcast_id "
+            "WHERE a.thesis_id = ANY(%s::uuid[]) AND a.created_at >= %s AND a.created_at < %s "
+            "AND a.stance IN ('supports', 'challenges') "
+            "ORDER BY a.strength DESC, c.signal DESC NULLS LAST, c.id", thesis_ids, start, end)
 
     # ---- Watch sources (RSS watchers) ---------------------------------------
 

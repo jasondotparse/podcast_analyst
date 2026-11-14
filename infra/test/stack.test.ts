@@ -3,7 +3,7 @@ import { App } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { PodcastAnalystStack } from '../lib/podcast-analyst-stack';
 
-function template(stage: 'beta' | 'prod' = 'beta'): Template {
+function template(stage: 'alpha' | 'beta' | 'prod' = 'beta'): Template {
   const stack = new PodcastAnalystStack(new App({ context: {
     '@aws-cdk/aws-ec2:uniqueImdsv2TemplateName': true,
     'ssm:account=111111111111:parameterName=/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64:region=us-east-1': 'ami-0123456789abcdef0',
@@ -45,15 +45,17 @@ test('releases have immutable tags and survive stack deletion', () => {
   });
 });
 
-test('beta and prod use separate hostnames', () => {
+test('each stage uses its own hostname', () => {
+  template('alpha').hasResourceProperties('AWS::SES::EmailIdentity', { EmailIdentity: 'alpha.example.com' });
   template('beta').hasResourceProperties('AWS::SES::EmailIdentity', { EmailIdentity: 'beta.example.com' });
   template('prod').hasResourceProperties('AWS::SES::EmailIdentity', { EmailIdentity: 'example.com' });
+  template('alpha').hasResourceProperties('AWS::Route53::RecordSet', { Name: 'alpha.example.com.' });
   template('beta').hasResourceProperties('AWS::Route53::RecordSet', { Name: 'beta.example.com.' });
   template('prod').hasResourceProperties('AWS::Route53::RecordSet', { Name: 'example.com.' });
 });
 
-test('prod has a 32 GiB root disk while beta keeps its 16 GiB disk', () => {
-  for (const [stage, size] of [['beta', 16], ['prod', 32]] as const) {
+test('prod has a 32 GiB root disk while alpha and beta keep 16 GiB disks', () => {
+  for (const [stage, size] of [['alpha', 16], ['beta', 16], ['prod', 32]] as const) {
     template(stage).hasResourceProperties('AWS::EC2::Instance', {
       BlockDeviceMappings: [Match.objectLike({ Ebs: {
         VolumeSize: size, VolumeType: 'gp3', Encrypted: true, DeleteOnTermination: true,

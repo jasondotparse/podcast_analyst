@@ -281,8 +281,13 @@ Do not confuse Codex's `callId` with the JSON-RPC `id` used to answer the reques
 | `register_rss_to_watcher(feed_url)` | chat | `AgentTools` → `WatcherService.register`: fetches and validates the feed, then saves it to `watch_sources`. Returns `registered`, `already_registered`, or `invalid` with the reason. The `register-watcher-on-podcast` skill tells Codex how to find the official feed (see [etl_design.md](etl_design.md#rss-watchers)). |
 | `add_thesis(description, entities)` | chat | `AgentTools.add_thesis` → `PostgresClient.add_thesis` (thesis + `thesis_entities`, one transaction) → `GraphClient.project_thesis` (`(Thesis)-[:ABOUT]->(Entity)`). Its description tells Codex to ask follow-up questions about a vague stance ("I'm bullish on AMZN") and to save a specific thesis immediately; a blank description or no entities is refused. |
 | `add_subscription(email, thesis_ids)` | chat only | Normalizes email, validates all theses are active, inserts subscriptions idempotently, and returns covered descriptions. |
+| `register_scheduled_thesis_digest(email, thesis_ids, cron, timezone)` | chat, alpha only | `AgentTools` → `DigestService.register`: validates the address, five-field cron, IANA timezone, and active theses; saves (or returns the identical active) `cron_subscriptions` row; returns the next run in local time and UTC plus overlapping immediate `subscriptions`, which Codex offers to remove. |
+| `remove_subscription(email, thesis_ids)` | chat, alpha only | `AgentTools` → `PostgresClient.remove_subscriptions`: deletes only that address's immediate subscriptions to those theses and returns them. Idempotent; Codex calls it only after explicit confirmation. |
+| `remove_scheduled_thesis_digest(subscription_id)` | chat, alpha only | `AgentTools` → `DigestService.cancel`: sets `is_active = false`; `cancelled` or `already_cancelled`. Codex finds the ID with `postgres_database_query`. |
 
-`add_thesis`, `add_subscription`, and `register_rss_to_watcher` are the chat agent's write tools. `AgentTools.call` serializes results to JSON and caps them at 200 rows / 40,000 characters.
+`add_thesis`, `add_subscription`, and `register_rss_to_watcher` are the chat agent's write tools, plus the three
+digest tools when `PODCAST_ENABLE_SCHEDULED_DIGESTS=1` (alpha). Without the flag `AgentTools.chat_tools()` omits
+them from `dynamicTools`, and `AgentTools.call` refuses them. See [etl_design.md](etl_design.md#scheduled-thesis-digests). `AgentTools.call` serializes results to JSON and caps them at 200 rows / 40,000 characters.
 A handler exception is returned to the model as a failed tool result so it can correct itself.
 
 After a successful chat-thread `graph_query`, `ChatHarness.chat_tool_call` scans the

@@ -4,8 +4,8 @@ import { PodcastAnalystStack } from '../lib/podcast-analyst-stack';
 
 const app = new App();
 const stage = app.node.tryGetContext('stage');
-if (stage !== 'beta' && stage !== 'prod') {
-  throw new Error('Use -c stage=beta or -c stage=prod');
+if (stage !== 'alpha' && stage !== 'beta' && stage !== 'prod') {
+  throw new Error('Use -c stage=alpha, -c stage=beta, or -c stage=prod');
 }
 
 new PodcastAnalystStack(app, `PodcastAnalyst-${stage}`, {
