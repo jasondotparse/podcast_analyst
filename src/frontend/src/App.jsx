@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowUpRightIcon, BellSimpleIcon, BookmarkSimpleIcon, BroadcastIcon, GraphIcon, MagnifyingGlassIcon } from '@phosphor-icons/react'
+import { ArrowUpRightIcon, BellSimpleIcon, BookmarkSimpleIcon, BroadcastIcon, CalendarCheckIcon, GraphIcon, MagnifyingGlassIcon } from '@phosphor-icons/react'
 import { post } from './api.js'
 import DbCabinet from './components/DbCabinet.jsx'
 import PipelineStatus from './components/PipelineStatus.jsx'
@@ -18,6 +18,11 @@ const SUGGESTED_PROMPTS = [
     label: 'Get email alerts',
     icon: BellSimpleIcon,
     text: 'Regarding my thesis on Microsoft and its enterprise AI spending: email me at holtkam2@gmail.com if you see a high signal claim which refutes my theory',
+  },
+  {
+    label: 'Schedule a digest',
+    icon: CalendarCheckIcon,
+    text: 'Send me a digest for my thesis on Microsoft and its enterprise AI spending once per day, every day at 2:15 PM Chicago time, to holtkam2@gmail.com.',
   },
   {
     label: 'Follow a podcast',
