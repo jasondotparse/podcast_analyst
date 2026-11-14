@@ -715,7 +715,11 @@ Local, November 14, 2026, with real SES (`PODCAST_ALERT_SENDER=alerts@alpha.podc
 - The digest fired at 14:15:26 with 19 claims (window Nov 13 2:15 PM to Nov 14 2:15 PM), status
   `sent`, and `next_run_at` advanced to Nov 15 2:15 PM. SES accepted both emails independently.
 
-Not yet exercised: the alpha deployment.
+Alpha, November 14, 2026: deployed this branch with the flag in `/podcast-analyst/alpha/runtime`.
+Migration 008 applied and the worker logged that digests were enabled. The same chat flow saved the
+thesis, kept the immediate alert, and registered `40 14 * * *` / `America/Chicago`. The uploaded
+transcript produced 19 challenging assessments by 2:29 PM (immediate alert sent), and the digest was
+sent at 14:40:54 with 19 claims and a one-day window; `next_run_at` advanced to Nov 15 2:40 PM.
 
 ## Later, without restructuring
 
