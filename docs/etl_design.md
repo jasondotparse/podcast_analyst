@@ -706,7 +706,16 @@ the flag on and no SES sender, so the digest was rendered to the log and recorde
 - Restarted without the flag: no digest worker log line, and Codex reported it had no tool to
   schedule a digest.
 
-Not yet exercised: a real SES send (mocked in tests) and the alpha deployment.
+Local, November 14, 2026, with real SES (`PODCAST_ALERT_SENDER=alerts@alpha.podcastanalystagent.com`):
+
+- Saved a co-packaged-optics thesis with an immediate challenge alert, then asked for a daily digest
+  at 2:15 PM Chicago (`15 14 * * *` / `America/Chicago`) and kept the immediate alert.
+- Uploaded a synthetic "copper comeback" transcript at 2:07 PM; by 2:09 PM it had 18 challenging and
+  1 supporting assessment, and the immediate alert email was sent.
+- The digest fired at 14:15:26 with 19 claims (window Nov 13 2:15 PM to Nov 14 2:15 PM), status
+  `sent`, and `next_run_at` advanced to Nov 15 2:15 PM. SES accepted both emails independently.
+
+Not yet exercised: the alpha deployment.
 
 ## Later, without restructuring
 
