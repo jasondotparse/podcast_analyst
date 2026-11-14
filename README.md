@@ -85,6 +85,7 @@ app** for HMR development, or **serve front end** when the backend is already ru
 
 ## Software development process
 * Codex and claude code were used for implementation and deployment, also for monitoring and debugging. Claude Design was used for app layout and styling.
+* Branching: `main` is frozen at the final submitted version. Post-submission work lives on the `alpha` branch, which is what gets deployed to the alpha environment. New feature branches come off `alpha` and open PRs against `alpha`.
 
 ## Watching podcasts (RSS)
 
