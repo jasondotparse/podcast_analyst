@@ -219,23 +219,33 @@ class DigestDatabaseTests(unittest.IsolatedAsyncioTestCase):
             await self.db.execute("INSERT INTO cron_subscriptions (email, cron, timezone, thesis_ids, next_run_at) "
                                   "VALUES ('a@b.co', '0 14 * * *', 'UTC', '{}', now())")
 
-    async def test_remove_subscription_removes_only_the_requested_immediate_subscriptions(self):
+    async def test_update_notification_turns_only_the_requested_immediate_subscriptions_off_and_on(self):
         await self.tools.add_subscription("analyst@example.com", [str(self.a), str(self.b)])
         await self.tools.add_subscription("other@example.com", [str(self.a)])
         digest = await self.register([self.a])
-        removed = json.loads(await self.tools.call("remove_subscription", {
-            "email": "ANALYST@example.com", "thesis_ids": [str(self.a), str(uuid4())]}))
+
+        async def update(email, thesis_ids, is_active=False):
+            return json.loads(await self.tools.call("update_notification", {
+                "email": email, "thesis_ids": [str(thesis_id) for thesis_id in thesis_ids], "is_active": is_active}))
+
+        removed = await update("ANALYST@example.com", [self.a, uuid4()])
         self.assertEqual((removed["email"], removed["removed_count"]), ("analyst@example.com", 1))
         self.assertEqual([(row["thesis_id"], row["thesis"]) for row in removed["removed"]],
                          [(str(self.a), "AI inference costs will decline")])
         self.assertEqual(await self.db.all("SELECT email, thesis_id FROM subscriptions ORDER BY email"),
                          [("analyst@example.com", self.b), ("other@example.com", self.a)])
-        again = json.loads(await self.tools.call("remove_subscription", {
-            "email": "analyst@example.com", "thesis_ids": [str(self.a)]}))
-        self.assertEqual(again["removed_count"], 0)
+        self.assertEqual((await update("analyst@example.com", [self.a]))["removed_count"], 0)
         self.assertEqual((await self.schedule(digest["subscription_id"]))[0], True)  # Digests are untouched.
         with self.assertRaisesRegex(ValueError, "Invalid email"):
-            await self.tools.call("remove_subscription", {"email": "nope", "thesis_ids": [str(self.a)]})
+            await update("nope", [self.a])
+
+        # Back on: the same validation as add_subscription, so an archived thesis is refused.
+        self.assertEqual(await update("analyst@example.com", [self.a], is_active=True),
+                         {"email": "analyst@example.com", "subscribed_to": ["AI inference costs will decline"]})
+        await self.db.execute("UPDATE theses SET is_active = false WHERE id = %s", self.c)
+        with self.assertRaisesRegex(ValueError, "inactive thesis IDs"):
+            await update("analyst@example.com", [self.c], is_active=True)
+        self.assertEqual(await self.db.one("SELECT count(*) FROM subscriptions"), (3,))
 
     async def test_cancel_disables_only_that_digest_and_is_idempotent(self):
         daily = await self.register([self.a])

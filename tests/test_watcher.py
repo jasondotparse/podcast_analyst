@@ -1,14 +1,17 @@
 import asyncio
 from datetime import date, datetime, timezone
+import json
 import secrets
 import socket
 import unittest
 from unittest.mock import patch
+from uuid import uuid4
 
 import httpx2
 import psycopg
 from psycopg.conninfo import make_conninfo
 
+from src.backend.agent_tools import AgentTools
 from src.backend.clients import feed_client
 from src.backend.clients.feed_client import FeedClient, FeedError, parse_feed, transcript_text
 from src.backend.clients.postgres_client import PostgresClient
@@ -204,6 +207,47 @@ class WatcherTests(unittest.IsolatedAsyncioTestCase):
         await self.next_check()
         self.assertEqual(await self.queued(), ["ep2", "ep4", "ep3"])
         self.assertNotIn("https://cdn.example.com/ep1.mp3", self.web.requests)
+
+    async def test_update_subscription_stops_and_resumes_a_feed_without_backfilling_the_gap(self):
+        tools = AgentTools(self.db, graph=None, embedder=None)
+        tools.watcher = self.watcher
+
+        async def update(is_active, source_id=None):
+            return json.loads(await tools.call("update_subscription", {
+                "watch_source_id": source_id or str(source), "is_active": is_active}))
+
+        self.web.pages[FEED_URL] = rss(item("ep2", 9), item("ep1", 2))
+        await self.watcher.register(FEED_URL)
+        await self.watcher.check_feeds()
+        (source,) = await self.db.one("SELECT id FROM watch_sources")
+        self.assertEqual(await update(False), {"watch_source_id": str(source), "podcast": "Chip Talk",
+                                               "feed_url": FEED_URL, "status": "stopped"})
+        self.assertEqual((await update(False))["status"], "already_stopped")
+
+        # A stopped feed is never fetched, so new episodes are not queued.
+        self.web.pages[FEED_URL] = rss(item("ep4", 11), item("ep3", 10), item("ep2", 9), item("ep1", 2))
+        fetches = self.web.requests.count(FEED_URL)
+        await self.next_check()
+        self.assertEqual(self.web.requests.count(FEED_URL), fetches)
+        self.assertEqual(await self.queued(), ["ep2"])
+
+        # Resuming restarts from the newest episode, like a new registration; ep3 came out while it was stopped.
+        resumed = await update(True)
+        self.assertEqual((resumed["status"], resumed["newest_episode"]), ("resumed", "Episode ep4"))
+        self.assertEqual((await update(True))["status"], "already_registered")
+        await self.next_check()
+        await self.next_check()
+        self.assertEqual(await self.queued(), ["ep2", "ep4"])
+
+        # Asking to watch a stopped podcast again resumes the same row, and its start never moves back.
+        await update(False)
+        self.web.pages[FEED_URL] = rss(item("ep1", 2))
+        self.assertEqual((await self.watcher.register(FEED_URL))["status"], "resumed")
+        self.assertEqual(await self.db.all("SELECT is_active, ingest_since FROM watch_sources"),
+                         [(True, datetime(2026, 11, 11, 9, tzinfo=timezone.utc))])
+        for bad_id, error in ((str(uuid4()), "No watched feed"), ("nope", "Invalid watched feed ID")):
+            with self.assertRaisesRegex(ValueError, error):
+                await update(False, bad_id)
 
     async def test_nothing_is_fetched_or_queued_while_an_ingestion_is_active(self):
         self.web.pages[FEED_URL] = rss(item("ep1", 2))

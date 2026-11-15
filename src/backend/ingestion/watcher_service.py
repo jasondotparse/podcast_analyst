@@ -7,6 +7,7 @@ is pending or running, and it queues at most one episode, so watcher ingestions 
 import asyncio
 from datetime import timedelta
 import logging
+from uuid import UUID
 
 from ..clients.feed_client import FeedClient, FeedError
 from ..clients.postgres_client import PostgresClient
@@ -28,20 +29,35 @@ class WatcherService:
         self.max_audio_bytes = max_audio_bytes
 
     async def register(self, feed_url: str) -> dict:
-        """Validate the feed and start watching it. Only its newest episode and later ones get ingested."""
+        """Validate the feed and start (or resume) watching it. Only its newest episode and later ones get ingested."""
         feed_url = feed_url.strip()
         try:
             feed = await self.feeds.fetch_feed(feed_url)
         except FeedError as error:
             return {"status": "invalid", "feed_url": feed_url, "error": str(error)}
         newest = max(feed.episodes, key=lambda episode: episode.published_at)
-        if not await self.db.add_watch_source(feed_url, feed.title, newest.published_at):
+        status = await self.db.add_watch_source(feed_url, feed.title, newest.published_at)
+        if status is None:
             return {"status": "already_registered", "feed_url": feed_url, "podcast": feed.title}
-        log.info("Watching %s (%s); newest episode %r", feed.title, feed_url, newest.title)
-        return {"status": "registered", "feed_url": feed_url, "podcast": feed.title,
+        log.info("Watching %s (%s, %s); newest episode %r", feed.title, feed_url, status, newest.title)
+        return {"status": status, "feed_url": feed_url, "podcast": feed.title,
                 "newest_episode": newest.title, "published": newest.published_at.date(),
                 "next": "The newest episode is ingested within minutes, once no other ingestion is running. "
                         "The feed is checked hourly for later episodes; older episodes are not ingested."}
+
+    async def set_active(self, source_id: UUID, is_active: bool) -> dict:
+        """Stop watching a feed, or resume it. Resuming re-registers it, so it restarts from the feed's newest
+        episode, like a new registration; episodes published while it was stopped are not ingested."""
+        source = await self.db.watch_source(source_id)
+        if source is None:
+            raise ValueError(f"No watched feed with ID {source_id}")
+        if is_active:
+            return await self.register(source["feed_url"])
+        if not source.pop("is_active"):
+            return {**source, "status": "already_stopped"}
+        await self.db.stop_watch_source(source_id)
+        log.info("Stopped watching %s (%s)", source["podcast"], source["feed_url"])
+        return {**source, "status": "stopped"}
 
     async def run(self) -> None:
         """The background loop. A failure is logged and never stops it."""

@@ -1,7 +1,7 @@
 {
   "type": "function",
   "name": "register_rss_to_watcher",
-  "description": "Start watching a podcast for new episodes by registering its RSS or Atom feed URL (find the official feed first; see the register-watcher-on-podcast skill). The backend fetches and validates the feed before saving it. Its newest episode is then ingested within minutes, and the feed is checked hourly for later episodes; older episodes are not ingested. Returns status 'registered' (with the podcast and its newest episode), 'already_registered', or 'invalid' (with the reason). The watched feeds are in the watch_sources table.",
+  "description": "Start watching a podcast for new episodes by registering its RSS or Atom feed URL (find the official feed first; see the register-watcher-on-podcast skill). The backend fetches and validates the feed before saving it. Its newest episode is then ingested within minutes, and the feed is checked hourly for later episodes; older episodes are not ingested. Returns status 'registered' (with the podcast and its newest episode), 'resumed' (a feed that had been stopped is watched again, the same way), 'already_registered', or 'invalid' (with the reason). The watched feeds are in the watch_sources table; stop watching one with update_subscription.",
   "inputSchema": {
     "type": "object",
     "properties": {

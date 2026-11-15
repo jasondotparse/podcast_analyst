@@ -17,7 +17,9 @@ class GraphView:
         self.db, self.graph = db, graph
 
     async def theses(self, thesis_id: UUID | None = None) -> dict | None:
-        ids = self.graph.thesis_neighborhood(str(thesis_id) if thesis_id else None, MAX_THESIS_CLAIMS + 1)
+        # The overview starts from active theses only, so an archived thesis's claims don't linger without it.
+        thesis_ids = [str(thesis_id)] if thesis_id else await self.db.active_thesis_ids()
+        ids = self.graph.thesis_neighborhood(thesis_ids, MAX_THESIS_CLAIMS + 1)
         if thesis_id and not ids:
             return None
         # Overfetch one claim to report the cap truthfully; keep only its selected episodes.
@@ -25,10 +27,10 @@ class GraphView:
         claims = {row[0] for row in rows if row[1] == "Claim"}
         truncated = len(claims) > MAX_THESIS_CLAIMS
         if truncated:
-            ids = self.graph.thesis_neighborhood(str(thesis_id) if thesis_id else None, MAX_THESIS_CLAIMS)
+            ids = self.graph.thesis_neighborhood(thesis_ids, MAX_THESIS_CLAIMS)
         view = await self.subgraph(ids)
         view["truncated"] |= truncated
-        # A stale graph thesis is unknown too, rather than a UUID-only node.
+        # A stale or archived graph thesis is unknown too, rather than a UUID-only node.
         if thesis_id and not any(node["id"] == str(thesis_id) for node in view["nodes"]):
             return None
         return view

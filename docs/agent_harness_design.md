@@ -281,13 +281,25 @@ Do not confuse Codex's `callId` with the JSON-RPC `id` used to answer the reques
 | `register_rss_to_watcher(feed_url)` | chat | `AgentTools` → `WatcherService.register`: fetches and validates the feed, then saves it to `watch_sources`. Returns `registered`, `already_registered`, or `invalid` with the reason. The `register-watcher-on-podcast` skill tells Codex how to find the official feed (see [etl_design.md](etl_design.md#rss-watchers)). |
 | `add_thesis(description, entities)` | chat | `AgentTools.add_thesis` → `PostgresClient.add_thesis` (thesis + `thesis_entities`, one transaction) → `GraphClient.project_thesis` (`(Thesis)-[:ABOUT]->(Entity)`). Its description tells Codex to ask follow-up questions about a vague stance ("I'm bullish on AMZN") and to save a specific thesis immediately; a blank description or no entities is refused. |
 | `add_subscription(email, thesis_ids)` | chat only | Normalizes email, validates all theses are active, inserts subscriptions idempotently, and returns covered descriptions. |
-| `register_scheduled_thesis_digest(email, thesis_ids, cron, timezone)` | chat, alpha only | `AgentTools` → `DigestService.register`: validates the address, five-field cron, IANA timezone, and active theses; saves (or returns the identical active) `cron_subscriptions` row; returns the next run in local time and UTC plus overlapping immediate `subscriptions`, which Codex offers to remove. |
-| `remove_subscription(email, thesis_ids)` | chat, alpha only | `AgentTools` → `PostgresClient.remove_subscriptions`: deletes only that address's immediate subscriptions to those theses and returns them. Idempotent; Codex calls it only after explicit confirmation. |
+| `update_thesis(thesis_id, is_active)` | chat | `AgentTools` → `PostgresClient.set_thesis_active`: archives (`false`) or restores (`true`) a thesis; `archived`, `restored`, `already_archived`, or `already_active`. Archived theses are skipped by reflection, alerts, and digests and hidden from the graph view; assessments and subscriptions are kept for a restore. There is no wording edit: archive it and `add_thesis` the new version. |
+| `update_subscription(watch_source_id, is_active)` | chat | `AgentTools` → `WatcherService.set_active`: stops watching a feed (`stopped`/`already_stopped`), or resumes it by re-registering its URL (`resumed`, `already_registered`, or `invalid`). See [RSS watchers](etl_design.md#rss-watchers). |
+| `update_notification(email, thesis_ids, is_active)` | chat | `false` → `PostgresClient.remove_subscriptions`: deletes only that address's immediate subscriptions to those theses and returns them (idempotent). `true` → the same path as `add_subscription`. Never touches scheduled digests. Codex calls it only when asked or after explicit confirmation. |
+| `register_scheduled_thesis_digest(email, thesis_ids, cron, timezone)` | chat, alpha only | `AgentTools` → `DigestService.register`: validates the address, five-field cron, IANA timezone, and active theses; saves (or returns the identical active) `cron_subscriptions` row; returns the next run in local time and UTC plus overlapping immediate `subscriptions`, which Codex offers to turn off with `update_notification`. |
 | `remove_scheduled_thesis_digest(subscription_id)` | chat, alpha only | `AgentTools` → `DigestService.cancel`: sets `is_active = false`; `cancelled` or `already_cancelled`. Codex finds the ID with `postgres_database_query`. |
 
-`add_thesis`, `add_subscription`, and `register_rss_to_watcher` are the chat agent's write tools, plus the three
-digest tools when `PODCAST_ENABLE_SCHEDULED_DIGESTS=1` (alpha). Without the flag `AgentTools.chat_tools()` omits
+`add_thesis`, `add_subscription`, and `register_rss_to_watcher` are the chat agent's write tools, each with an
+`update_*` counterpart that turns it off or back on (`update_thesis`, `update_notification`, `update_subscription`;
+"subscription" here means a watched podcast, following how users talk about it, while `add_subscription` creates
+email alerts). Codex finds the IDs with `postgres_database_query`. The two
+digest tools are added when `PODCAST_ENABLE_SCHEDULED_DIGESTS=1` (alpha). Without the flag `AgentTools.chat_tools()` omits
 them from `dynamicTools`, and `AgentTools.call` refuses them. See [etl_design.md](etl_design.md#scheduled-thesis-digests). `AgentTools.call` serializes results to JSON and caps them at 200 rows / 40,000 characters.
+
+The `update_*` tools were verified locally on November 15, 2026 with a real Codex chat against a scratch
+database (two theses with alerts, two watched feeds). "That thesis isn't relevant to me anymore. Please get rid
+of it", "I'm done with the All-In podcast", and "stop emailing analyst@example.com about the optics thesis" each
+led to one `postgres_database_query` lookup and the matching `update_*` call; only the named rows changed.
+The graph overview dropped the archived thesis (6 → 3 nodes) and its view returned 404 until "bring back my AWS
+capex thesis" restored it. Codex once mistyped a UUID, got `Invalid thesis ID`, and retried correctly.
 A handler exception is returned to the model as a failed tool result so it can correct itself.
 
 After a successful chat-thread `graph_query`, `ChatHarness.chat_tool_call` scans the

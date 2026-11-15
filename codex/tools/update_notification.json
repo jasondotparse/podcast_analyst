@@ -1,0 +1,15 @@
+{
+  "type": "function",
+  "name": "update_notification",
+  "description": "Turn immediate email alerts (created by add_subscription; the subscriptions table) off (is_active false) or back on (is_active true) for one email address and the given thesis IDs. Only call this when the user asks for the change or explicitly confirms it, for example after you offered to replace immediate alerts with a scheduled digest. Look up the address's alerts with postgres_database_query on subscriptions joined to theses; 'all my alerts' means every thesis that address is subscribed to. Changes nothing else: other addresses, other theses, and scheduled digests are untouched (digests are cancelled with remove_scheduled_thesis_digest). Turning off returns the alerts removed (removed_count 0 means they were already off); turning on returns the theses covered and refuses archived theses. Confirm the change to the user.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "email": {"type": "string"},
+      "thesis_ids": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+      "is_active": {"type": "boolean", "description": "false to stop these email alerts, true to turn them back on."}
+    },
+    "required": ["email", "thesis_ids", "is_active"],
+    "additionalProperties": false
+  }
+}
