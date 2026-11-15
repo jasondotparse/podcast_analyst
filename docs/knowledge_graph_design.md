@@ -23,13 +23,20 @@ ABOUT-edge selection and neighborhood traversal also use explicit endpoint types
 the remaining generic relationship lookup intermittently omitted thesis ABOUT
 edges on prod even after the node lookup was corrected.
 
-The four visual types are Thesis (pale violet with a soft halo), Claim (gray, sized
+The original four visual types are Thesis (pale violet with a soft halo), Claim (gray, sized
 by signal), Entity (violet), and Episode (a hollow ring). SUPPORTS edges are violet;
 CHALLENGES are muted red and dashed; both have arrowheads and width by strength.
 ABOUT and IN_EPISODE are dim hairlines. Colors are Nocturne tokens, listed in
 `graphStyle.js`; the canvas resolves them once with `getComputedStyle`. With a
 node selected, unrelated nodes fade to 25% and links that don't touch it to 12%. Passage nodes and MENTIONS are omitted; claim-to-passage-to-episode
 paths become IN_EPISODE. A text legend accompanies every canvas.
+
+Coverage adds Debate (accent-400, radius 7), Question (accent-200, radius 5), and Driver
+(background with accent-500 outline, radius 4). HAS_DEBATE/HAS_QUESTION use accent-700/600;
+AFFECTS uses neutral-600. The existing generated legend includes each type. Debate details show
+both stored views; question details name the parent debate. All lookups remain explicitly typed.
+The thesis view also includes active debates, questions and linked drivers for every entity
+already selected. Rebuilding a pack deletes its historical node IDs and merges only the active tree.
 
 ## API and limits
 
@@ -71,6 +78,23 @@ React text; source links require http(s). Node and connection buttons provide a
 keyboard alternative to the canvas. Escape closes and restores trigger focus.
 
 ## Verification
+
+**Coverage packs — beta, November 15, 2026:** release `5412f586dedd-20261115T234509-5a466f`
+(working tree; SSM deployment succeeded, app/db healthy). Playwright signed in through the login
+page, saved the Appendix pack, and checked the two debates, three questions and seven drivers
+in the thesis graph. Re-saving retained all six thesis/debate/question IDs. A first terse final
+reply prompted a tool-description correction; the recheck read back each question and its drivers.
+The original D2 counter-view over-negated the delivery gains and remained unchanged on re-save;
+its exact wording is visible for analyst review. No browser page errors.
+
+**Coverage packs — local, November 15, 2026:** 77 backend tests passed with local Postgres;
+frontend build passed. Playwright saved the Appendix pack through chat without clarification:
+D1 held the first two questions, D2 the third, with seven drivers. The graph rendered all
+three new node/edge types and both debate views. Editing Q2 retired its row, created the
+Trainium question, and preserved Q1/Q3 IDs; the follow-up listed each active question's drivers.
+The first readback combined D1's questions/drivers. D2's generated counter-view said delivery/
+automation would not expand margins, rather than the supplied example's gains being offset.
+Stored questions matched the fixture; no browser page errors. Email was disabled locally.
 
 - Production fix verified November 12, 2026 (Central), release
   `d77fd7dc5abc-20261113T012044-7f2f38`: the Amazon thesis now appears with six ABOUT

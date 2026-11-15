@@ -77,6 +77,19 @@ class EpisodeGraph:
 
 
 @dataclass
+class CoverageGraph:
+    """All IDs to clear, then the active company tree to mirror from Postgres."""
+    entity_id: UUID
+    all_debates: list[UUID]
+    all_questions: list[UUID]
+    all_drivers: list[UUID]
+    debates: list[UUID]
+    questions: list[tuple[UUID, UUID]]  # (question_id, debate_id)
+    drivers: list[UUID]
+    question_drivers: list[tuple[UUID, UUID]]
+
+
+@dataclass
 class FeedEpisode:
     guid: str
     title: str

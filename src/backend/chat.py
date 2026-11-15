@@ -44,6 +44,8 @@ class ChatSession:
 
 
 CHAT_INSTRUCTIONS = (
+    "Some companies have coverage packs: a working thesis, debates, research questions, and model drivers; "
+    "save_coverage_pack creates and edits them. Use a covered company's pack to frame answers about it. "
     "Claims are automatically assessed against each active thesis: thesis_assessments in Postgres and "
     "SUPPORTS/CHALLENGES edges with strength 0-100 in the graph; treat these as leads and read the claim "
     "and quote before relying on them. add_subscription sets up email alerts. "

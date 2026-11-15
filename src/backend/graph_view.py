@@ -9,7 +9,7 @@ from .clients.postgres_client import PostgresClient
 MAX_NODES = 300
 MAX_THESIS_CLAIMS = 150
 MAX_NEIGHBORS = 60
-VIEW_TYPES = {"Thesis", "Claim", "Entity", "Episode"}
+VIEW_TYPES = {"Thesis", "Claim", "Entity", "Episode", "Debate", "Question", "Driver"}
 
 
 class GraphView:

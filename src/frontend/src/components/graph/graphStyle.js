@@ -4,12 +4,18 @@ export const NODE_STYLES = {
   Episode: { fill: '--color-bg', stroke: '--color-neutral-300', radius: 6 },
   Entity: { fill: '--color-accent-600', radius: 4.5 },
   Claim: { fill: '--color-neutral-400', radius: 3 },
+  Debate: { fill: '--color-accent-400', radius: 7 },
+  Question: { fill: '--color-accent-200', radius: 5 },
+  Driver: { fill: '--color-bg', stroke: '--color-accent-500', radius: 4 },
 }
 export const EDGE_STYLES = {
   CHALLENGES: { color: '--color-error', label: 'Challenges', dashed: true },
   SUPPORTS: { color: '--color-accent-400', label: 'Supports' },
   ABOUT: { color: '--color-neutral-700', label: 'About' },
   IN_EPISODE: { color: '--color-neutral-800', label: 'In episode' },
+  HAS_DEBATE: { color: '--color-accent-700', label: 'Has debate' },
+  HAS_QUESTION: { color: '--color-accent-600', label: 'Has question' },
+  AFFECTS: { color: '--color-neutral-600', label: 'Affects' },
 }
 export const nodeId = (node) => node?.id ?? node
 export const nodeRadius = (node) => NODE_STYLES[node.type].radius + (node.type === 'Claim' ? (node.signal ?? 0) / 25 : 0)

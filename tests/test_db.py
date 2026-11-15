@@ -102,7 +102,8 @@ class GraphSchemaTests(unittest.TestCase):
             connection = ladybug.Connection(database)
             tables = {row[0] for row in connection.execute("CALL show_tables() RETURN name").get_all()}
             self.assertEqual(tables, {"Episode", "Passage", "Claim", "Thesis", "Entity", "CONTAINS",
-                                      "EVIDENCED_BY", "ABOUT", "SUPPORTS", "CHALLENGES", "MENTIONS"})
+                                      "EVIDENCED_BY", "ABOUT", "SUPPORTS", "CHALLENGES", "MENTIONS",
+                                      "Debate", "Question", "Driver", "HAS_DEBATE", "HAS_QUESTION", "AFFECTS"})
             rows = connection.execute("MATCH (:Claim {id: 'c1'})-[:EVIDENCED_BY]->(p) RETURN p.id").get_all()
             self.assertEqual(rows, [["p1"]])
             database.close()
@@ -139,7 +140,7 @@ class PostgresMigrationTests(unittest.IsolatedAsyncioTestCase):
     async def test_migrations_apply_once_and_enforce_the_design(self):
         self.assertEqual(await migrate_postgres(self.url), ["001_initial", "002_ingestion", "003_thesis_entities",
                                                             "004_episode_audio", "005_rss_watchers",
-                                                            "006_claim_signal", "007_thesis_assessments"])
+                                                            "006_claim_signal", "007_thesis_assessments", "008_coverage_packs"])
         self.assertEqual(await migrate_postgres(self.url), [])
 
         async with await psycopg.AsyncConnection.connect(self.url, autocommit=True) as conn:
@@ -182,6 +183,30 @@ class PostgresMigrationTests(unittest.IsolatedAsyncioTestCase):
                 await conn.execute("INSERT INTO thesis_assessments VALUES (%s, %s, 'supports', 25)", (claim_id, thesis))
             await conn.execute("DELETE FROM claims")
             self.assertEqual(await one("SELECT count(*) FROM thesis_assessments"), (0,))
+
+    async def test_coverage_indexes_and_reader_privileges(self):
+        await migrate_postgres(self.url)
+        db = PostgresClient(self.url)
+        from tests.test_ingestion import amzn_pack
+        await db.save_coverage_pack(**amzn_pack())
+        for table in ('coverage', 'debates', 'research_questions', 'model_drivers', 'question_drivers'):
+            self.assertTrue(await db.read_only_query(f'SELECT * FROM {table}', 20))
+        for statement in (
+            "INSERT INTO coverage SELECT entity_id, ticker, thesis_id, created_at FROM coverage",
+            "INSERT INTO debates (entity_id, label, title, our_view, counter_view) "
+            "SELECT entity_id, label, title, our_view, counter_view FROM debates LIMIT 1",
+            "INSERT INTO research_questions (debate_id, text) SELECT debate_id, text FROM research_questions LIMIT 1",
+        ):
+            with self.assertRaises(psycopg.errors.UniqueViolation):
+                await db.execute(statement)
+        indexes = await db.all("SELECT indexdef FROM pg_indexes WHERE tablename = 'coverage'")
+        self.assertTrue(any('UNIQUE' in r[0] and '(ticker)' in r[0] for r in indexes))
+        self.assertTrue(any('UNIQUE' in r[0] and '(thesis_id)' in r[0] for r in indexes))
+        for table in ('debates', 'research_questions'):
+            indexes = await db.all('SELECT indexdef FROM pg_indexes WHERE tablename = %s', table)
+            self.assertTrue(any('UNIQUE' in r[0] and 'WHERE is_active' in r[0] for r in indexes))
+        await db.execute('UPDATE research_questions SET is_active = false')
+        await db.execute('INSERT INTO research_questions (debate_id, text) SELECT debate_id, text FROM research_questions')
 
     async def test_catalog_lists_what_the_cabinet_shows(self):
         await migrate_postgres(self.url)

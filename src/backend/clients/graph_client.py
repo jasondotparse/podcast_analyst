@@ -2,7 +2,7 @@
 
 import real_ladybug as ladybug
 
-from ..ingestion.models import EpisodeGraph
+from ..ingestion.models import CoverageGraph, EpisodeGraph
 
 
 EDGE_MIN_STRENGTH = 25  # Keep weak relevant connections available for research recall.
@@ -54,6 +54,22 @@ class GraphClient:
                          "n.kind = $kind MERGE (t)-[:ABOUT]->(n)",
                          {"t": str(thesis_id), "n": str(entity_id), "name": name, "kind": kind})
 
+    def project_coverage(self, graph: CoverageGraph) -> None:
+        """Replace the company's tree from its canonical active rows, removing retired nodes."""
+        conn = ladybug.Connection(self.database)
+        for kind, ids in (("Debate", graph.all_debates), ("Question", graph.all_questions), ("Driver", graph.all_drivers)):
+            if ids:
+                conn.execute(f"MATCH (n:{kind}) WHERE n.id IN $ids DETACH DELETE n", {"ids": list(map(str, ids))})
+        for id in graph.debates:
+            conn.execute("MATCH (e:Entity {id: $e}) MERGE (d:Debate {id: $d}) MERGE (e)-[:HAS_DEBATE]->(d)",
+                         {"e": str(graph.entity_id), "d": str(id)})
+        for id, debate_id in graph.questions:
+            conn.execute("MATCH (d:Debate {id: $d}) MERGE (q:Question {id: $q}) MERGE (d)-[:HAS_QUESTION]->(q)",
+                         {"d": str(debate_id), "q": str(id)})
+        for question_id, driver_id in graph.question_drivers:
+            conn.execute("MATCH (q:Question {id: $q}) MERGE (d:Driver {id: $d}) MERGE (q)-[:AFFECTS]->(d)",
+                         {"q": str(question_id), "d": str(driver_id)})
+
     # Fixed read queries for the visual model. Passage paths become IN_EPISODE.
     def _rows(self, cypher: str, params: dict) -> list:
         return ladybug.Connection(self.database).execute(cypher, params).get_all()
@@ -65,6 +81,9 @@ class GraphClient:
             return []
         entities = self._rows("MATCH (t:Thesis)-[:ABOUT]->(e:Entity) WHERE t.id IN $ids "
                               "RETURN DISTINCT e.id ORDER BY e.id", {"ids": theses})
+        pack = self._rows("MATCH (e:Entity)-[:HAS_DEBATE]->(d:Debate)-[:HAS_QUESTION]->(q:Question)"
+                          "-[:AFFECTS]->(v:Driver) WHERE e.id IN $ids RETURN d.id, q.id, v.id ORDER BY d.id, q.id, v.id",
+                          {"ids": [row[0] for row in entities]}) if entities else []
         claims = self._rows("MATCH (c:Claim)-[r:SUPPORTS|CHALLENGES]->(t:Thesis) WHERE t.id IN $ids "
                             "RETURN c.id, max(r.strength) AS strength ORDER BY strength DESC, c.id LIMIT $n",
                             {"ids": theses, "n": max_claims})
@@ -72,7 +91,8 @@ class GraphClient:
         episodes = self._rows(
             "MATCH (c:Claim)-[:EVIDENCED_BY]->(:Passage)<-[:CONTAINS]-(e:Episode) "
             "WHERE c.id IN $ids RETURN DISTINCT e.id ORDER BY e.id", {"ids": claim_ids}) if claim_ids else []
-        return list(dict.fromkeys(theses + [row[0] for row in entities] + claim_ids + [row[0] for row in episodes]))
+        return list(dict.fromkeys(theses + [row[0] for row in entities] + [id for row in pack for id in row]
+                                  + claim_ids + [row[0] for row in episodes]))
 
     def neighbor_ids(self, node_id: str, limit: int) -> list[str] | None:
         nodes = self.view_nodes([node_id])
@@ -81,7 +101,9 @@ class GraphClient:
         rows = []
         # Use typed endpoints here too: untyped lookups can omit thesis links.
         for source, target, relationship in (("Claim", "Entity", "ABOUT"), ("Thesis", "Entity", "ABOUT"),
-                                             ("Claim", "Thesis", "SUPPORTS|CHALLENGES")):
+                                             ("Claim", "Thesis", "SUPPORTS|CHALLENGES"),
+                                             ("Entity", "Debate", "HAS_DEBATE"), ("Debate", "Question", "HAS_QUESTION"),
+                                             ("Question", "Driver", "AFFECTS")):
             signal = "CASE WHEN a.id = $id THEN NULL ELSE a.signal END" if source == "Claim" else "NULL"
             rows.extend(self._rows(
                 f"MATCH (a:{source})-[:{relationship}]->(b:{target}) WHERE a.id = $id OR b.id = $id "
@@ -103,7 +125,7 @@ class GraphClient:
         # Untyped ID lookups returned nodes from the wrong table on prod (Ladybug 0.15.3).
         # Keep the table explicit; only Entity has name/kind properties.
         rows = []
-        for kind in ("Episode", "Passage", "Claim", "Thesis"):
+        for kind in ("Episode", "Passage", "Claim", "Thesis", "Debate", "Question", "Driver"):
             rows.extend(self._rows(
                 f"MATCH (n:{kind}) WHERE n.id IN $ids RETURN n.id, '{kind}', NULL, NULL", {"ids": ids}))
         rows.extend(self._rows("MATCH (n:Entity) WHERE n.id IN $ids RETURN n.id, 'Entity', n.name, n.kind",
@@ -114,6 +136,11 @@ class GraphClient:
         if not ids:
             return []
         params = {"ids": ids}
+        structure = []
+        for source, target, rel in (("Entity", "Debate", "HAS_DEBATE"), ("Debate", "Question", "HAS_QUESTION"),
+                                    ("Question", "Driver", "AFFECTS")):
+            structure.extend(self._rows(f"MATCH (a:{source})-[:{rel}]->(b:{target}) "
+                f"WHERE a.id IN $ids AND b.id IN $ids RETURN a.id, b.id, '{rel}', NULL", params))
         stances = self._rows(
             "MATCH (a:Claim)-[r:SUPPORTS|CHALLENGES]->(b:Thesis) WHERE a.id IN $ids AND b.id IN $ids "
             "RETURN a.id, b.id, label(r), r.strength", params)
@@ -124,7 +151,7 @@ class GraphClient:
         episodes = self._rows(
             "MATCH (a:Claim)-[:EVIDENCED_BY]->(:Passage)<-[:CONTAINS]-(b:Episode) "
             "WHERE a.id IN $ids AND b.id IN $ids RETURN DISTINCT a.id, b.id", params)
-        return stances + [[a, b, "ABOUT", None] for a, b in about] + [
+        return structure + stances + [[a, b, "ABOUT", None] for a, b in about] + [
             [a, b, "IN_EPISODE", None] for a, b in episodes]
 
     def read_only_query(self, cypher: str, max_rows: int) -> list[dict]:
