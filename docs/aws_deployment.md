@@ -33,14 +33,21 @@ Caddy obtains and renews HTTPS certificates and redirects HTTP to HTTPS.
 Its certificate files live in Docker volumes. EC2 uses its IAM role to pull from
 its own ECR repository and register with SSM; it receives no local AWS keys.
 
-`beta` and `prod` are separate stacks and hosts in **us-east-1**:
+`alpha`, `beta`, and `prod` are separate stacks and hosts in **us-east-1**:
 
 | Environment | Stack | URL |
 |---|---|---|
+| alpha | `PodcastAnalyst-alpha` | `https://alpha.podcastanalystagent.com` |
 | beta | `PodcastAnalyst-beta` | `https://beta.podcastanalystagent.com` |
 | prod | `PodcastAnalyst-prod` | `https://podcastanalystagent.com` |
 
 Deploy beta first. Prod is created only if you explicitly deploy its stack.
+
+**Alpha** is an experimental testbed for new feature ideas. It is configured
+exactly like beta (16 GiB disk, same test-user password and OpenAI key), with its
+own host, ECR repository, SES identity, and initially empty databases. Use the
+same commands with `alpha` in place of `beta`; `PODCAST_ALPHA_PASSWORD` in `.env`
+matches `PODCAST_BETA_PASSWORD`.
 
 ## Prerequisites
 
@@ -397,8 +404,8 @@ then `docker compose up -d --wait app`.
 
 ## Thesis alert email (SES)
 
-Each stage owns an SES identity on its app hostname: `beta.podcastanalystagent.com` for beta,
-`podcastanalystagent.com` for prod. CDK publishes three DKIM CNAMEs in the existing zone and
+Each stage owns an SES identity on its app hostname: `alpha.podcastanalystagent.com` for alpha,
+`beta.podcastanalystagent.com` for beta, `podcastanalystagent.com` for prod. CDK publishes three DKIM CNAMEs in the existing zone and
 grants the instance role `ses:SendEmail` on that identity. Compose sets
 `PODCAST_ALERT_SENDER=alerts@${APP_DOMAIN}`; the email app link uses `PODCAST_PUBLIC_ORIGIN`.
 The SDK obtains role credentials through IMDSv2; no AWS keys enter the image or environment.

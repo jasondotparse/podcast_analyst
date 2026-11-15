@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("stage", choices=("beta", "prod"))
+    parser.add_argument("stage", choices=("alpha", "beta", "prod"))
     args = parser.parse_args()
     env_file = ROOT / ".env"
     values = dotenv_values(env_file)
