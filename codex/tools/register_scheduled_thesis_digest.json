@@ -1,0 +1,16 @@
+{
+  "type": "function",
+  "name": "register_scheduled_thesis_digest",
+  "description": "Schedule one consolidated email digest of new podcast evidence (supporting and challenging claims) for selected theses, sent on a recurring schedule in the user's timezone, e.g. 'daily at 2 PM Dubai time' is cron '0 14 * * *' with timezone 'Asia/Dubai'. This is separate from add_subscription's immediate alerts; the user may keep both. Before calling, you need the email address, the theses (look up IDs with postgres_database_query on theses; 'all my AI infrastructure theses' means the matching active theses), and the schedule (frequency, time, and timezone). If any of these is ambiguous, ask instead of guessing. Each digest covers evidence recorded between the previous scheduled time and this one, lists every selected thesis (including those with no new evidence), and shows the strongest claims first. Registering an identical schedule again returns the existing digest (status 'already_registered'). Afterwards, confirm the schedule to the user in their local time (next_run_local) and the theses covered. If overlapping_immediate_subscriptions is not empty, tell the user those theses also have immediate email alerts and offer to remove them with remove_subscription; never remove them unless the user explicitly confirms.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "email": {"type": "string"},
+      "thesis_ids": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+      "cron": {"type": "string", "description": "A standard five-field cron expression (minute hour day-of-month month day-of-week) in the user's local time, e.g. '0 14 * * *' every day at 2 PM, '0 9 * * 1' every Monday at 9 AM."},
+      "timezone": {"type": "string", "description": "IANA timezone name, e.g. 'Asia/Dubai', 'America/Chicago', 'Europe/London'."}
+    },
+    "required": ["email", "thesis_ids", "cron", "timezone"],
+    "additionalProperties": false
+  }
+}

@@ -20,6 +20,10 @@ and release scripts on its own `t3.medium`, with a 32 GiB root disk (beta stays 
 Follow the [prod runbook](aws_deployment.md#prod-deployment); never copy beta data
 or deploy a beta instance replacement to create prod.
 
+**Alpha:** `https://alpha.podcastanalystagent.com` is an experimental testbed with
+beta's exact settings (instance, 16 GiB disk, password) on its own host and
+databases. Deploy with `./scripts/deploy.py alpha`.
+
 **Audience:** Engineer joining the project on day one.  
 **Immediate milestone:** **P−1: deploy a minimal React + FastAPI application to the owner's personal AWS account, securely accessible through a web browser, with fast repeatable deployments.**
 

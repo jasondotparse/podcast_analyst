@@ -1,0 +1,14 @@
+{
+  "type": "function",
+  "name": "remove_subscription",
+  "description": "Remove immediate email alert subscriptions (the subscriptions table, created by add_subscription) for one email address and the given thesis IDs. Only call this after the user has explicitly asked for or confirmed the removal, for example after you offered to replace immediate alerts with a scheduled digest. Removes nothing else: other theses' alerts and scheduled digests are untouched. Returns the subscriptions removed; removed_count 0 means they were already gone.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "email": {"type": "string"},
+      "thesis_ids": {"type": "array", "items": {"type": "string"}, "minItems": 1}
+    },
+    "required": ["email", "thesis_ids"],
+    "additionalProperties": false
+  }
+}
