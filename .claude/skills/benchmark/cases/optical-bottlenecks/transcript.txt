@@ -1,0 +1,67 @@
+DANA WHITFIELD: Welcome back to The Margin Call. I'm Dana Whitfield. Today we're talking about the part of the AI buildout that doesn't get the headlines: the optics. Every GPU cluster needs to move enormous amounts of data between racks, and that traffic increasingly runs over light, not copper. So the transceivers, the lasers inside them, and the materials those lasers are made from have become real bottlenecks. I have two guests who look at this from very different angles. Priya Raman covers semiconductors and networking at Halcyon Capital. And Marcus Oyelaran spent eight years running optical supply chain at one of the large cloud providers before leaving last spring. Welcome, both of you.
+
+PRIYA RAMAN: Thanks, Dana. Happy to be here.
+
+MARCUS OYELARAN: Glad to be on.
+
+DANA WHITFIELD: Priya, let's start with the company most people ask me about, Corvane Semiconductor. The stock has been one of the cleaner ways to play AI networking. Where do you think we are with them?
+
+PRIYA RAMAN: Corvane is the name I have the most conviction on in the space right now. The story for the last two years was 800G transceivers, and they executed well there. But the next leg is 1.6T, and that's where I think the market is underestimating them. My model has Corvane's 1.6T unit shipments tripling in 2027 versus 2026. They have qualified parts at three of the four largest cloud buyers, and the fourth qualification should finish early next year.
+
+DANA WHITFIELD: Tripling is a big number. What does that do to the financials?
+
+PRIYA RAMAN: The important thing is the margin. Corvane's gross margin was 41% last quarter. I expect it to reach 47% by the fourth quarter of 2027. That's almost entirely mix. 1.6T modules carry meaningfully higher gross margins than 800G, because there are only two or three vendors that can ship them at volume today, so pricing is still rational. As 1.6T goes from a small slice of revenue to the majority, the blended margin moves up with it. Six points of gross margin on a business growing this fast is a lot of operating leverage.
+
+DANA WHITFIELD: Marcus, you were on the buying side of exactly these products. Does that square with what you saw?
+
+MARCUS OYELARAN: Partly. I don't disagree that 1.6T ramps hard. Where I'd push back is on how long the pricing stays rational. From the buyer's side, the playbook is always the same. You qualify a second source as fast as you can, and then you use that second source to negotiate. Every large cloud provider I know is dual-sourcing 1.6T, the same way they dual-sourced 800G. And look at what happened to 800G. In my experience 800G transceiver prices fell something like 15 to 20 percent a year once the second and third suppliers were qualified. I'd expect 1.6T to follow the same curve, maybe with a lag of a year or so.
+
+PRIYA RAMAN: That's fair, and it's in my model. I assume 1.6T pricing starts declining in the back half of 2027. The difference is that Corvane's costs are coming down faster than pricing, because of their move to a newer laser design that cuts the number of components per module. So I think the margin holds even as average selling prices fall.
+
+MARCUS OYELARAN: Maybe. I just think people underestimate how aggressive procurement teams get when the spend is this large. When I was in the seat, optics was one of the top three line items in a new data center after the accelerators themselves and power. That gets a lot of attention from finance.
+
+DANA WHITFIELD: Priya, what are the risks you worry about with Corvane, if you're the bull?
+
+PRIYA RAMAN: The biggest one is customer concentration. Corvane's top two customers, both hyperscalers, were 68% of revenue last fiscal year. That's a lot of eggs in two baskets. If either of them pauses a buildout for a quarter, or shifts share to a competitor, it shows up immediately in Corvane's numbers. I don't think that's likely in the next twelve months, given the order visibility they've talked about, but it's the risk I'd watch most closely.
+
+DANA WHITFIELD: Let's talk about the supply side, because Marcus, you mentioned to me before the show that the constraint isn't really the transceiver makers at all.
+
+MARCUS OYELARAN: Right. The transceiver companies are assemblers, in a sense. The scarce part is the laser. For the highest speed modules you need EML lasers, electro-absorption modulated lasers, and there are very few companies that can make them at volume with good yields. The one I'd point to is Talmadge Photonics. Talmadge is the laser bottleneck for this whole cycle. Almost everyone shipping 1.6T, Corvane included, is buying at least some of their EML lasers from Talmadge.
+
+DANA WHITFIELD: Is Talmadge adding capacity?
+
+MARCUS OYELARAN: They are. They're building out a new fab in Malaysia, and from what I've heard it comes online in the second half of 2027. Until then, laser supply is going to gate how many 1.6T modules the industry can actually ship, no matter how much demand there is. Which, by the way, is a risk to Priya's tripling number, not because demand isn't there but because the lasers might not be.
+
+PRIYA RAMAN: I'd say Corvane has done more than most to lock up supply. They signed a multi-year capacity agreement with Talmadge last year. But Marcus is right that nobody is fully insulated.
+
+DANA WHITFIELD: And underneath the lasers there's a materials story too.
+
+MARCUS OYELARAN: Yes, indium phosphide. The EML lasers are grown on indium phosphide substrates, and there are only a handful of substrate suppliers in the world. Lead times for indium phosphide substrates are running around 30 weeks right now. Actually, let me correct that, I'm thinking of last year's number. The latest quotes I've seen are closer to 40 weeks. Two years ago it was about 12 weeks. So it has more than tripled. When a laser maker wants to add capacity, the substrate order is one of the very first things they have to place, and it's now most of a year out.
+
+DANA WHITFIELD: That's a long lead time for something so foundational.
+
+MARCUS OYELARAN: It is. And it's a quiet risk because it doesn't show up in anyone's earnings call until it's already a problem.
+
+DANA WHITFIELD: Let's talk about co-packaged optics, because that's the thing I hear about at every conference. The idea is that instead of pluggable transceivers at the edge of the switch, you put the optics right next to the switch chip in the same package. Some people think it makes pluggable transceivers obsolete. Priya, is that an existential risk for Corvane?
+
+PRIYA RAMAN: Long term it's a real shift, but I don't think it's a near-term risk. Corvane has its own co-packaged optics program, and their light engines could end up inside those packages. But the bigger point is timing.
+
+MARCUS OYELARAN: I'll be blunt on timing. I don't see co-packaged optics hitting volume adoption until 2028 at the earliest. I know of one large cloud provider that pushed its co-packaged optics pilot back by two quarters this year because of thermal problems. When you put the lasers right next to a switch chip that's running extremely hot, laser reliability suffers. And there's a serviceability problem. With a pluggable module, if a laser fails, a technician pulls the module and slots in a new one in a couple of minutes. With co-packaged optics, a failed laser can mean replacing the whole switch. Operations teams hate that.
+
+DANA WHITFIELD: So pluggables have a few more years.
+
+MARCUS OYELARAN: At least a few more years as the volume product, yes. Co-packaged optics will show up first in specific, very high density deployments, and grow from there.
+
+PRIYA RAMAN: I agree with that. I model co-packaged optics as less than 5% of the optical interconnect market in 2027. It's a 2028 and beyond story.
+
+DANA WHITFIELD: Before we wrap, I have to ask about something. There's been chatter in the market that Corvane is in talks to acquire a small silicon photonics startup. Priya, any color?
+
+PRIYA RAMAN: I've heard the same chatter, and I can't confirm it. Management hasn't said anything, and I wouldn't put any weight on it in an investment decision. If it happened, it would make sense strategically for their co-packaged work, but that's speculation.
+
+DANA WHITFIELD: Fair enough. Last question for each of you. If you had to own one name in optics for the next two years, what would it be? Marcus, you first.
+
+MARCUS OYELARAN: I'd own Talmadge Photonics. It's the picks and shovels for the picks and shovels. Whoever wins the transceiver share battle, they're buying lasers from Talmadge, and capacity is tight, so Talmadge has pricing power the transceiver makers don't have. I'd be more cautious on the transceiver makers themselves, Corvane included, because of the pricing dynamics I talked about.
+
+PRIYA RAMAN: I'll stay with Corvane. The 1.6T ramp, the margin expansion from 41% toward 47%, and the fact that they've locked up laser supply make it my top pick. I understand Marcus's pricing concern, I just think the cost curve offsets it.
+
+DANA WHITFIELD: A genuine disagreement, which is what we like on this show. Priya Raman of Halcyon Capital, Marcus Oyelaran, thank you both. And thanks to everyone for listening to The Margin Call. We'll be back next week.

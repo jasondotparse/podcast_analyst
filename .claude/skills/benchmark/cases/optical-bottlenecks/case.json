@@ -1,0 +1,67 @@
+{
+  "name": "optical-bottlenecks",
+  "notes": "Synthetic transcript written for this benchmark. The podcast, people, and companies are fictional, so web search can't answer the questions: a good answer has to come from what ingestion extracted. It plants a self-correction (q4), an unconfirmed rumor (q5), and a topic the episode never covers (q6).",
+  "metadata": {
+    "podcast_name": "The Margin Call",
+    "title": "Optical bottlenecks in the AI buildout",
+    "description": "Dana Whitfield talks with Priya Raman (Halcyon Capital) and Marcus Oyelaran (former hyperscaler optical supply chain lead) about Corvane Semiconductor, Talmadge Photonics, indium phosphide supply, and co-packaged optics.",
+    "guests": ["Priya Raman", "Marcus Oyelaran"]
+  },
+  "questions": [
+    {
+      "id": "q1",
+      "question": "What did Priya Raman say about Corvane Semiconductor's gross margin outlook?",
+      "expected": [
+        "Priya Raman said Corvane's gross margin was 41% last quarter and she expects it to reach 47% by Q4 2027.",
+        "She attributed the expansion almost entirely to mix: 1.6T modules carry higher gross margins than 800G.",
+        "Optional context: she models 1.6T unit shipments tripling in 2027 versus 2026, and thinks cost declines offset falling prices."
+      ]
+    },
+    {
+      "id": "q2",
+      "question": "When do the guests expect co-packaged optics to reach volume adoption, and why?",
+      "expected": [
+        "Marcus Oyelaran: not until 2028 at the earliest.",
+        "One large cloud provider pushed its co-packaged optics pilot back two quarters because of thermal problems (laser reliability next to a hot switch chip).",
+        "Serviceability: a failed laser can mean replacing the whole switch, versus swapping a pluggable module.",
+        "Priya Raman agreed and models co-packaged optics at under 5% of the optical interconnect market in 2027."
+      ]
+    },
+    {
+      "id": "q3",
+      "question": "What risks to the Corvane Semiconductor bull case came up in the episode?",
+      "expected": [
+        "Customer concentration (Priya): the top two customers, both hyperscalers, were 68% of revenue last fiscal year.",
+        "Pricing pressure (Marcus): buyers dual-source, and 800G prices fell about 15-20% a year once more suppliers qualified; he expects 1.6T to follow.",
+        "Supply (Marcus): Talmadge Photonics' EML lasers gate 1.6T shipments until its Malaysia fab comes online in 2H 2027; indium phosphide substrate lead times of about 40 weeks.",
+        "Co-packaged optics was discussed as a long-term shift, but both guests saw it as not a near-term risk."
+      ]
+    },
+    {
+      "id": "q4",
+      "question": "What lead times were mentioned for indium phosphide substrates?",
+      "expected": [
+        "About 40 weeks per the latest quotes Marcus Oyelaran has seen. He first said 30 weeks, then corrected himself: 30 weeks was last year's number.",
+        "About 12 weeks two years ago, so lead times have more than tripled.",
+        "Answering 30 weeks as the current figure is wrong."
+      ]
+    },
+    {
+      "id": "q5",
+      "question": "Is Corvane Semiconductor acquiring another company?",
+      "expected": [
+        "Only an unconfirmed rumor: the host mentioned market chatter that Corvane is in talks to acquire a small silicon photonics startup.",
+        "Priya Raman said she couldn't confirm it, management hasn't said anything, and she wouldn't put weight on it.",
+        "Presenting the acquisition as fact is a serious error."
+      ]
+    },
+    {
+      "id": "q6",
+      "question": "What did the guests say about Nvidia's latest earnings?",
+      "expected": [
+        "Nothing: the episode never discusses Nvidia or its earnings.",
+        "A good answer says the ingested episode doesn't cover it. If it brings in outside information, it must clearly label it as not from the podcast."
+      ]
+    }
+  ]
+}
