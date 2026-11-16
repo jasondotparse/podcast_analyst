@@ -239,7 +239,7 @@ class PostgresClient:
                   for e in thesis_entities or []]
         changes = dict(created=0, kept=0, retired=0)
         async with await self.connect() as conn:
-            # Both authoring paths lock before writes, so concurrent saves cannot evade the global cap.
+            # Target-activating writes share this lock, so concurrent saves/restores cannot evade the cap.
             await conn.execute("LOCK TABLE theses IN SHARE ROW EXCLUSIVE MODE")
             linked = await upsert_entities(conn, [(company, 'company'), *extras])
             entity_id = next(id for id, name, kind in linked if (name, kind) == (company, 'company'))
@@ -324,6 +324,17 @@ class PostgresClient:
             return CoverageGraph(entity_id, [id for id, _ in debates], [id for id, _, _ in questions],
                 [id for (id,) in drivers], [id for id, active in debates if active],
                 [(id, d) for id, d, active in questions if active], list(dict.fromkeys(d for _, d in links)), links)
+
+    async def set_thesis_active(self, thesis_id: UUID, is_active: bool) -> dict | None:
+        """Archive or restore a thesis; returns it with `was_active`, or None if the ID is unknown."""
+        async with await self.connect() as conn, conn.cursor(row_factory=dict_row) as cursor:
+            await conn.execute("LOCK TABLE theses IN SHARE ROW EXCLUSIVE MODE")
+            await cursor.execute("UPDATE theses SET is_active = %s WHERE id = %s RETURNING id AS thesis_id, "
+                                 "description AS thesis, old.is_active AS was_active", (is_active, thesis_id))
+            row = await cursor.fetchone()
+            if row and is_active:
+                await self.check_decisions_limit(conn)
+            return row
 
     async def delete_claims(self, episode_id: UUID) -> None:
         await self.execute("DELETE FROM claims WHERE passage_id IN (SELECT id FROM passages WHERE episode_id = %s)",
@@ -510,10 +521,26 @@ class PostgresClient:
 
     # ---- Watch sources (RSS watchers) ---------------------------------------
 
-    async def add_watch_source(self, url: str, description: str, ingest_since: datetime) -> bool:
-        """False if the URL is already registered."""
-        return await self.one("INSERT INTO watch_sources (url, description, ingest_since) VALUES (%s, %s, %s) "
-                              "ON CONFLICT (url) DO NOTHING RETURNING id", url, description, ingest_since) is not None
+    async def add_watch_source(self, url: str, description: str, ingest_since: datetime) -> str | None:
+        """'registered' for a new URL; 'resumed' for a stopped one, which restarts from ingest_since (never earlier
+        than before, so nothing published while it was stopped is backfilled); None if it is already watched."""
+        async with await self.connect() as conn:
+            if await (await conn.execute(
+                    "UPDATE watch_sources SET is_active = true, ingest_since = GREATEST(ingest_since, %s) "
+                    "WHERE url = %s AND NOT is_active RETURNING id", (ingest_since, url))).fetchone():
+                return "resumed"
+            inserted = await (await conn.execute(
+                "INSERT INTO watch_sources (url, description, ingest_since) VALUES (%s, %s, %s) "
+                "ON CONFLICT (url) DO NOTHING RETURNING id", (url, description, ingest_since))).fetchone()
+            return "registered" if inserted else None
+
+    async def watch_source(self, source_id: UUID) -> dict | None:
+        rows = await self.dicts("SELECT id AS watch_source_id, COALESCE(description, url) AS podcast, url AS feed_url, "
+                                "is_active FROM watch_sources WHERE id = %s", source_id)
+        return rows[0] if rows else None
+
+    async def stop_watch_source(self, source_id: UUID) -> None:
+        await self.execute("UPDATE watch_sources SET is_active = false WHERE id = %s", source_id)
 
     async def due_watch_sources(self, interval: timedelta) -> list[WatchSource]:
         """Active sources not checked within the interval, least recently checked first."""
@@ -555,8 +582,12 @@ class PostgresClient:
 
     # ---- Graph view ------------------------------------------------------
 
+    async def active_thesis_ids(self) -> list[str]:
+        return [str(thesis_id) for (thesis_id,) in await self.all("SELECT id FROM theses WHERE is_active ORDER BY id")]
+
     async def graph_labels(self, ids: list[str]) -> dict:
-        """Batch canonical labels and source details; no graph node is shown as a bare UUID."""
+        """Batch canonical labels and source details; no graph node is shown as a bare UUID. Archived theses get no
+        label, so the view drops them like stale nodes."""
         if not ids:
             return {}
         labels = {}
@@ -566,7 +597,7 @@ class PostgresClient:
                 "pod.name AS podcast, e.title AS episode, e.published_at, e.source_url "
                 "FROM claims c JOIN passages p ON p.id = c.passage_id JOIN episodes e ON e.id = p.episode_id "
                 "JOIN podcasts pod ON pod.id = e.podcast_id WHERE c.id = ANY(%s::uuid[])",
-                "SELECT id, description AS label FROM theses WHERE id = ANY(%s::uuid[])",
+                "SELECT id, description AS label FROM theses WHERE is_active AND id = ANY(%s::uuid[])",
                 "SELECT id, label || ' · ' || title AS label, our_view, counter_view FROM debates "
                 "WHERE is_active AND id = ANY(%s::uuid[])",
                 "SELECT q.id, q.text AS label, d.label || ' · ' || d.title AS debate FROM research_questions q "

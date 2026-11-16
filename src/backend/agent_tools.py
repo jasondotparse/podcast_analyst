@@ -1,6 +1,7 @@
 """Handlers for the chat agent's tools (definitions in codex/tools/): three read-only
-research tools, add_thesis, add_subscription, and register_rss_to_watcher, plus the alpha-only scheduled digest
-tools. Each passes the model's arguments straight to the clients or services."""
+research tools; add_thesis, register_rss_to_watcher, and add_subscription, each with an update_* tool that turns
+it off or back on; plus the alpha-only scheduled digest tools. Each passes the model's arguments straight to the
+clients or services."""
 
 import json
 import re
@@ -12,10 +13,10 @@ from .clients.postgres_client import PostgresClient
 
 
 MAX_ROWS, MAX_CHARS = 200, 40_000
-CHAT_TOOLS = ("vector_search", "graph_query", "postgres_database_query", "add_thesis", "register_rss_to_watcher",
-              "add_subscription", "save_coverage_pack")
+CHAT_TOOLS = ("vector_search", "graph_query", "postgres_database_query", "add_thesis", "update_thesis",
+              "register_rss_to_watcher", "update_subscription", "add_subscription", "update_notification", "save_coverage_pack")
 # Alpha experiment: advertised and callable only when main.py enables scheduled digests.
-DIGEST_TOOLS = ("register_scheduled_thesis_digest", "remove_subscription", "remove_scheduled_thesis_digest")
+DIGEST_TOOLS = ("register_scheduled_thesis_digest", "remove_scheduled_thesis_digest")
 
 
 def normalize_email(email: str) -> str:
@@ -79,6 +80,19 @@ class AgentTools:
         return {"thesis_id": thesis_id, "saved": description.strip(),
                 "about": [f"{name} ({kind})" for _, name, kind in linked]}
 
+    async def update_thesis(self, thesis_id: str, is_active: bool):
+        """Archive or restore a thesis. Only Postgres changes: everything downstream already skips inactive theses."""
+        [thesis_id] = parse_thesis_ids([thesis_id])
+        thesis = await self.db.set_thesis_active(thesis_id, is_active)
+        if thesis is None:
+            raise ValueError(f"No thesis with ID {thesis_id}")
+        was_active = thesis.pop("was_active")
+        if is_active:
+            status = "already_active" if was_active else "restored"
+        else:
+            status = "archived" if was_active else "already_archived"
+        return {**thesis, "is_active": is_active, "status": status}
+
     async def register_rss_to_watcher(self, feed_url: str):
         return await self.watcher.register(feed_url)
 
@@ -88,18 +102,27 @@ class AgentTools:
         self.graph.project_coverage(await self.db.coverage_graph(saved['entity_id']))
         return saved
 
+    async def update_subscription(self, watch_source_id: str, is_active: bool):
+        try:
+            source_id = UUID(watch_source_id)
+        except ValueError:
+            raise ValueError(f"Invalid watched feed ID: {watch_source_id}") from None
+        return await self.watcher.set_active(source_id, is_active)
+
     async def add_subscription(self, email: str, thesis_ids: list[str]):
         email = normalize_email(email)
         return {"email": email, "subscribed_to": await self.db.add_subscription(email, parse_thesis_ids(thesis_ids))}
 
-    async def register_scheduled_thesis_digest(self, email: str, thesis_ids: list[str], cron: str, timezone: str):
-        return await self.digests.register(normalize_email(email), parse_thesis_ids(thesis_ids), cron, timezone)
-
-    async def remove_subscription(self, email: str, thesis_ids: list[str]):
-        """Remove immediate alert subscriptions (not scheduled digests). Idempotent."""
+    async def update_notification(self, email: str, thesis_ids: list[str], is_active: bool):
+        """Turn immediate alert subscriptions on (like add_subscription) or off; never touches scheduled digests."""
+        if is_active:
+            return await self.add_subscription(email, thesis_ids)
         email = normalize_email(email)
         removed = await self.db.remove_subscriptions(email, parse_thesis_ids(thesis_ids))
         return {"email": email, "removed_count": len(removed), "removed": removed}
+
+    async def register_scheduled_thesis_digest(self, email: str, thesis_ids: list[str], cron: str, timezone: str):
+        return await self.digests.register(normalize_email(email), parse_thesis_ids(thesis_ids), cron, timezone)
 
     async def remove_scheduled_thesis_digest(self, subscription_id: str):
         try:

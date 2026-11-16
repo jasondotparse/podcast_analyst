@@ -74,9 +74,11 @@ class GraphClient:
     def _rows(self, cypher: str, params: dict) -> list:
         return ladybug.Connection(self.database).execute(cypher, params).get_all()
 
-    def thesis_neighborhood(self, thesis_id: str | None, max_claims: int) -> list[str]:
+    def thesis_neighborhood(self, thesis_ids: list[str], max_claims: int) -> list[str]:
+        if not thesis_ids:
+            return []
         theses = [row[0] for row in self._rows(
-            "MATCH (t:Thesis) WHERE $id IS NULL OR t.id = $id RETURN t.id ORDER BY t.id", {"id": thesis_id})]
+            "MATCH (t:Thesis) WHERE t.id IN $ids RETURN t.id ORDER BY t.id", {"ids": thesis_ids})]
         if not theses:
             return []
         entities = self._rows("MATCH (t:Thesis)-[:ABOUT]->(e:Entity) WHERE t.id IN $ids "

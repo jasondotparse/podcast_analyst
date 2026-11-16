@@ -1,0 +1,14 @@
+{
+  "type": "function",
+  "name": "update_subscription",
+  "description": "Stop watching a podcast feed (is_active false), so no more of its episodes are ingested, or resume watching a stopped one (is_active true). These are the podcast feeds registered with register_rss_to_watcher (the watch_sources table), not email alerts; for those, see update_notification. Only call this when the user asks. Find the ID with postgres_database_query on watch_sources (description holds the podcast's name); if several feeds plausibly match, ask which one. Episodes already ingested stay searchable, and an episode already queued still finishes. Resuming re-validates the feed and, like a new registration, ingests its newest episode and later ones; episodes published while it was stopped are not ingested. Returns status 'stopped', 'already_stopped', 'resumed', 'already_registered' (it was still being watched), or 'invalid' (with the reason). Confirm to the user what changed.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "watch_source_id": {"type": "string", "description": "watch_sources.id"},
+      "is_active": {"type": "boolean", "description": "false to stop watching the podcast, true to resume."}
+    },
+    "required": ["watch_source_id", "is_active"],
+    "additionalProperties": false
+  }
+}

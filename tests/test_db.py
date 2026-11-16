@@ -75,9 +75,10 @@ class GraphSchemaTests(unittest.TestCase):
                              "CREATE (c:Claim {id: $id, signal: $signal})-[:SUPPORTS {strength: $strength}]->(t), "
                              "(c)-[:EVIDENCED_BY]->(p), (c)-[:ABOUT]->(e)",
                              {"id": claim, "signal": signal, "strength": strength})
-            self.assertEqual(graph.thesis_neighborhood(None, 2), ['t', 'e', 'high', 'null', 'ep'])
-            self.assertEqual(graph.thesis_neighborhood('t', 1), ['t', 'e', 'high', 'ep'])
-            self.assertEqual(graph.thesis_neighborhood('missing', 2), [])
+            self.assertEqual(graph.thesis_neighborhood(['t', 'missing'], 2), ['t', 'e', 'high', 'null', 'ep'])
+            self.assertEqual(graph.thesis_neighborhood(['t'], 1), ['t', 'e', 'high', 'ep'])
+            for missing in (['missing'], []):
+                self.assertEqual(graph.thesis_neighborhood(missing, 2), [])
             self.assertEqual(graph.neighbor_ids('t', 60), ['e', 'high', 'low', 'null'])
             self.assertEqual(graph.neighbor_ids('e', 2), ['t', 'high'])
             self.assertEqual(graph.neighbor_ids('ep', 60), ['high', 'low', 'null'])

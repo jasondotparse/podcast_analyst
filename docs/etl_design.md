@@ -180,7 +180,9 @@ gets a separate plain-text email, strongest first, at most ten claims with quote
 The closing app link invites investigation; the analyst decides whether to revise a thesis.
 
 `add_subscription` normalizes the address and checks every thesis is active. “All my theses”
-means currently active theses only; future theses need a new subscription. Email is disabled
+means currently active theses only; future theses need a new subscription. `update_notification`
+turns an address's alerts for chosen theses off (deletes the rows) or back on. Archiving a thesis
+with `update_thesis` pauses its alerts without deleting subscriptions, so they resume on restore. Email is disabled
 when `PODCAST_ALERT_SENDER` is unset: subject/body are logged and alerts stay pending. Retries
 may repeat these local logs, but never create a duplicate alert row. SES errors mark failed
 and fail the job visibly; retries skip sent alerts. Partial recipient failures may resend
@@ -199,8 +201,8 @@ means the sweep will not repair them automatically. Manually re-project affected
 The chat-only `save_coverage_pack` tool stores a company's working thesis, debates with both sides,
 open research questions, and their model drivers. Immutable wording keeps future pair assessments
 valid; complete saves retire omitted debates/questions. Driver links are analyst structure, never
-judgment targets. The 200-question Decisions guard applies to both pack saves and standalone thesis
-creation, with transaction rollback. This first release projects structure only; question reflection
+judgment targets. The 200-question Decisions guard applies to pack saves, standalone thesis
+creation, and thesis restoration, with transaction rollback. This first release projects structure only; question reflection
 and question-based email follow in the stacked release.
 
 ## Key decisions and trade-offs
@@ -289,7 +291,7 @@ and question-based email follow in the stacked release.
 
 18. **Company-centered coverage with immutable wording.** Debate and question IDs denote exact
     wording; full saves retain matching IDs and retire omissions. Drivers are reusable forecast lines.
-19. **Guard the single Decisions call at authoring time.** Both write paths enforce the same
+19. **Guard the single Decisions call at authoring time.** Target-activating writes enforce the same
     200-question limit, avoiding a permanent reflection failure on newly ingested claims.
 
 ## Models and APIs
@@ -407,6 +409,11 @@ validation, alert gates, separate recipients, failed/sent retries, and disabled 
 `test_db.py` checks migration 007, stance/strength constraints, uniqueness, and cascading deletion.
 
 ## Verification
+
+**PR #43 integration — November 15, 2026:** merged the update tools from alpha into coverage packs,
+retaining archive/restore graph filtering, watched-feed stop/resume, and notification updates. All 96
+backend tests and the frontend build passed. Thesis restore now shares the transactional Decisions
+limit guard with pack saves and `add_thesis`; a failed restore at the limit leaves the thesis archived.
 
 **Coverage packs retargeted to alpha — November 15, 2026:** merged alpha's existing scheduled-digest
 changes into the feature branch, retaining its gated tools, worker, and migration. All 94 backend
@@ -602,9 +609,12 @@ WatcherService.run: one in-process asyncio task, every 60 s
   `httpx2` (already installed for `openai`) does the HTTP.
 
 **Limitations (deliberately deferred):**
-- Watcher jobs show in the UI's status bar like uploads, but there is no UI or API to list,
-  pause, or remove feeds. Ask Codex (it can read `watch_sources`),
-  or set `is_active = false` in SQL.
+- Watcher jobs show in the UI's status bar like uploads, but there is no UI or API to
+  pause or remove feeds. Ask Codex: "Stop watching All-In" calls `update_subscription`, which sets
+  `is_active = false` (already ingested episodes stay; a queued job still finishes). Resuming, or asking
+  to watch the same feed URL again, re-registers it: like a new registration, it starts from the feed's
+  newest episode (`ingest_since` only moves forward), so episodes published while it was stopped are
+  not ingested.
 - Episodes that leave a feed before they are queued are missed. An episode whose
   `pubDate` is earlier than `ingest_since` is never ingested, and undated episodes are ignored.
 - Video-only enclosures and HTML/JSON transcripts are not supported. A broken
@@ -665,7 +675,7 @@ chat: "Send me a daily thesis digest at 2 PM Dubai time, covering all my AI infr
        ├─ the same address + cron + timezone + set of theses already active? → return it ('already_registered')
        ├─ INSERT cron_subscriptions(..., next_run_at = next occurrence, in UTC)
        └─ return the schedule in local time + this address's immediate subscriptions to the same theses
-            → the agent offers to remove those (remove_subscription), only on explicit confirmation
+            → the agent offers to turn those off (update_notification), only on explicit confirmation
 
 DigestService.run: one in-process asyncio task, every 60 s
   for each active schedule with next_run_at <= now:
@@ -705,11 +715,11 @@ DigestService.run: one in-process asyncio task, every 60 s
   `postgres_database_query` on `cron_subscriptions` (asking if several match) and calls
   `remove_scheduled_thesis_digest`, which sets `is_active = false`. Rows are never deleted.
 - **Code:** `ingestion/digest_service.py` (`DigestService`, `render_digest`, and the cron helpers),
-  migration `008_cron_subscriptions.sql`, the three tools in `codex/tools/`, and their handlers in
-  `AgentTools`. Tests: `tests/test_digests.py` (mocked email, injected clock).
+  migration `008_cron_subscriptions.sql`, the two digest tools in `codex/tools/`, and their handlers in
+  `AgentTools`. Turning off overlapping immediate alerts uses the always-available `update_notification`. Tests: `tests/test_digests.py` (mocked email, injected clock).
 
 **Enabling it (alpha only).** `main.py` creates the `DigestService`, starts its task beside the
-ingestion worker and watcher, and advertises the three tools only when
+ingestion worker and watcher, and advertises the two digest tools only when
 `PODCAST_ENABLE_SCHEDULED_DIGESTS=1`. Otherwise nothing starts, chat threads never see the
 tools, and a call to one is refused ("Scheduled digests are not enabled"). The migration runs
 everywhere and leaves an empty table. In alpha, `./scripts/configure_runtime.py alpha` adds the
@@ -738,7 +748,7 @@ the flag on and no SES sender, so the digest was rendered to the log and recorde
 - "Send me a daily thesis digest at 2 PM Dubai time, covering all my AI infrastructure theses."
   Codex chose the two AI theses (not Costco) and registered `0 14 * * *` / `Asia/Dubai` (next run
   10:00 UTC). It confirmed 2 PM Dubai and offered to remove the two overlapping immediate alerts.
-  After "yes", `remove_subscription` deleted exactly those two rows.
+  After "yes", `remove_subscription` (since renamed `update_notification`) deleted exactly those two rows.
 - A synthetic test-fixture transcript was uploaded to create relevant evidence (9 supporting or
   challenging assessments), and a second digest was registered for 10:42 PM Chicago. It fired at
   22:42:31 with window Nov 12 10:42 PM to Nov 13 10:42 PM, both theses, all 9 claims strongest
