@@ -74,6 +74,7 @@ class EpisodeGraph:
     claims: list[tuple[UUID, UUID, int | None]]  # (claim_id, passage_id, signal)
     entity_links: list[EntityLink]
     stances: list[tuple[UUID, UUID, str, int]] = field(default_factory=list)
+    informs: list[tuple[UUID, UUID, str, int]] = field(default_factory=list)
 
 
 @dataclass
@@ -87,6 +88,7 @@ class CoverageGraph:
     questions: list[tuple[UUID, UUID]]  # (question_id, debate_id)
     drivers: list[UUID]
     question_drivers: list[tuple[UUID, UUID]]
+    informs: list[tuple[UUID, UUID, str, int]] = field(default_factory=list)
 
 
 @dataclass

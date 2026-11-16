@@ -1,0 +1,25 @@
+Host Maya Chen: Welcome to Cloud Capital Lab. This is a fictional interview for a software demonstration. Our guest, Elena Vale, is the fictional chief financial officer of fictional frontier-model company Meridian Forge. Every company-specific contract number in this interview is invented. We are examining how concentrated demand from frontier AI laboratories changes the economics of their cloud suppliers, including pricing, financing, flexibility, hardware utilization, and the allocation of investment returns. Elena, what did your procurement team negotiate in its most recent infrastructure agreement?
+
+Elena Vale: Meridian Forge signed a fictional five-year cloud commitment with AWS in this fictional scenario. The headline commitment was $4 billion. Our procurement team obtained a 28 percent discount from the provider's published accelerator-instance prices, compared with a 12 percent discount in our previous agreement. The discount applies to consumed compute throughout the first three years. It does not require us to buy equity in the provider. We secured those terms by presenting credible bids from three competing cloud suppliers and offering a larger committed training workload.
+
+Host Maya Chen: Was the published commitment an unconditional obligation, and what financing did the provider supply?
+
+Elena Vale: No. Twenty percent of the commitment can move between training and inference products each quarter without a repricing fee. Another fifteen percent can be deferred for up to twelve months if our next model architecture requires less training compute than planned. AWS also provided $300 million of financing support through credits redeemable over the first eighteen months. Those credits reduce our cash payments for consumed services, so they lower the effective price beyond the stated percentage discount. The supplier carries that financing cost during the credit period.
+
+Host Maya Chen: What protection does the cloud supplier retain if your computing requirements change?
+
+Elena Vale: We must still pay for sixty-five percent of the original scheduled capacity each year, even if we do not use it. That minimum is binding. If we terminate the agreement early, the supplier receives a payment equal to nine months of that minimum commitment. It can resell deferred capacity to other customers. There is no guarantee that resale will recover the original margin. The contract caps the provider's annual power-price pass-through at eight percent, leaving it exposed if electricity costs rise more sharply.
+
+Host Maya Chen: How much bargaining power came from your share of the supplier's growth?
+
+Elena Vale: Our workload accounts for thirty percent of AWS's contracted incremental accelerator demand next year. We used that concentration directly in negotiations. A competing supplier offered a similar delivery schedule, so we could threaten to shift the next training cluster without abandoning our existing software tools. Our engineers completed a portability trial in six weeks. That reduced the switching cost that had previously protected the incumbent's pricing. However, migration of our production inference service would still require approximately six months of engineering work.
+
+Host Maya Chen: Did custom silicon savings stay with the supplier or flow through to your laboratory?
+
+Elena Vale: In our separate fictional custom-chip pilot, the provider measured a twenty-five percent lower cost per completed inference workload than its comparable accelerator service. The offered customer price was only ten percent lower. On those measured workloads, the provider retained the remaining cost advantage before accounting for software-development expense. We have not established whether those results generalize to every model. In particular, memory-heavy workloads performed differently, and our agreement does not promise the same savings when the model architecture changes.
+
+Host Maya Chen: Can you estimate revenue or return on an additional gigawatt of infrastructure from these contracts?
+
+Elena Vale: We cannot. Our figures describe purchased service capacity and customer payments, not the supplier's entire construction, power, networking, and hardware replacement budget. We do not have a verified annual revenue-per-gigawatt estimate or a full cash payback calculation. A large commitment is therefore not itself a measurement of the supplier's return on invested capital. The discount, credit schedule, utilization floor, and flexibility clauses are known terms of this fictional agreement; the supplier's eventual investment return remains unknown.
+
+Host Maya Chen: Thank you. This fictional example illustrates contract mechanics for testing evidence retrieval. It makes no claim that Amazon, AWS, or any real frontier laboratory signed these terms.

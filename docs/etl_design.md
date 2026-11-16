@@ -58,9 +58,9 @@ async def run_job(job):
 | `embed` | Embed passages `WHERE embedding IS NULL`, in batches. | none are NULL |
 | `extract_claims` | One Codex thread for the whole episode (below). It reads the transcript with SQL and writes claims one at a time with `write_claim`. When its turn completes, set `episodes.claims_extracted_at`. | `claims_extracted_at` is set; otherwise first delete claims left by an interrupted run |
 | `rank` | One Decisions API call per claim (8 at a time) with three `score` questions, each rated against five anchored levels: `specificity`, `materiality`, `source_standing`. Each becomes a 0–100 column on `claims`, and `signal` is their mean ([Claim ranking](#claim-ranking)). | `claims.signal` is set; it scores only `WHERE signal IS NULL` |
-| `reflect` | Decisions assesses each claim against missing active theses; saves stance and strength, including unrelated. | the pair already has a `thesis_assessments` row |
-| `project_graph` | Deterministic `MERGE`s from Postgres: Episode, Passage, `CONTAINS`, Claim (with `signal`), `EVIDENCED_BY`, Entity, `ABOUT` (Claim→Entity), and `MENTIONS` (Passage→Entity, derived from that passage's claim entities); replace `SUPPORTS`/`CHALLENGES` edges with strength ≥25. | never; `MERGE` makes it a safe full rerun |
-| `notify` | Snapshot high-signal challenges and subscribers; send one plain-text SES email per recipient. | alert is already `sent`; disabled email only logs |
+| `reflect` | Decisions assesses each claim against missing active theses and research questions; saves all pairs, including unrelated/zero strength. | the pair already has a `thesis_assessments` or `question_assessments` row |
+| `project_graph` | Deterministic `MERGE`s from Postgres: Episode, Passage, `CONTAINS`, Claim (with `signal`), `EVIDENCED_BY`, Entity, `ABOUT` (Claim→Entity), and `MENTIONS` (Passage→Entity, derived from that passage's claim entities); replace `SUPPORTS`/`CHALLENGES` and `INFORMS` edges with strength ≥25. | never; `MERGE` makes it a safe full rerun |
+| `notify` | Snapshot high-signal thesis challenges/question answers and subscribers; send one plain-text SES email per recipient. | alert is already `sent`; disabled email only logs |
 
 Retrying a job means running the whole list again; finished work is skipped. On
 startup, reset `running` jobs to `pending`. An interrupted extraction thread is abandoned,
@@ -198,8 +198,29 @@ The chat-only `save_coverage_pack` tool stores a company's working thesis, debat
 open research questions, and their model drivers. Immutable wording keeps future pair assessments
 valid; complete saves retire omitted debates/questions. Driver links are analyst structure, never
 judgment targets. The 200-question Decisions guard applies to both pack saves and standalone thesis
-creation, with transaction rollback. This first release projects structure only; question reflection
-and question-based email follow in the stacked release.
+creation, with transaction rollback.
+
+The same reflection call now includes two questions per missing active research question:
+`question_stance:<id>` favors our view (`supports`), the counter view (`challenges`), or neither
+(`neutral`). Stance compares BOTH parent-debate views from the covered company's perspective,
+never a yes/no answer to the research question; `question_strength:<id>` asks how much the claim answers the question, in either direction.
+The five anchors are 0 no bearing, 1 tangential, 2 indirect through a related company/segment/trend,
+3 direct but partial or qualitative, and 4 a direct answer with figures/terms/timelines. The weighted
+level maps to 0–100 as before. A refusal on either question saves `neutral` / 0; all pairs persist
+with conflict-do-nothing. Thesis `unrelated` behavior is unchanged. No driver judgments are requested.
+
+The idle sweep assesses missing thesis/question pairs across episodes and projects both stance and
+INFORMS edges; it never notifies. Episode projection includes INFORMS, and rebuilding coverage
+restores active questions' existing evidence. Research neighborhoods include those claims within the
+same strongest-first claim cap.
+
+Question alerts require an active question/debate, question strength ≥75 (direct evidence), claim
+signal ≥60 (NULL excluded), and an active subscribed working thesis. Any stance qualifies. Their
+matches are unioned with thesis challenges into the existing episode/thesis alert. Plain-text email
+groups evidence by debate then question, lists the question's drivers, quote, speaker, source, scores
+and lean; each claim appears once under its strongest question, followed by thesis-only challenges.
+The ten-claim total cap and send/retry/failure behavior stay in place. Thesis-only emails retain
+their exact prior layout. The renderer arranges stored facts without generated implications.
 
 ## Key decisions and trade-offs
 
@@ -290,6 +311,11 @@ and question-based email follow in the stacked release.
 19. **Guard the single Decisions call at authoring time.** Both write paths enforce the same
     200-question limit, avoiding a permanent reflection failure on newly ingested claims.
 
+20. **Research questions are the judgment targets.** Strength measures relevance, while stance
+    records the lean toward a debate's two views; a direct neutral answer can still alert.
+21. **Reuse working-thesis subscriptions and alert identity.** Pack evidence widens the match set;
+    driver links organize forecast context without estimating impacts or writing conclusions.
+
 ## Models and APIs
 
 - **Transcription:** [`gpt-transcribe`](https://developers.openai.com/api/docs/guides/speech-to-text)
@@ -306,7 +332,7 @@ and question-based email follow in the stacked release.
   plus ordered `levels` (`label`, `description`); the answer's `score` is the
   probability-weighted level index, with a `confidence` we do not store. About 600 input tokens
   per claim at $0.10 per million, so well under a cent per episode.
-- **Reflection:** Decisions (`gpt-6-luna`), two questions per missing active thesis, one request per claim.
+- **Reflection:** Decisions (`gpt-6-luna`), two questions per missing active thesis or research question, one request per claim.
 - **Email:** boto3 `sesv2.send_email` in `asyncio.to_thread`, us-east-1, instance-role credentials.
 - **Embeddings:** `text-embedding-3-large` with `dimensions=1536`. Query-time
   embeddings (Codex `vector_search`) must use the same model and `dimensions`.
@@ -400,9 +426,66 @@ validation/rollback, graph labels/links and reopen, indexes and reader permissio
 Reflection tests extend `test_ingestion.py` with fake Decisions/email clients: pair idempotency,
 refusals, inactive theses, sweep limits/errors, stance replacement and thresholds, subscription
 validation, alert gates, separate recipients, failed/sent retries, and disabled delivery.
-`test_db.py` checks migration 007, stance/strength constraints, uniqueness, and cascading deletion.
+`test_db.py` checks migrations 007–009, stance/strength constraints, uniqueness, reader privileges,
+and cascading deletion. Question tests cover one combined call, refusals, retry/retirement, no driver
+judgments, across-episode backfill, INFORMS thresholds/rebuilds, question-only and neutral alert gates,
+claim deduplication and the shared email cap.
 
 ## Verification
+
+**Research-question reflection and alerts — November 15, 2026:** 81 backend tests passed against
+local Postgres; frontend build passed. Startup applied `009`; graph schema reopened idempotently.
+The existing local RSS job finished before idle backfill began. Local assessed 553 claims / 1,659
+question pairs in 37.2 s from first to last saved pair; beta assessed 610 / 1,830 in 46.4 s.
+Both reached zero missing pairs. The sweep created no alerts. These are assessment windows, not
+save-to-completion latency while an ingestion is running.
+
+Playwright verified research, working-thesis subscription, TXT upload, INFORMS rendering and job
+retry locally and through beta's login page. The 702-word fictional Meridian Forge interview
+(`tests/fixtures/coverage_interview.txt`) completed in 61 s locally (17 claims, one pending alert,
+email logged) and 56 s on beta (19 claims, one sent alert, nine matches deduplicated to eight claims).
+The owner pasted the received beta email, confirming debate, question, drivers, quotes, speaker,
+scores, lean and app link. Retry retained the same alert and sent timestamp. Beta job
+`8c6cbfcf-cccb-4130-b27c-731b51429620`, alert `4e00b6f4-6be3-46d7-81a0-581f596dd178`.
+
+Initial distributions after that interview (active questions): local 1,710 pairs = 32 challenges,
+1,644 neutral, 34 supports; strength bins 0–24 / 25–49 / 50–74 / 75–100 = 1,208 / 486 / 6 / 10.
+Beta 1,887 pairs = 41 challenges, 1,829 neutral, 17 supports; bins = 1,140 / 714 / 24 / 9.
+By-eye review covered the 20 strongest existing pairs and 20 after ingestion. A local headline-commitment-only claim was a borderline relevance false positive at strength 88;
+five of the eight emailed leans appeared reversed (discounts/credits/
+flexibility vs minimum-payment/termination protections). Some indirect hardware claims scored
+49–50; a direct concentration claim scored 71 and missed the 75 gate. Scores need analyst review.
+
+With owner approval, stance instructions were tightened to compare both parent views from the
+covered company's perspective, followed by explicit concession/protection examples. Intermediate
+fresh-claim runs corrected concession labels but still reversed protections. A read-only live
+Decisions calibration on copied claims then correctly labeled discounts/credits as challenges,
+minimum payments/termination penalties as supports, and contract size as neutral. A mixed claim
+about competitive bids plus a larger workload still leaned supports, illustrating residual ambiguity.
+Existing saved assessments and emails were deliberately left intact; wording/pair history was preserved.
+
+The final calibrated fixture (`tests/fixtures/coverage_interview_calibrated.txt`) completed in 81 s
+locally (19 claims; one pending alert with nine matches) and 66 s on beta (21 claims; one sent alert
+with seven matches). Both retries completed with one alert per episode. Beta release
+`3e9e68c50010-20261116T000449-7d8158` used the final working tree, without CDK changes.
+Beta job `d4a0de57-5d0d-41cf-90cd-a9be9a0e49ba`; alert `aa51a568-9155-4912-8de0-a940af7d6f18`.
+Playwright checked stored discounts/credits as challenges and minimum payments/termination penalties
+as supports, then rendered the graph and retried. Local and beta had no browser page errors.
+
+**Remaining model-quality limitation:** calibration improved the core cases, but did not eliminate
+errors. The final local power-cost cap leaned supports at strength 87 although it leaves AWS exposed;
+a headline commitment alone was neutral but strength 78, a relevance false positive at the gate.
+Beta retained-cost-advantage evidence leaned challenges at strength 76; power-cost and portability
+leans were also reversed below the gate. The neutral contract-size claim scored 70 on beta. A
+concentration claim scored 74 on beta and missed the gate. These observations are recorded for
+review, with PR 2 kept draft; they are not corrected by changing stored facts or suppressing a stance.
+
+Final active-question totals, including all three fictional runs and unchanged earlier assessments:
+local 1,815 pairs = 67 challenges (16–96), 1,702 neutral (0–78), 46 supports (12–96);
+strength bins 0–24 / 25–49 / 50–74 / 75–100 = 1,243 / 528 / 16 / 28.
+Beta 2,028 pairs = 88 challenges (1–99), 1,914 neutral (0–74), 26 supports (4–98);
+bins = 1,176 / 779 / 53 / 20. There are three distinct test episodes/alerts in each environment,
+not duplicate alerts from retry. Local email remained disabled; beta sent only to the approved address.
 
 **Coverage packs — beta, November 15, 2026:** release `5412f586dedd-20261115T234509-5a466f`
 (working tree; SSM deployment succeeded, app/db healthy). Playwright signed in through the login

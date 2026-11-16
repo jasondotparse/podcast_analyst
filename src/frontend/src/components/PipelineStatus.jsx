@@ -10,7 +10,7 @@ const STEP_LABELS = {
   embed: 'Embedding passages',
   extract_claims: 'Extracting claims (takes a few minutes)',
   rank: 'Ranking claims',
-  reflect: 'Checking claims against theses',
+  reflect: 'Checking claims against theses and research questions',
   notify: 'Sending alerts',
   project_graph: 'Updating the knowledge graph',
 }

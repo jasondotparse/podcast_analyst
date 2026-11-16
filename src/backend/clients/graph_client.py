@@ -31,6 +31,19 @@ class GraphClient:
                          {"c": str(link.claim_id), "p": str(link.passage_id), "n": str(link.entity_id),
                           "name": link.name, "kind": link.kind})
         self.project_stances([row[0] for row in graph.claims], graph.stances)
+        self.project_informs([row[0] for row in graph.claims], graph.informs)
+
+    def project_informs(self, claim_ids: list, edges: list) -> None:
+        """Replace these claims' question evidence; matching questions never revives retired wording."""
+        conn = ladybug.Connection(self.database)
+        if claim_ids:
+            conn.execute("MATCH (c:Claim)-[r:INFORMS]->(:Question) WHERE c.id IN $ids DELETE r",
+                         {"ids": list(map(str, claim_ids))})
+        for claim_id, question_id, stance, strength in edges:
+            if strength >= EDGE_MIN_STRENGTH:
+                conn.execute("MATCH (q:Question {id: $q}) MERGE (c:Claim {id: $c}) "
+                             "MERGE (c)-[r:INFORMS]->(q) SET r.stance = $stance, r.strength = $strength",
+                             {"q": str(question_id), "c": str(claim_id), "stance": stance, "strength": strength})
 
     def project_stances(self, claim_ids: list, edges: list) -> None:
         """Replace stance edges from Postgres, so a changed stance never leaves its opposite behind."""
@@ -69,6 +82,7 @@ class GraphClient:
         for question_id, driver_id in graph.question_drivers:
             conn.execute("MATCH (q:Question {id: $q}) MERGE (d:Driver {id: $d}) MERGE (q)-[:AFFECTS]->(d)",
                          {"q": str(question_id), "d": str(driver_id)})
+        self.project_informs([], graph.informs)  # Restore only this pack's edges; leave other packs intact.
 
     # Fixed read queries for the visual model. Passage paths become IN_EPISODE.
     def _rows(self, cypher: str, params: dict) -> list:
@@ -85,8 +99,14 @@ class GraphClient:
                           "-[:AFFECTS]->(v:Driver) WHERE e.id IN $ids RETURN d.id, q.id, v.id ORDER BY d.id, q.id, v.id",
                           {"ids": [row[0] for row in entities]}) if entities else []
         claims = self._rows("MATCH (c:Claim)-[r:SUPPORTS|CHALLENGES]->(t:Thesis) WHERE t.id IN $ids "
-                            "RETURN c.id, max(r.strength) AS strength ORDER BY strength DESC, c.id LIMIT $n",
-                            {"ids": theses, "n": max_claims})
+                            "RETURN c.id, max(r.strength) AS strength", {"ids": theses})
+        if pack:
+            claims.extend(self._rows("MATCH (c:Claim)-[r:INFORMS]->(q:Question) WHERE q.id IN $ids "
+                                     "RETURN c.id, max(r.strength)", {"ids": list({row[1] for row in pack})}))
+        strongest = {}
+        for id, strength in claims:
+            strongest[id] = max(strength, strongest.get(id, 0))
+        claims = sorted(strongest.items(), key=lambda row: (-row[1], row[0]))[:max_claims]
         claim_ids = [row[0] for row in claims]
         episodes = self._rows(
             "MATCH (c:Claim)-[:EVIDENCED_BY]->(:Passage)<-[:CONTAINS]-(e:Episode) "
@@ -103,7 +123,7 @@ class GraphClient:
         for source, target, relationship in (("Claim", "Entity", "ABOUT"), ("Thesis", "Entity", "ABOUT"),
                                              ("Claim", "Thesis", "SUPPORTS|CHALLENGES"),
                                              ("Entity", "Debate", "HAS_DEBATE"), ("Debate", "Question", "HAS_QUESTION"),
-                                             ("Question", "Driver", "AFFECTS")):
+                                             ("Question", "Driver", "AFFECTS"), ("Claim", "Question", "INFORMS")):
             signal = "CASE WHEN a.id = $id THEN NULL ELSE a.signal END" if source == "Claim" else "NULL"
             rows.extend(self._rows(
                 f"MATCH (a:{source})-[:{relationship}]->(b:{target}) WHERE a.id = $id OR b.id = $id "
@@ -151,7 +171,9 @@ class GraphClient:
         episodes = self._rows(
             "MATCH (a:Claim)-[:EVIDENCED_BY]->(:Passage)<-[:CONTAINS]-(b:Episode) "
             "WHERE a.id IN $ids AND b.id IN $ids RETURN DISTINCT a.id, b.id", params)
-        return structure + stances + [[a, b, "ABOUT", None] for a, b in about] + [
+        informs = self._rows("MATCH (a:Claim)-[r:INFORMS]->(b:Question) WHERE a.id IN $ids AND b.id IN $ids "
+                             "RETURN a.id, b.id, 'INFORMS', r.strength", params)
+        return structure + stances + informs + [[a, b, "ABOUT", None] for a, b in about] + [
             [a, b, "IN_EPISODE", None] for a, b in episodes]
 
     def read_only_query(self, cypher: str, max_rows: int) -> list[dict]:

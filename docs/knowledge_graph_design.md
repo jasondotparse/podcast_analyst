@@ -36,7 +36,11 @@ Coverage adds Debate (accent-400, radius 7), Question (accent-200, radius 5), an
 AFFECTS uses neutral-600. The existing generated legend includes each type. Debate details show
 both stored views; question details name the parent debate. All lookups remain explicitly typed.
 The thesis view also includes active debates, questions and linked drivers for every entity
-already selected. Rebuilding a pack deletes its historical node IDs and merges only the active tree.
+already selected. Rebuilding a pack deletes its historical node IDs, merges the active tree, and restores active
+INFORMS evidence. INFORMS edges (accent-300, arrowheads and width by strength) link Claim → Question
+with stored stance and strength; all stances including neutral appear at strength ≥25. Evidence never
+recreates a retired question. Claims informing the selected questions share the existing cap with
+thesis stance claims, ordered by their strongest edge. Neighbor traversal includes INFORMS.
 
 ## API and limits
 
@@ -78,6 +82,15 @@ React text; source links require http(s). Node and connection buttons provide a
 keyboard alternative to the canvas. Escape closes and restores trigger focus.
 
 ## Verification
+
+**Question evidence — November 15, 2026:** local and authenticated beta Playwright flows rendered
+INFORMS evidence in the working-thesis view (294 and 373 displayed INFORMS links respectively
+after the first synthetic interview; existing view caps still apply). Backend tests verify neutral
+edges at strength 25+, exclusion at 24, strongest-first shared claim cap, pack rebuild preserving
+kept questions' evidence, and retirement removing evidence without recreating the question.
+Research chat read the stored claims/quotes and correctly flagged the initial reversed lean labels.
+The final calibrated run rendered 301 local / 372 beta INFORMS links, with the cap notice visible.
+See [reflection verification](etl_design.md#verification) for distributions and prompt calibration.
 
 **Coverage packs — beta, November 15, 2026:** release `5412f586dedd-20261115T234509-5a466f`
 (working tree; SSM deployment succeeded, app/db healthy). Playwright signed in through the login

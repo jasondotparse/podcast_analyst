@@ -120,6 +120,7 @@ class IngestionService:
             claims = await self.reflector.reflect(limit=SWEEP_CLAIMS)
             if claims:
                 self.graph.project_stances(claims, await self.db.stance_edges(claims))
+                self.graph.project_informs(claims, await self.db.informs_edges(claims))
                 log.info("Thesis sweep assessed and projected %s claims", len(claims))
             return bool(claims)
         except Exception:

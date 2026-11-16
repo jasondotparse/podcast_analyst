@@ -55,7 +55,19 @@ theses plus research questions exceeds the 200-question Decisions request limit.
 ID-only graph nodes `Debate`, `Question`, and `Driver` form
 `(Entity)-[:HAS_DEBATE]->(Debate)-[:HAS_QUESTION]->(Question)-[:AFFECTS]->(Driver)`.
 `CoverageGraph` carries all historical IDs for deletion, then the active tree for deterministic
-projection. Retired wording remains in Postgres. Coverage structure adds no judgments yet.
+projection. Retired wording remains in Postgres.
+
+Migration `009_question_assessments` stores `(claim_id, question_id)` as its primary key, stance
+(`supports`, `challenges`, `neutral`), strength 0–100 and creation time. Both FKs cascade;
+question_id has its own join index, and the reader role inherits SELECT. Every pair is retained,
+including zero strength. Question relevance is strength; stance only describes the parent debate's
+lean. Drivers are never assessed. `INFORMS(Claim → Question, stance, strength)` projects any stance
+at strength ≥25, matching existing Question nodes so retired questions cannot be recreated.
+Pack rebuilds restore active INFORMS edges, preserving kept questions' evidence.
+
+`alerts.matches` retains thesis hits as `{claim_id, strength, signal}` and adds question hits as
+`{claim_id, question_id, stance, strength, signal}`. The unit remains `(episode_id, thesis_id)`;
+`coverage.thesis_id` subscriptions cover the whole pack, with the existing recipient snapshot.
 
 ## LadybugDB graph schema
 
@@ -87,7 +99,7 @@ Projection deletes existing stance edges for those claims before merging the cur
 
 `dedupe → [screen auto-discovered metadata] → transcribe audio if needed → passages → embeddings → grounded claims/entities → rank → reflect → graph projection → notify (SES alert)`
 
-Persist each durable stage before moving on, so a failed run does not redo expensive work. Audio can be segmented for transcription; retain offsets. Manual uploads should not be silently skipped by the relevance screen. Prompt-injection classification is optional defense-in-depth; transcripts are always **untrusted data**, never agent instructions. Send notifications via **FastAPI + boto3/SES**, not Lambda; only high-signal conflicts qualify, and emails link to the source and to Podcast Analyst.
+Persist each durable stage before moving on, so a failed run does not redo expensive work. Audio can be segmented for transcription; retain offsets. Manual uploads should not be silently skipped by the relevance screen. Prompt-injection classification is optional defense-in-depth; transcripts are always **untrusted data**, never agent instructions. Send notifications via **FastAPI + boto3/SES**, not Lambda; high-signal thesis conflicts or answers to open research questions qualify, and emails link to the source and to Podcast Analyst.
 
 **Codex dynamic tools** (schema/reference guidance documented in its `skill.md`):
 
