@@ -85,12 +85,15 @@ app** for HMR development, or **serve front end** when the backend is already ru
 
 ## Software development process
 * Codex and claude code were used for implementation and deployment, also for monitoring and debugging. Claude Design was used for app layout and styling.
+* Branching: `main` is frozen at the final submitted version. Post-submission work lives on the `alpha` branch, which is what gets deployed to the alpha environment. New feature branches come off `alpha` and open PRs against `alpha`.
 
 ## Watching podcasts (RSS)
 
 Ask the chat to *"Start watching the Dwarkesh Podcast."* Codex follows the
 `register-watcher-on-podcast` skill: it web-searches for the official RSS feed and calls
-`register_rss_to_watcher`. The backend then fetches and validates the feed (http(s) only, public
+`register_rss_to_watcher`. If the user pastes a YouTube link instead, the `youtube-link-to-rss`
+skill has Codex identify the show, find its RSS feed, and offer to watch that feed (YouTube itself
+is never subscribed to or ingested). The backend then fetches and validates the feed (http(s) only, public
 hosts only, timeouts and size caps) and saves it in `watch_sources`.
 - **First run:** only the newest episode at registration is ingested; the archive is not backfilled.
 - **Polling:** every minute the watcher checks whether the pipeline is idle (no pending or running job).

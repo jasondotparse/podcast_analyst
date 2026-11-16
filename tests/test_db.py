@@ -141,7 +141,7 @@ class PostgresMigrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await migrate_postgres(self.url), ["001_initial", "002_ingestion", "003_thesis_entities",
                                                             "004_episode_audio", "005_rss_watchers",
                                                             "006_claim_signal", "007_thesis_assessments", "008_coverage_packs",
-                                                            "009_question_assessments"])
+                                                            "008_cron_subscriptions", "009_question_assessments"])
         self.assertEqual(await migrate_postgres(self.url), [])
 
         async with await psycopg.AsyncConnection.connect(self.url, autocommit=True) as conn:
