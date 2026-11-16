@@ -1,4 +1,5 @@
 import asyncio
+from copy import deepcopy
 import json
 from pathlib import Path
 import secrets
@@ -29,7 +30,28 @@ from src.backend.ingestion.notifier import Notifier, render_alert
 from src.backend.ingestion.models import Claim, Episode, EpisodeMetadata, IngestionJob
 from src.backend.main import app
 from src.backend.graph_view import GraphView, MAX_NODES
-from tests.test_db import DATABASE_URL
+from tests.test_db import DATABASE_URL, ROOT
+
+
+def amzn_pack():
+    text = ' '.join((ROOT / 'tests/fixtures/amzn_coverage.txt').read_text().split())
+    thesis = text.split('Working investment thesis: ')[1].split(' Two key debates')[0]
+    questions = text.split('Ongoing research questions and model drivers ')[1]
+    q1, rest = questions.split(' Model: ', 1)
+    drivers1, rest = rest.split('. ', 1)
+    q2, rest = rest.split(' Model: ', 1)
+    drivers2, rest = rest.split('. ', 1)
+    q3, drivers3 = rest.split(' Model: ', 1)
+    return dict(company='Amazon', ticker='AMZN', thesis=thesis, thesis_entities=[dict(name='AWS', kind='company')],
+        debates=[dict(label='D1', title='AWS growth and returns',
+            our_view='AI demand is translating into sustained, attractively priced cloud consumption.',
+            counter_view='Infrastructure costs, competition and monopsony power from labs absorb the incremental profits.',
+            questions=[dict(text=q1, drivers=drivers1.replace(' and ', ', ').split(', ')),
+                       dict(text=q2, drivers=drivers2.replace(' and ', ', ').split(', '))]),
+                 dict(label='D2', title='Retail and advertising economics',
+            our_view='Faster delivery and automation expand retail margins while Amazon retains customer relationships and advertising economics as shopping becomes more agent-driven.',
+            counter_view="Agent-driven shopping erodes Amazon's customer relationships and advertising economics, offsetting the delivery and automation gains.",
+            questions=[dict(text=q3, drivers=[drivers3.rstrip('.')])])])
 
 
 class SplitPassagesTests(unittest.TestCase):
@@ -206,6 +228,101 @@ class PostgresBackedTests(unittest.IsolatedAsyncioTestCase):
 
     async def query(self, sql):
         return await self.tools.call("postgres_database_query", {"sql": sql})
+
+    async def test_coverage_identity_retirement_projection_and_labels(self):
+        pack = amzn_pack()
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'coverage.lbug'
+            graph = GraphClient(open_graph(path))
+            self.tools.graph = graph
+            saved = await self.tools.save_coverage_pack(**pack)
+            same = await self.tools.save_coverage_pack(**pack)
+            self.assertEqual(saved['debates'], same['debates'])
+            self.assertEqual(same['changes']['created'], 0)
+            self.assertEqual(await self.db.one('SELECT count(*) FROM model_drivers'), (7,))
+            self.assertEqual({r[1] for r in await self.db.thesis_entities(saved['thesis_id'])}, {'Amazon', 'AWS'})
+            d1, d2 = saved['debates']
+            q1, q2 = d1['questions']
+            view = await GraphView(self.db, graph).theses(saved['thesis_id'])
+            self.assertEqual({n['type'] for n in view['nodes']}, {'Thesis', 'Entity', 'Debate', 'Question', 'Driver'})
+            self.assertEqual({e['type'] for e in view['links']}, {'ABOUT', 'HAS_DEBATE', 'HAS_QUESTION', 'AFFECTS'})
+            node = next(n for n in view['nodes'] if n['id'] == str(d1['id']))
+            self.assertEqual(node['label'], 'D1 · AWS growth and returns')
+            self.assertEqual(node['detail']['counter_view'], d1['counter_view'])
+            self.assertIn(str(q1['id']), graph.neighbor_ids(str(d1['id']), 60))
+            pack['debates'][0]['label'] = 'D9'
+            pack['debates'][0]['questions'][1]['text'] = "How much of Trainium's cost advantage does AWS retain?"
+            pack['debates'][0]['questions'][1]['drivers'].append('realized pricing')
+            pack['debates'].pop()
+            edited = await self.tools.save_coverage_pack(**pack)
+            self.assertEqual(edited['debates'][0]['id'], d1['id'])
+            self.assertEqual(edited['debates'][0]['questions'][0]['id'], q1['id'])
+            self.assertNotEqual(edited['debates'][0]['questions'][1]['id'], q2['id'])
+            self.assertEqual(edited['changes']['retired'], 3)  # Q2, D2, and D2's question.
+            self.assertEqual(await self.db.one('SELECT is_active FROM research_questions WHERE id = %s', q2['id']), (False,))
+            self.assertEqual(await self.db.one('SELECT count(*) FROM model_drivers'), (7,))
+            graph.close()
+            graph = GraphClient(open_graph(path))  # New DDL is also idempotent on an existing file.
+            try:
+                current = await self.db.coverage_graph(saved['entity_id'])
+                expected = set(map(str, [*current.debates, *(q for q, _ in current.questions), *current.drivers]))
+                nodes = graph.view_nodes(list(map(str, current.all_debates + current.all_questions + current.all_drivers)))
+                self.assertEqual({n[0] for n in nodes}, expected)
+                self.assertEqual({n['id'] for n in (await GraphView(self.db, graph).theses(saved['thesis_id']))['nodes']
+                                  if n['type'] in {'Debate', 'Question', 'Driver'}}, expected)
+            finally:
+                graph.close()
+
+    async def test_coverage_thesis_revision_copies_subscriptions_and_debate_wording_retires_questions(self):
+        pack = amzn_pack()
+        first = await self.db.save_coverage_pack(**pack)
+        await self.db.add_subscription('analyst@example.com', [first['thesis_id']])
+        pack['thesis'] += ' Revised.'
+        pack['debates'][0]['our_view'] += ' Revised.'
+        second = await self.db.save_coverage_pack(**pack)
+        self.assertTrue(second['thesis_revised'])
+        self.assertNotEqual(first['thesis_id'], second['thesis_id'])
+        self.assertEqual(await self.db.one('SELECT is_active FROM theses WHERE id = %s', first['thesis_id']), (False,))
+        self.assertEqual(await self.db.one('SELECT thesis_id FROM coverage'), (second['thesis_id'],))
+        self.assertEqual(await self.db.all('SELECT email FROM subscriptions WHERE thesis_id = %s', second['thesis_id']),
+                         [('analyst@example.com',)])
+        self.assertEqual(await self.db.one('SELECT count(*) FROM research_questions WHERE NOT is_active'), (2,))
+
+    async def test_coverage_validation_and_decisions_guards_roll_back(self):
+        pack = amzn_pack()
+        cases = [(dict(debates=[]), 'at least one debate'), (dict(company='  '), 'company'),
+                 (dict(debates=[pack['debates'][0]] * 2), 'Duplicate debate')]
+        for field, value, error in [('questions', [], 'at least one question'),
+                                   ('questions', [pack['debates'][0]['questions'][0]] * 2, 'Duplicate question')]:
+            bad = deepcopy(pack)
+            bad['debates'][0][field] = value
+            cases.append((bad, error))
+        bad = deepcopy(pack)
+        bad['debates'][0]['questions'][0]['drivers'] = []
+        cases.append((bad, 'at least one driver'))
+        for changes, error in cases:
+            with self.subTest(error=error), self.assertRaisesRegex(ValueError, error):
+                await self.db.save_coverage_pack(**(pack | changes))
+        await self.db.save_coverage_pack(**pack)
+        with self.assertRaisesRegex(ValueError, 'AMZN already belongs to Amazon'):
+            await self.db.save_coverage_pack(**(pack | dict(company='Other')))
+        self.assertIsNone(await self.db.one("SELECT id FROM entities WHERE name = 'Other'"))
+        await self.db.execute("INSERT INTO theses (description) SELECT 'filler' FROM generate_series(1, 96)")
+        with self.assertRaisesRegex(ValueError, '202.*200'):
+            await self.db.add_thesis('Exceeds the cap', [('Rolled back', 'company')])
+        self.assertIsNone(await self.db.one("SELECT id FROM entities WHERE name = 'Rolled back'"))
+        pack['thesis'] += ' Must roll back.'
+        pack['debates'][0]['questions'].append(dict(text='Too many?', drivers=['New driver']))
+        with self.assertRaisesRegex(ValueError, '202.*200'):
+            await self.db.save_coverage_pack(**pack)
+        self.assertEqual(await self.db.one('SELECT count(*) FROM theses'), (97,))
+        self.assertEqual(await self.db.one('SELECT count(*) FROM model_drivers'), (7,))
+        self.assertEqual(await self.db.one('SELECT count(*) FROM research_questions'), (3,))
+        (archived,) = await self.db.one("INSERT INTO theses (description, is_active) "
+                                       "VALUES ('Archived', false) RETURNING id")
+        with self.assertRaisesRegex(ValueError, '202.*200'):
+            await self.tools.update_thesis(str(archived), True)
+        self.assertEqual(await self.db.one('SELECT is_active FROM theses WHERE id = %s', archived), (False,))
 
     async def test_query_tool_is_read_only_and_single_statement(self):
         self.assertIn('"title": "Optics"', await self.query("SELECT title FROM episodes"))

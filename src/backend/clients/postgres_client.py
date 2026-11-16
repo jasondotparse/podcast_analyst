@@ -7,11 +7,12 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
-from ..ingestion.models import (Claim, CronSubscription, EntityLink, Episode, EpisodeGraph, EpisodeMetadata,
+from ..ingestion.models import (Claim, CoverageGraph, CronSubscription, EntityLink, Episode, EpisodeGraph, EpisodeMetadata,
                                 IngestionJob, Signal, WatchSource)
 
 
 JOB_COLUMNS = "id, episode_id, status, current_step, error"
+DECISIONS_MAX_QUESTIONS = 200  # Two judgments per target must fit in one Decisions request.
 CRON_COLUMNS = "id, email, cron, timezone, thesis_ids, next_run_at"  # In CronSubscription's field order.
 # Jobs with their episode's podcast name and title, so the UI can say what is being ingested.
 LABELED_JOBS = ("SELECT j.id, j.episode_id, j.status, j.current_step, j.error, p.name, e.title FROM ingestion_jobs j "
@@ -181,18 +182,159 @@ class PostgresClient:
     async def add_thesis(self, description: str, entities: list[tuple[str, str]]) -> tuple[UUID, list]:
         """Insert a thesis linked to its (name, kind) entities; returns its ID and (id, name, kind) entities."""
         async with await self.connect() as conn:
+            await conn.execute("LOCK TABLE theses IN SHARE ROW EXCLUSIVE MODE")
             (thesis_id,) = await (await conn.execute(
                 "INSERT INTO theses (description) VALUES (%s) RETURNING id", (description,))).fetchone()
             linked = await upsert_entities(conn, entities)
             for entity_id, _, _ in linked:
                 await conn.execute("INSERT INTO thesis_entities VALUES (%s, %s)", (thesis_id, entity_id))
+            await self.check_decisions_limit(conn)
             return thesis_id, linked
+
+    async def check_decisions_limit(self, conn) -> None:
+        (count,) = await (await conn.execute(
+            "SELECT 2 * ((SELECT count(*) FROM theses WHERE is_active) + "
+            "(SELECT count(*) FROM research_questions WHERE is_active))")).fetchone()
+        if count > DECISIONS_MAX_QUESTIONS:
+            raise ValueError(f"Nothing saved: active theses and research questions would require {count} "
+                             f"Decisions questions; the per-request limit is {DECISIONS_MAX_QUESTIONS}.")
+
+    async def thesis_entities(self, thesis_id: UUID) -> list:
+        return await self.all("SELECT e.id, e.name, e.kind FROM entities e JOIN thesis_entities te "
+                              "ON te.entity_id = e.id WHERE te.thesis_id = %s", thesis_id)
+
+    async def save_coverage_pack(self, company: str, ticker: str, thesis: str, debates: list[dict],
+                                 thesis_entities: list[dict] | None = None) -> dict:
+        """Replace the whole active pack; assessed wording is immutable, labels and driver links are not."""
+        def clean(value, field):
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"{field} must be a non-empty string.")
+            return value.strip()
+
+        company, ticker, thesis = [clean(v, k) for v, k in
+                                   ((company, 'company'), (ticker, 'ticker'), (thesis, 'thesis'))]
+        if not debates:
+            raise ValueError("A coverage pack needs at least one debate.")
+        packed, identities = [], set()
+        for debate in debates:
+            d = {k: clean(debate.get(k), f"Debate {k}") for k in ('label', 'title', 'our_view', 'counter_view')}
+            identity = (d['title'], d['our_view'], d['counter_view'])
+            if identity in identities:
+                raise ValueError(f"Duplicate debate: {d['title']}")
+            identities.add(identity)
+            if not debate.get('questions'):
+                raise ValueError(f"Debate {d['label']} needs at least one question.")
+            d['questions'], texts = [], set()
+            for question in debate['questions']:
+                text = clean(question.get('text'), 'Question text')
+                if text in texts:
+                    raise ValueError(f"Duplicate question in {d['label']}: {text}")
+                texts.add(text)
+                if not question.get('drivers'):
+                    raise ValueError(f"Question {text} needs at least one driver.")
+                d['questions'].append({'text': text, 'drivers': list(dict.fromkeys(
+                    clean(name, 'Driver name') for name in question['drivers']))})
+            packed.append(d)
+        extras = [(clean(e.get('name'), 'Entity name'), clean(e.get('kind'), 'Entity kind'))
+                  for e in thesis_entities or []]
+        changes = dict(created=0, kept=0, retired=0)
+        async with await self.connect() as conn:
+            # Target-activating writes share this lock, so concurrent saves/restores cannot evade the cap.
+            await conn.execute("LOCK TABLE theses IN SHARE ROW EXCLUSIVE MODE")
+            linked = await upsert_entities(conn, [(company, 'company'), *extras])
+            entity_id = next(id for id, name, kind in linked if (name, kind) == (company, 'company'))
+            owner = await (await conn.execute("SELECT e.name FROM coverage c JOIN entities e ON e.id = c.entity_id "
+                "WHERE c.ticker = %s AND c.entity_id <> %s", (ticker, entity_id))).fetchone()
+            if owner:
+                raise ValueError(f"Ticker {ticker} already belongs to {owner[0]}.")
+            old = await (await conn.execute("SELECT t.id, t.description FROM coverage c JOIN theses t "
+                "ON t.id = c.thesis_id WHERE c.entity_id = %s", (entity_id,))).fetchone()
+            revised = bool(old and old[1] != thesis)
+            if old and not revised:
+                thesis_id = old[0]
+                changes['kept'] += 1
+            else:
+                (thesis_id,) = await (await conn.execute("INSERT INTO theses (description) VALUES (%s) RETURNING id",
+                                                        (thesis,))).fetchone()
+                changes['created'] += 1
+                if revised:
+                    await conn.execute("UPDATE theses SET is_active = false WHERE id = %s", (old[0],))
+                    await conn.execute("INSERT INTO subscriptions (thesis_id, email) SELECT %s, email "
+                                       "FROM subscriptions WHERE thesis_id = %s ON CONFLICT DO NOTHING", (thesis_id, old[0]))
+                    changes['retired'] += 1
+            for id, _, _ in linked:
+                await conn.execute("INSERT INTO thesis_entities VALUES (%s, %s) ON CONFLICT DO NOTHING", (thesis_id, id))
+            await conn.execute("INSERT INTO coverage (entity_id, ticker, thesis_id) VALUES (%s, %s, %s) "
+                "ON CONFLICT (entity_id) DO UPDATE SET ticker = EXCLUDED.ticker, thesis_id = EXCLUDED.thesis_id",
+                (entity_id, ticker, thesis_id))
+            active_debates, active_questions = [], []
+            for d in packed:
+                row = await (await conn.execute("SELECT id FROM debates WHERE entity_id = %s AND title = %s "
+                    "AND our_view = %s AND counter_view = %s AND is_active",
+                    (entity_id, d['title'], d['our_view'], d['counter_view']))).fetchone()
+                changes['kept' if row else 'created'] += 1
+                if not row:
+                    row = await (await conn.execute("INSERT INTO debates (entity_id, label, title, our_view, counter_view) "
+                        "VALUES (%s, %s, %s, %s, %s) RETURNING id",
+                        (entity_id, d['label'], d['title'], d['our_view'], d['counter_view']))).fetchone()
+                d['id'] = row[0]
+                active_debates.append(d['id'])
+                await conn.execute("UPDATE debates SET label = %s WHERE id = %s", (d['label'], d['id']))
+                for q in d['questions']:
+                    row = await (await conn.execute("SELECT id FROM research_questions WHERE debate_id = %s "
+                        "AND text = %s AND is_active", (d['id'], q['text']))).fetchone()
+                    changes['kept' if row else 'created'] += 1
+                    if not row:
+                        row = await (await conn.execute("INSERT INTO research_questions (debate_id, text) "
+                            "VALUES (%s, %s) RETURNING id", (d['id'], q['text']))).fetchone()
+                    q['id'] = row[0]
+                    active_questions.append(q['id'])
+                    await conn.execute("DELETE FROM question_drivers WHERE question_id = %s", (q['id'],))
+                    for name in q['drivers']:
+                        row = await (await conn.execute("INSERT INTO model_drivers (entity_id, name) VALUES (%s, %s) "
+                            "ON CONFLICT DO NOTHING RETURNING id", (entity_id, name))).fetchone()
+                        changes['created'] += bool(row)
+                        if not row:
+                            row = await (await conn.execute("SELECT id FROM model_drivers WHERE entity_id = %s AND name = %s",
+                                                           (entity_id, name))).fetchone()
+                        await conn.execute("INSERT INTO question_drivers VALUES (%s, %s)", (q['id'], row[0]))
+            retired = await conn.execute("UPDATE research_questions q SET is_active = false FROM debates d "
+                "WHERE q.debate_id = d.id AND d.entity_id = %s AND q.is_active AND NOT (q.id = ANY(%s::uuid[]))",
+                (entity_id, active_questions))
+            changes['retired'] += retired.rowcount
+            retired = await conn.execute("UPDATE debates SET is_active = false WHERE entity_id = %s "
+                "AND is_active AND NOT (id = ANY(%s::uuid[]))", (entity_id, active_debates))
+            changes['retired'] += retired.rowcount
+            await self.check_decisions_limit(conn)
+        return dict(entity_id=entity_id, company=company, ticker=ticker, thesis=thesis, thesis_id=thesis_id,
+                    thesis_revised=revised, debates=packed, changes=changes)
+
+    async def coverage_graph(self, entity_id: UUID) -> CoverageGraph:
+        async with await self.connect() as conn:
+            await conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+            debates = await (await conn.execute("SELECT id, is_active FROM debates WHERE entity_id = %s",
+                                               (entity_id,))).fetchall()
+            questions = await (await conn.execute("SELECT q.id, q.debate_id, q.is_active AND d.is_active "
+                "FROM research_questions q JOIN debates d ON d.id = q.debate_id WHERE d.entity_id = %s",
+                (entity_id,))).fetchall()
+            drivers = await (await conn.execute("SELECT id FROM model_drivers WHERE entity_id = %s", (entity_id,))).fetchall()
+            links = await (await conn.execute("SELECT qd.question_id, qd.driver_id FROM question_drivers qd "
+                "JOIN research_questions q ON q.id = qd.question_id JOIN debates d ON d.id = q.debate_id "
+                "WHERE d.entity_id = %s AND d.is_active AND q.is_active", (entity_id,))).fetchall()
+            return CoverageGraph(entity_id, [id for id, _ in debates], [id for id, _, _ in questions],
+                [id for (id,) in drivers], [id for id, active in debates if active],
+                [(id, d) for id, d, active in questions if active], list(dict.fromkeys(d for _, d in links)), links)
 
     async def set_thesis_active(self, thesis_id: UUID, is_active: bool) -> dict | None:
         """Archive or restore a thesis; returns it with `was_active`, or None if the ID is unknown."""
-        rows = await self.dicts("UPDATE theses SET is_active = %s WHERE id = %s RETURNING id AS thesis_id, "
-                                "description AS thesis, old.is_active AS was_active", is_active, thesis_id)
-        return rows[0] if rows else None
+        async with await self.connect() as conn, conn.cursor(row_factory=dict_row) as cursor:
+            await conn.execute("LOCK TABLE theses IN SHARE ROW EXCLUSIVE MODE")
+            await cursor.execute("UPDATE theses SET is_active = %s WHERE id = %s RETURNING id AS thesis_id, "
+                                 "description AS thesis, old.is_active AS was_active", (is_active, thesis_id))
+            row = await cursor.fetchone()
+            if row and is_active:
+                await self.check_decisions_limit(conn)
+            return row
 
     async def delete_claims(self, episode_id: UUID) -> None:
         await self.execute("DELETE FROM claims WHERE passage_id IN (SELECT id FROM passages WHERE episode_id = %s)",
@@ -456,6 +598,11 @@ class PostgresClient:
                 "FROM claims c JOIN passages p ON p.id = c.passage_id JOIN episodes e ON e.id = p.episode_id "
                 "JOIN podcasts pod ON pod.id = e.podcast_id WHERE c.id = ANY(%s::uuid[])",
                 "SELECT id, description AS label FROM theses WHERE is_active AND id = ANY(%s::uuid[])",
+                "SELECT id, label || ' · ' || title AS label, our_view, counter_view FROM debates "
+                "WHERE is_active AND id = ANY(%s::uuid[])",
+                "SELECT q.id, q.text AS label, d.label || ' · ' || d.title AS debate FROM research_questions q "
+                "JOIN debates d ON d.id = q.debate_id WHERE q.is_active AND d.is_active AND q.id = ANY(%s::uuid[])",
+                "SELECT id, name AS label FROM model_drivers WHERE id = ANY(%s::uuid[])",
                 "SELECT e.id, e.title AS label, pod.name AS podcast, e.published_at, e.source_url "
                 "FROM episodes e JOIN podcasts pod ON pod.id = e.podcast_id WHERE e.id = ANY(%s::uuid[])",
             ):

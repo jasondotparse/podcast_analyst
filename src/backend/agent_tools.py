@@ -14,7 +14,7 @@ from .clients.postgres_client import PostgresClient
 
 MAX_ROWS, MAX_CHARS = 200, 40_000
 CHAT_TOOLS = ("vector_search", "graph_query", "postgres_database_query", "add_thesis", "update_thesis",
-              "register_rss_to_watcher", "update_subscription", "add_subscription", "update_notification")
+              "register_rss_to_watcher", "update_subscription", "add_subscription", "update_notification", "save_coverage_pack")
 # Alpha experiment: advertised and callable only when main.py enables scheduled digests.
 DIGEST_TOOLS = ("register_scheduled_thesis_digest", "remove_scheduled_thesis_digest")
 
@@ -95,6 +95,12 @@ class AgentTools:
 
     async def register_rss_to_watcher(self, feed_url: str):
         return await self.watcher.register(feed_url)
+
+    async def save_coverage_pack(self, **arguments):
+        saved = await self.db.save_coverage_pack(**arguments)
+        self.graph.project_thesis(saved['thesis_id'], await self.db.thesis_entities(saved['thesis_id']))
+        self.graph.project_coverage(await self.db.coverage_graph(saved['entity_id']))
+        return saved
 
     async def update_subscription(self, watch_source_id: str, is_active: bool):
         try:

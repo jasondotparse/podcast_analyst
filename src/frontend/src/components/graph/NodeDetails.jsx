@@ -21,8 +21,8 @@ export default function NodeDetails({ graph, selectedId, onSelect, onExpand, exp
         </span><span className="graph-signal-value">{node.signal ?? 'Not scored'}</span></p>}
         {detail.quote && <blockquote>{detail.quote}</blockquote>}
         <dl>
-          {['speaker', 'podcast', 'episode', 'published_at'].filter((key) => detail[key]).map((key) => (
-            <div key={key}><dt>{key === 'published_at' ? 'Published' : key}</dt><dd>{detail[key]}</dd></div>
+          {['our_view', 'counter_view', 'debate', 'speaker', 'podcast', 'episode', 'published_at'].filter((key) => detail[key]).map((key) => (
+            <div key={key}><dt>{({ published_at: 'Published', our_view: 'Our view', counter_view: 'Counter view' })[key] ?? key}</dt><dd>{detail[key]}</dd></div>
           ))}
         </dl>
         {/^https?:\/\//i.test(detail.source_url ?? '') && <a href={detail.source_url} target="_blank" rel="noreferrer">

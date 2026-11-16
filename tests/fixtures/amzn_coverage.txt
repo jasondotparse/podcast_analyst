@@ -1,0 +1,23 @@
+Amazon — AMZN
+Working investment thesis: Amazon can convert AWS AI demand into durable cash
+earnings while fulfillment moat and advertising improve retail profitability in an agentic
+world.
+Two key debates
+D1 — AWS growth and returns: Is AI demand translating into sustained, attractively
+priced cloud consumption, or will infrastructure costs, competition and monopsony
+power from labs absorb the incremental profits?
+D2 — Retail and advertising economics: Can faster delivery and automation expand
+retail margins while Amazon retains customer relationships and advertising economics
+as shopping becomes more agent-driven?
+Ongoing research questions and model drivers
+As a few labs account for more incremental demand, can they extract lower prices,
+financing support and more flexible commitments? What protection does AWS retain if
+their compute requirements change? Model: realized pricing, customer concentration
+and incremental AWS margins.
+What annual revenue and operating profit does the next utilized IT GW generate, and
+what is the cash payback after construction, power and hardware replacement? How
+much of Trainium's cost advantage does AWS retain versus pass to customers? Model:
+revenue per GW, capex intensity and ROIC.
+If agents control product discovery and comparison, does Amazon retain the customer
+relationship and sponsored-placement economics? Can its fulfillment advantage sustain
+monetization even when discovery starts elsewhere? Model: advertising revenue.

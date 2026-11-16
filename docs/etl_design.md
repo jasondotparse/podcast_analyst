@@ -196,6 +196,15 @@ Errors are logged and delay the sweep by 60 seconds. **Deferred by owner:** a fa
 assessments commit but before projection can leave missing graph edges; pair idempotency
 means the sweep will not repair them automatically. Manually re-project affected episodes.
 
+### Coverage pack authoring
+
+The chat-only `save_coverage_pack` tool stores a company's working thesis, debates with both sides,
+open research questions, and their model drivers. Immutable wording keeps future pair assessments
+valid; complete saves retire omitted debates/questions. Driver links are analyst structure, never
+judgment targets. The 200-question Decisions guard applies to pack saves, standalone thesis
+creation, and thesis restoration, with transaction rollback. This first release projects structure only; question reflection
+and question-based email follow in the stacked release.
+
 ## Key decisions and trade-offs
 
 1. **No workflow framework (Airflow, n8n, Celery, queues).** It's one host, ~20
@@ -279,6 +288,11 @@ means the sweep will not repair them automatically. Manually re-project affected
     weak alerts; unrelated rows prevent repeat API work. Plain text preserves quotes as data.
 17. **Idle batches, no extra worker.** Handle new theses and backfill with one loop; defer durable
     recovery between assessment and projection for this demo.
+
+18. **Company-centered coverage with immutable wording.** Debate and question IDs denote exact
+    wording; full saves retain matching IDs and retire omissions. Drivers are reusable forecast lines.
+19. **Guard the single Decisions call at authoring time.** Target-activating writes enforce the same
+    200-question limit, avoiding a permanent reflection failure on newly ingested claims.
 
 ## Models and APIs
 
@@ -383,12 +397,45 @@ sends through the same `EmailClient`; see [scheduled thesis digests](#scheduled-
 
   Then deploy to beta and repeat.
 
+Coverage code lives in `PostgresClient.save_coverage_pack` / `coverage_graph`,
+`GraphClient.project_coverage`, and `ingestion.models.CoverageGraph`; migration `008` and the
+chat tool schema define the stored and authoring shapes. Tests use the owner's verbatim
+`tests/fixtures/amzn_coverage.txt`, checking IDs, retirement, subscriptions, shared drivers,
+validation/rollback, graph labels/links and reopen, indexes and reader permissions.
+
 Reflection tests extend `test_ingestion.py` with fake Decisions/email clients: pair idempotency,
 refusals, inactive theses, sweep limits/errors, stance replacement and thresholds, subscription
 validation, alert gates, separate recipients, failed/sent retries, and disabled delivery.
 `test_db.py` checks migration 007, stance/strength constraints, uniqueness, and cascading deletion.
 
 ## Verification
+
+**PR #43 integration — November 15, 2026:** merged the update tools from alpha into coverage packs,
+retaining archive/restore graph filtering, watched-feed stop/resume, and notification updates. All 96
+backend tests and the frontend build passed. Thesis restore now shares the transactional Decisions
+limit guard with pack saves and `add_thesis`; a failed restore at the limit leaves the thesis archived.
+
+**Coverage packs retargeted to alpha — November 15, 2026:** merged alpha's existing scheduled-digest
+changes into the feature branch, retaining its gated tools, worker, and migration. All 94 backend
+tests passed against local Postgres and the frontend build passed. Both `008` migration filenames
+apply once independently. PR #42 targets alpha; PR #44 depends on it and also targets alpha.
+
+**Coverage packs — beta, November 15, 2026:** release `5412f586dedd-20261115T234509-5a466f`
+(working tree; SSM deployment succeeded, app/db healthy). Playwright signed in through the login
+page, saved the Appendix pack, and checked the two debates, three questions and seven drivers
+in the thesis graph. Re-saving retained all six thesis/debate/question IDs. A first terse final
+reply prompted a tool-description correction; the recheck read back each question and its drivers.
+The original D2 counter-view over-negated the delivery gains and remained unchanged on re-save;
+its exact wording is visible for analyst review. No browser page errors.
+
+**Coverage packs — local, November 15, 2026:** 77 backend tests passed with local Postgres;
+frontend build passed. Playwright saved the Appendix pack through chat without clarification:
+D1 held the first two questions, D2 the third, with seven drivers. The graph rendered all
+three new node/edge types and both debate views. Editing Q2 retired its row, created the
+Trainium question, and preserved Q1/Q3 IDs; the follow-up listed each active question's drivers.
+The first readback combined D1's questions/drivers. D2's generated counter-view said delivery/
+automation would not expand margins, rather than the supplied example's gains being offset.
+Stored questions matched the fixture; no browser page errors. Email was disabled locally.
 
 Local runs (`curl` against the backend on port 8000), November 2026:
 
