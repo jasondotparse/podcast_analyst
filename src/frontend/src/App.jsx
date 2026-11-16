@@ -64,6 +64,23 @@ monetization even when discovery starts elsewhere? Model: advertising revenue.`,
     text: `What are the top 3 most high signal claims that have been made against my thesis "Nvidia's data center revenue will keep growing more than 40% a year through 2027"?`,
   },
   {
+    label: 'Prepare an IC briefing',
+    icon: MagnifyingGlassIcon,
+    text: `Let's prepare for an investment committee discussion about Amazon (AMZN).
+
+Focus on my **D1: AWS Growth and Returns** debate.
+
+1. Show me our investment view versus the counter-view.
+2. For each research question associated with this debate, identify the financial model drivers it affects.
+3. Search our ingested podcast evidence for the strongest claims supporting and challenging each side. Use the claim-to-research-question relationships in our knowledge graph.
+4. For each relevant claim, provide its speaker, podcast, supporting quote, signal score, and assessment strength.
+5. Based on the available evidence, which side of the debate appears stronger today? Which financial model assumptions should I revisit?
+
+Organize the response as an investment research briefing, tracing the relationships from **thesis → debate → research question → model driver → supporting/challenging evidence**.
+
+Distinguish actual evidence from your interpretation. If we don't have enough evidence to assess a question, say so rather than speculate.`,
+  },
+  {
     label: 'Connect my theses',
     icon: GraphIcon,
     text: 'How are my Nvidia, AWS, and optical-interconnect theses connected? Limit each stage to at most 3 claims. '

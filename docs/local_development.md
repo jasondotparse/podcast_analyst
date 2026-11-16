@@ -192,13 +192,17 @@ FastAPI; breakpoints in `src/backend/main.py` work in the backend debugger.
 open the UI. The chat creates a fresh session when the page opens; reload the
 page after restarting the backend. Wait for **Ready** before sending a message.
 
-An empty chat shows a left-aligned welcome heading and the message input, with seven
+An empty chat shows a left-aligned welcome heading and the message input, with eight
 hardcoded suggested prompts below it in a ruled grid (two columns when there is room): save a Microsoft thesis,
 request email alerts for that thesis, **Schedule a digest** for it (daily at 2:15 PM Chicago; scheduled
 digests are alpha-only, so other environments decline it), follow the a16z podcast, research the
-strongest claims against an Nvidia data center thesis, **Connect my theses**, and **Add a coverage pack**.
+strongest claims against an Nvidia data center thesis, **Connect my theses**, **Add a coverage pack**,
+and **Prepare an IC briefing**.
 The coverage-pack card contains the owner's complete Amazon example: working thesis, two debates,
 three research questions and seven model drivers, with explicit question/debate mapping and D2 counter-view.
+The IC-briefing card contains the owner's full Amazon D1 research prompt: compare both views,
+trace question-linked evidence and model drivers, cite quotes and scores, and distinguish evidence
+from interpretation and unanswered questions.
 The new graph prompt traces evidence between the Nvidia, AWS-capex, and optical
 theses, with at most three claims per stage. Each card shows a label and
 a shortened preview; selecting it fills and focuses the input with the full prompt
