@@ -318,6 +318,10 @@ The **Add a coverage pack** card was checked on November 15, 2026 in Chrome at 1
 390 px: all seven cards remained available, selecting it filled and focused the composer with the
 complete Amazon fixture and explicit mapping, and no chat turn was sent. The cards stacked on
 mobile without horizontal overflow; no browser page errors occurred. The frontend build passed.
+The same checks passed through alpha's login page after PR #45 merged, release
+`e8e259d6b5ad-20261116T005509-408c87` (November 15, 2026 Central). All seven cards were present;
+the 1,890-character pack filled without a turn submission, authenticated health/readiness passed,
+and deployed main JS/CSS SHA-256 hashes matched the local build. No browser page or console errors.
 
 The Nocturne restyle was checked on November 11, 2026 in headless Chromium against the
 design handoff's screenshots (924 x 540) and prototype (1440 x 900): home, a live chat
