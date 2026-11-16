@@ -192,11 +192,13 @@ FastAPI; breakpoints in `src/backend/main.py` work in the backend debugger.
 open the UI. The chat creates a fresh session when the page opens; reload the
 page after restarting the backend. Wait for **Ready** before sending a message.
 
-An empty chat shows a left-aligned welcome heading and the message input, with six
+An empty chat shows a left-aligned welcome heading and the message input, with seven
 hardcoded suggested prompts below it in a ruled grid (two columns when there is room): save a Microsoft thesis,
 request email alerts for that thesis, **Schedule a digest** for it (daily at 2:15 PM Chicago; scheduled
 digests are alpha-only, so other environments decline it), follow the a16z podcast, research the
-strongest claims against an Nvidia data center thesis, and **Connect my theses**.
+strongest claims against an Nvidia data center thesis, **Connect my theses**, and **Add a coverage pack**.
+The coverage-pack card contains the owner's complete Amazon example: working thesis, two debates,
+three research questions and seven model drivers, with explicit question/debate mapping and D2 counter-view.
 The new graph prompt traces evidence between the Nvidia, AWS-capex, and optical
 theses, with at most three claims per stage. Each card shows a label and
 a shortened preview; selecting it fills and focuses the input with the full prompt
@@ -311,6 +313,11 @@ limit near the start of the prompt. The frontend build passed.
 The sixth **Schedule a digest** card was checked on November 14, 2026 in headless Chromium: the six
 cards formed a 3x2 grid at 1280 px and stacked at 390 px, and selecting it filled and focused the
 composer with the full prompt without sending. The frontend build passed.
+
+The **Add a coverage pack** card was checked on November 15, 2026 in Chrome at 1440 px and
+390 px: all seven cards remained available, selecting it filled and focused the composer with the
+complete Amazon fixture and explicit mapping, and no chat turn was sent. The cards stacked on
+mobile without horizontal overflow; no browser page errors occurred. The frontend build passed.
 
 The Nocturne restyle was checked on November 11, 2026 in headless Chromium against the
 design handoff's screenshots (924 x 540) and prototype (1440 x 900): home, a live chat
