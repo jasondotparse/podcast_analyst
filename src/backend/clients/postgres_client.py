@@ -321,9 +321,13 @@ class PostgresClient:
             links = await (await conn.execute("SELECT qd.question_id, qd.driver_id FROM question_drivers qd "
                 "JOIN research_questions q ON q.id = qd.question_id JOIN debates d ON d.id = q.debate_id "
                 "WHERE d.entity_id = %s AND d.is_active AND q.is_active", (entity_id,))).fetchall()
+            informs = await (await conn.execute("SELECT a.claim_id, a.question_id, a.stance, a.strength "
+                "FROM question_assessments a JOIN research_questions q ON q.id = a.question_id "
+                "JOIN debates d ON d.id = q.debate_id WHERE d.entity_id = %s AND d.is_active AND q.is_active",
+                (entity_id,))).fetchall()
             return CoverageGraph(entity_id, [id for id, _ in debates], [id for id, _, _ in questions],
                 [id for (id,) in drivers], [id for id, active in debates if active],
-                [(id, d) for id, d, active in questions if active], list(dict.fromkeys(d for _, d in links)), links)
+                [(id, d) for id, d, active in questions if active], list(dict.fromkeys(d for _, d in links)), links, informs)
 
     async def set_thesis_active(self, thesis_id: UUID, is_active: bool) -> dict | None:
         """Archive or restore a thesis; returns it with `was_active`, or None if the ID is unknown."""
@@ -365,7 +369,8 @@ class PostgresClient:
                                "JOIN passages p ON p.id = c.passage_id WHERE p.episode_id = %s", episode_id)
         return EpisodeGraph(episode_id, [passage_id for (passage_id,) in passages],
                             [tuple(row) for row in claims], [EntityLink(*row) for row in links],
-                            await self.stance_edges([row[0] for row in claims]))
+                            await self.stance_edges([row[0] for row in claims]),
+                            await self.informs_edges([row[0] for row in claims]))
 
     # ---- Thesis reflection and alerts ------------------------------------
 
@@ -373,8 +378,11 @@ class PostgresClient:
         return await self.all(
             "SELECT p.episode_id, c.id, c.text, c.evidence_quote, c.speaker FROM claims c "
             "JOIN passages p ON p.id = c.passage_id WHERE (%s::uuid IS NULL OR p.episode_id = %s) "
-            "AND EXISTS (SELECT 1 FROM theses t WHERE t.is_active AND NOT EXISTS "
+            "AND (EXISTS (SELECT 1 FROM theses t WHERE t.is_active AND NOT EXISTS "
             "(SELECT 1 FROM thesis_assessments a WHERE a.claim_id = c.id AND a.thesis_id = t.id)) "
+            "OR EXISTS (SELECT 1 FROM research_questions q JOIN debates d ON d.id = q.debate_id "
+            "WHERE q.is_active AND d.is_active AND NOT EXISTS (SELECT 1 FROM question_assessments a "
+            "WHERE a.claim_id = c.id AND a.question_id = q.id))) "
             "ORDER BY c.id LIMIT %s", episode_id, episode_id, limit)
 
     async def missing_theses(self, claim_id: UUID) -> list:
@@ -386,6 +394,23 @@ class PostgresClient:
         async with await self.connect() as conn, conn.cursor() as cursor:
             await cursor.executemany("INSERT INTO thesis_assessments (claim_id, thesis_id, stance, strength) "
                                      "VALUES (%s, %s, %s, %s) ON CONFLICT DO NOTHING", rows)
+
+    async def missing_questions(self, claim_id: UUID) -> list:
+        return await self.all("SELECT q.id, q.text, d.title, d.our_view, d.counter_view, e.name, c.ticker "
+            "FROM research_questions q JOIN debates d ON d.id = q.debate_id "
+            "JOIN coverage c ON c.entity_id = d.entity_id JOIN entities e ON e.id = c.entity_id "
+            "WHERE q.is_active AND d.is_active AND NOT EXISTS (SELECT 1 FROM question_assessments a "
+            "WHERE a.question_id = q.id AND a.claim_id = %s) ORDER BY q.id", claim_id)
+
+    async def save_question_assessments(self, rows: list) -> None:
+        async with await self.connect() as conn, conn.cursor() as cursor:
+            await cursor.executemany("INSERT INTO question_assessments (claim_id, question_id, stance, strength) "
+                                     "VALUES (%s, %s, %s, %s) ON CONFLICT DO NOTHING", rows)
+
+    async def informs_edges(self, claim_ids: list[UUID]) -> list:
+        return await self.all("SELECT a.claim_id, a.question_id, a.stance, a.strength FROM question_assessments a "
+            "JOIN research_questions q ON q.id = a.question_id JOIN debates d ON d.id = q.debate_id "
+            "WHERE a.claim_id = ANY(%s::uuid[]) AND q.is_active AND d.is_active", claim_ids)
 
     async def stance_edges(self, claim_ids: list[UUID]) -> list:
         return await self.all("SELECT claim_id, thesis_id, stance, strength FROM thesis_assessments "
@@ -403,18 +428,28 @@ class PostgresClient:
                                    "ON CONFLICT DO NOTHING", (thesis_id, email))
             return [description for _, description in rows]
 
-    async def create_alerts(self, episode_id: UUID, min_strength: int, min_signal: int) -> None:
+    async def create_alerts(self, episode_id: UUID, min_strength: int, min_signal: int,
+                            min_question_strength: int) -> None:
         await self.execute(
-            "INSERT INTO alerts (episode_id, thesis_id, matches, recipient_emails) "
-            "SELECT %s, t.id, jsonb_agg(jsonb_build_object('claim_id', c.id, 'strength', a.strength, "
-            "'signal', c.signal) ORDER BY a.strength DESC, c.signal DESC, c.id), "
-            "ARRAY(SELECT s.email FROM subscriptions s WHERE s.thesis_id = t.id ORDER BY s.email) "
+            "WITH hits AS ("
+            "SELECT a.thesis_id, c.id AS claim_id, a.strength, c.signal, "
+            "jsonb_build_object('claim_id', c.id, 'strength', a.strength, 'signal', c.signal) AS match "
             "FROM thesis_assessments a JOIN claims c ON c.id = a.claim_id "
-            "JOIN passages p ON p.id = c.passage_id JOIN theses t ON t.id = a.thesis_id "
-            "WHERE p.episode_id = %s AND t.is_active AND a.stance = 'challenges' "
-            "AND a.strength >= %s AND c.signal >= %s "
+            "JOIN passages p ON p.id = c.passage_id WHERE p.episode_id = %s "
+            "AND a.stance = 'challenges' AND a.strength >= %s AND c.signal >= %s UNION ALL "
+            "SELECT cov.thesis_id, c.id, a.strength, c.signal, jsonb_build_object('claim_id', c.id, "
+            "'question_id', q.id, 'stance', a.stance, 'strength', a.strength, 'signal', c.signal) "
+            "FROM question_assessments a JOIN claims c ON c.id = a.claim_id "
+            "JOIN passages p ON p.id = c.passage_id JOIN research_questions q ON q.id = a.question_id "
+            "JOIN debates d ON d.id = q.debate_id JOIN coverage cov ON cov.entity_id = d.entity_id "
+            "WHERE p.episode_id = %s AND q.is_active AND d.is_active AND a.strength >= %s AND c.signal >= %s) "
+            "INSERT INTO alerts (episode_id, thesis_id, matches, recipient_emails) "
+            "SELECT %s, t.id, jsonb_agg(h.match ORDER BY h.strength DESC, h.signal DESC, h.claim_id), "
+            "ARRAY(SELECT s.email FROM subscriptions s WHERE s.thesis_id = t.id ORDER BY s.email) "
+            "FROM hits h JOIN theses t ON t.id = h.thesis_id WHERE t.is_active "
             "AND EXISTS (SELECT 1 FROM subscriptions s WHERE s.thesis_id = t.id) GROUP BY t.id "
-            "ON CONFLICT (episode_id, thesis_id) DO NOTHING", episode_id, episode_id, min_strength, min_signal)
+            "ON CONFLICT (episode_id, thesis_id) DO NOTHING",
+            episode_id, min_strength, min_signal, episode_id, min_question_strength, min_signal, episode_id)
 
     async def unsent_alerts(self, episode_id: UUID) -> list:
         return await self.all("SELECT a.id, t.description, a.recipient_emails, a.matches FROM alerts a "
@@ -424,12 +459,17 @@ class PostgresClient:
     async def alert_claims(self, matches: list[dict]) -> list[dict]:
         async with await self.connect() as conn, conn.cursor(row_factory=dict_row) as cursor:
             await cursor.execute(
-                "SELECT c.text, c.evidence_quote, c.speaker, pod.name AS podcast, e.title AS episode, "
-                "e.published_at, e.source_url, m.signal, m.strength FROM "
-                "jsonb_to_recordset(%s) AS m(claim_id uuid, strength int, signal int) "
+                "SELECT c.id AS claim_id, c.text, c.evidence_quote, c.speaker, pod.name AS podcast, e.title AS episode, "
+                "e.published_at, e.source_url, m.signal, m.strength, m.question_id, m.stance, cov.ticker, "
+                "d.id AS debate_id, d.label AS debate_label, d.title AS debate_title, q.text AS question, "
+                "ARRAY(SELECT md.name FROM question_drivers qd JOIN model_drivers md ON md.id = qd.driver_id "
+                "WHERE qd.question_id = q.id ORDER BY md.name) AS drivers FROM "
+                "jsonb_to_recordset(%s) AS m(claim_id uuid, strength int, signal int, question_id uuid, stance text) "
                 "JOIN claims c ON c.id = m.claim_id JOIN passages p ON p.id = c.passage_id "
                 "JOIN episodes e ON e.id = p.episode_id JOIN podcasts pod ON pod.id = e.podcast_id "
-                "ORDER BY m.strength DESC, m.signal DESC, c.id", (Jsonb(matches),))
+                "LEFT JOIN research_questions q ON q.id = m.question_id LEFT JOIN debates d ON d.id = q.debate_id "
+                "LEFT JOIN coverage cov ON cov.entity_id = d.entity_id "
+                "ORDER BY m.strength DESC, m.signal DESC, c.id, m.question_id", (Jsonb(matches),))
             return await cursor.fetchall()
 
     async def set_alert_status(self, alert_id: UUID, status: str) -> None:

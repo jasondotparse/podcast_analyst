@@ -104,7 +104,7 @@ class GraphSchemaTests(unittest.TestCase):
             tables = {row[0] for row in connection.execute("CALL show_tables() RETURN name").get_all()}
             self.assertEqual(tables, {"Episode", "Passage", "Claim", "Thesis", "Entity", "CONTAINS",
                                       "EVIDENCED_BY", "ABOUT", "SUPPORTS", "CHALLENGES", "MENTIONS",
-                                      "Debate", "Question", "Driver", "HAS_DEBATE", "HAS_QUESTION", "AFFECTS"})
+                                      "Debate", "Question", "Driver", "HAS_DEBATE", "HAS_QUESTION", "AFFECTS", "INFORMS"})
             rows = connection.execute("MATCH (:Claim {id: 'c1'})-[:EVIDENCED_BY]->(p) RETURN p.id").get_all()
             self.assertEqual(rows, [["p1"]])
             database.close()
@@ -142,7 +142,7 @@ class PostgresMigrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await migrate_postgres(self.url), ["001_initial", "002_ingestion", "003_thesis_entities",
                                                             "004_episode_audio", "005_rss_watchers",
                                                             "006_claim_signal", "007_thesis_assessments", "008_coverage_packs",
-                                                            "008_cron_subscriptions"])
+                                                            "008_cron_subscriptions", "009_question_assessments"])
         self.assertEqual(await migrate_postgres(self.url), [])
 
         async with await psycopg.AsyncConnection.connect(self.url, autocommit=True) as conn:
@@ -209,6 +209,27 @@ class PostgresMigrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(any('UNIQUE' in r[0] and 'WHERE is_active' in r[0] for r in indexes))
         await db.execute('UPDATE research_questions SET is_active = false')
         await db.execute('INSERT INTO research_questions (debate_id, text) SELECT debate_id, text FROM research_questions')
+
+    async def test_question_assessment_constraints_and_cascade(self):
+        await migrate_postgres(self.url)
+        db = PostgresClient(self.url)
+        from tests.test_ingestion import amzn_pack
+        saved = await db.save_coverage_pack(**amzn_pack())
+        question = saved['debates'][0]['questions'][0]['id']
+        from src.backend.ingestion.models import EpisodeMetadata
+        job = await db.create_episode_job(EpisodeMetadata(podcast_name='Test', title='Test'), 'txt', 'quote', 'hash')
+        await db.insert_passages(job.episode_id, ['quote'])
+        passage = (await db.one('SELECT id FROM passages'))[0]
+        await db.save_claim(passage, 'text', 'quote', None, 'hash', [])
+        claim = (await db.one('SELECT id FROM claims'))[0]
+        for stance, strength in [('unrelated', 0), ('neutral', -1), ('supports', 101)]:
+            with self.assertRaises(psycopg.errors.CheckViolation):
+                await db.save_question_assessments([(claim, question, stance, strength)])
+        await db.save_question_assessments([(claim, question, 'neutral', 75)] * 2)
+        self.assertEqual(await db.one('SELECT count(*) FROM question_assessments'), (1,))
+        self.assertTrue(await db.read_only_query('SELECT * FROM question_assessments', 10))
+        await db.execute('DELETE FROM claims')
+        self.assertEqual(await db.one('SELECT count(*) FROM question_assessments'), (0,))
 
     async def test_catalog_lists_what_the_cabinet_shows(self):
         await migrate_postgres(self.url)

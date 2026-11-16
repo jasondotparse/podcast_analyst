@@ -16,6 +16,7 @@ export const EDGE_STYLES = {
   HAS_DEBATE: { color: '--color-accent-700', label: 'Has debate' },
   HAS_QUESTION: { color: '--color-accent-600', label: 'Has question' },
   AFFECTS: { color: '--color-neutral-600', label: 'Affects' },
+  INFORMS: { color: '--color-accent-300', label: 'Informs' },
 }
 export const nodeId = (node) => node?.id ?? node
 export const nodeRadius = (node) => NODE_STYLES[node.type].radius + (node.type === 'Claim' ? (node.signal ?? 0) / 25 : 0)

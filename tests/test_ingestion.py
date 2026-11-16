@@ -324,6 +324,132 @@ class PostgresBackedTests(unittest.IsolatedAsyncioTestCase):
             await self.tools.update_thesis(str(archived), True)
         self.assertEqual(await self.db.one('SELECT is_active FROM theses WHERE id = %s', archived), (False,))
 
+    async def test_question_reflection_sweep_and_evidence_survives_pack_rebuild(self):
+        thesis = await self.reflection_fixture()
+        await self.db.save_assessments([(r[0], thesis, 'unrelated', 0) for r in await self.db.all('SELECT id FROM claims')])
+        pack = amzn_pack()
+        saved = await self.db.save_coverage_pack(**pack)
+        questions = [q['id'] for d in saved['debates'] for q in d['questions']]
+        scores = {f'Claim {i}': {f'stance:{saved["thesis_id"]}': 'unrelated', f'strength:{saved["thesis_id"]}': 0,
+                    **{f'question_stance:{q}': ('neutral' if j != 1 else 'supports') for j, q in enumerate(questions)},
+                    **{f'question_strength:{q}': (1 if j == 0 else 3) for j, q in enumerate(questions)}} for i in range(6)}
+        scores['Claim 0'][f'question_stance:{questions[0]}'] = None  # Either refusal fails the whole pair closed.
+        api = fake_decisions(scores)
+        with tempfile.TemporaryDirectory() as directory:
+            graph = GraphClient(open_graph(Path(directory) / 'questions.lbug'))
+            self.addCleanup(graph.close)
+            graph.project_thesis(saved['thesis_id'], await self.db.thesis_entities(saved['thesis_id']))
+            graph.project_episode(await self.db.episode_graph(self.episode))
+            graph.project_coverage(await self.db.coverage_graph(saved['entity_id']))
+            service = IngestionService(self.db, graph, None, None, None, None, None, ThesisReflector(self.db, api), None)
+            self.assertTrue(await service.sweep())
+            self.assertFalse(await service.sweep())
+            self.assertEqual(api.decisions.create.await_count, 6)
+            for call in api.decisions.create.call_args_list:
+                self.assertEqual(len(call.kwargs['questions']), 8)  # One missing thesis plus three questions.
+                instructions = ' '.join(q['instructions'] for q in call.kwargs['questions'])
+                self.assertNotIn('Model drivers:', instructions)
+                self.assertNotIn('revenue per GW', instructions)
+            self.assertEqual(await self.db.one('SELECT stance, strength FROM question_assessments '
+                'WHERE question_id = %s AND claim_id = (SELECT id FROM claims WHERE text = %s)', questions[0], 'Claim 0'),
+                ('neutral', 0))
+            edges = graph.read_only_query('MATCH (c:Claim)-[r:INFORMS]->(q:Question) '
+                'RETURN c.id AS c, q.id AS q, r.stance AS stance, r.strength AS strength', 100)
+            self.assertEqual(len(edges), 17)
+            weak_claim = uuid4()
+            graph.project_informs([], [(weak_claim, questions[0], 'neutral', 24)])
+            self.assertEqual(graph.view_nodes([str(weak_claim)]), [])
+            self.assertTrue(any(e['stance'] == 'neutral' and e['strength'] == 75 for e in edges))
+            self.assertEqual(len([i for i in graph.thesis_neighborhood([str(saved['thesis_id'])], 2)
+                                 if i in {e['c'] for e in edges}]), 2)
+            view = await GraphView(self.db, graph).theses(saved['thesis_id'])
+            self.assertEqual(len([e for e in view['links'] if e['type'] == 'INFORMS']), 17)
+            graph.project_coverage(await self.db.coverage_graph(saved['entity_id']))
+            self.assertEqual(graph.read_only_query('MATCH ()-[r:INFORMS]->() RETURN count(r) AS n', 1), [{'n': 17}])
+            pack['debates'][0]['questions'].pop()
+            await self.db.save_coverage_pack(**pack)
+            graph.project_coverage(await self.db.coverage_graph(saved['entity_id']))
+            graph.project_informs([], [(uuid4(), questions[1], 'neutral', 99)])  # Must not revive the retired question.
+            self.assertEqual(graph.read_only_query('MATCH ()-[r:INFORMS]->() RETURN count(r) AS n', 1), [{'n': 11}])
+            self.assertNotIn(questions[1], [r[0] for r in await self.db.missing_questions(uuid4())])
+            self.assertEqual(await self.db.one('SELECT count(*) FROM alerts'), (0,))
+            await self.db.execute('DELETE FROM question_assessments WHERE question_id = %s', questions[2])
+            await service.sweep()
+            self.assertTrue(all(q['name'].startswith('question_') for q in api.decisions.create.call_args.kwargs['questions']))
+
+    async def test_question_alert_gate_deduplication_and_plain_text_rendering(self):
+        await self.reflection_fixture()
+        saved = await self.db.save_coverage_pack(**amzn_pack())
+        q1, q2 = [q['id'] for q in saved['debates'][0]['questions']]
+        ids = [r[0] for r in await self.db.all('SELECT id FROM claims ORDER BY text')]
+        for claim, strength, signal in zip(ids, [75, 74, 100, 100, 90, 80], [60, 100, 59, None, 90, 80]):
+            await self.db.save_question_assessments([(claim, q1, 'neutral', strength)])
+            await self.db.execute('UPDATE claims SET signal = %s WHERE id = %s', signal, claim)
+        await self.db.save_question_assessments([(ids[4], q2, 'challenges', 95)])
+        await self.db.save_assessments([(ids[4], saved['thesis_id'], 'challenges', 99)])
+        email = SimpleNamespace(enabled=True, send=AsyncMock())
+        notifier = Notifier(self.db, email, 'https://app.example.com')
+        await notifier.notify(self.episode)
+        email.send.assert_not_awaited()
+        await self.db.add_subscription('analyst@example.com', [saved['thesis_id']])
+        await self.db.execute('UPDATE theses SET is_active = false WHERE id = %s', saved['thesis_id'])
+        await notifier.notify(self.episode)
+        email.send.assert_not_awaited()
+        await self.db.execute('UPDATE theses SET is_active = true WHERE id = %s', saved['thesis_id'])
+        await notifier.notify(self.episode)
+        await notifier.notify(self.episode)
+        email.send.assert_awaited_once()
+        _, subject, body = email.send.call_args.args
+        self.assertIn('AMZN coverage', subject)
+        for text in ('D1 · AWS growth and returns', 'Model drivers:', 'realized pricing', 'Lasers ship next year.',
+                     'Anders Storm', 'Leans toward: neither side', 'Leans toward: the counter view',
+                     'https://app.example.com/app/'):
+            self.assertIn(text, body)
+        self.assertEqual(body.count('Claim 4'), 1)
+        self.assertLess(body.index('Claim 4'), body.index('Claim 0'))
+        self.assertEqual(body.count('Quote:'), 3)
+        matches = (await self.db.one('SELECT matches FROM alerts'))[0]
+        self.assertEqual(len(matches), 5)
+        self.assertTrue(any(m.get('question_id') == str(q1) and m['stance'] == 'neutral' for m in matches))
+        only_questions = await self.db.alert_claims([m for m in matches if m.get('question_id')])
+        self.assertEqual(render_alert(saved['thesis'], only_questions, 'https://app.example.com')[0], subject)
+        # Thesis-only evidence follows question evidence, and the total cap applies across all sections.
+        thesis_only = dict(only_questions[0], claim_id=uuid4(), question_id=None, text='Thesis-only claim')
+        combined = render_alert(saved['thesis'], only_questions + [thesis_only], 'https://app.example.com')[1]
+        self.assertIn('Thesis-only claim', combined)
+        self.assertLess(combined.index('Model drivers:'), combined.index('Thesis-only claim'))
+        more = [dict(only_questions[0], claim_id=uuid4()) for _ in range(12)]
+        self.assertEqual(render_alert(saved['thesis'], more + [thesis_only], 'https://app.example.com')[1].count('Quote:'), 10)
+
+    async def test_new_question_backfills_across_episodes_and_question_only_alerts(self):
+        saved = await self.db.save_coverage_pack(**amzn_pack())
+        qid = saved['debates'][0]['questions'][0]['id']
+        second = await self.db.create_episode_job(EpisodeMetadata(podcast_name='Chips', title='Second'),
+                                                 'txt', 'Lasers ship next year.', 'new-question')
+        await self.db.insert_passages(second.episode_id, ['Lasers ship next year.'])
+        for episode in (self.episode, second.episode_id):
+            await self.extractor.write_claim(episode, dict(text='Evidence', evidence_quote='Lasers ship next year.',
+                                                         speaker='Guest', entities=[]))
+        all_q = [q['id'] for d in saved['debates'] for q in d['questions']]
+        api = fake_decisions({'Evidence': {f'stance:{saved["thesis_id"]}': 'unrelated',
+            f'strength:{saved["thesis_id"]}': 0, **{f'question_stance:{q}': 'neutral' for q in all_q},
+            **{f'question_strength:{q}': (3 if q == qid else 0) for q in all_q}}})
+        reflector = ThesisReflector(self.db, api)
+        self.assertEqual(len(await reflector.reflect()), 2)
+        self.assertEqual(await reflector.reflect(), [])
+        await self.db.execute('UPDATE claims SET signal = 60')
+        await self.db.add_subscription('analyst@example.com', [saved['thesis_id']])
+        email = SimpleNamespace(enabled=True, send=AsyncMock())
+        notifier = Notifier(self.db, email, 'https://app.example.com')
+        await notifier.notify(self.episode)
+        matches = (await self.db.one('SELECT matches FROM alerts'))[0]
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0]['question_id'], str(qid))
+        self.assertEqual(matches[0]['stance'], 'neutral')
+        await self.db.execute('UPDATE research_questions SET is_active = false WHERE id = %s', qid)
+        await notifier.notify(second.episode_id)
+        self.assertEqual(await self.db.one('SELECT count(*) FROM alerts'), (1,))
+
     async def test_query_tool_is_read_only_and_single_statement(self):
         self.assertIn('"title": "Optics"', await self.query("SELECT title FROM episodes"))
         for sql in ("DELETE FROM passages", "SELECT 1; DELETE FROM passages"):

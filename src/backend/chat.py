@@ -46,6 +46,9 @@ class ChatSession:
 CHAT_INSTRUCTIONS = (
     "Some companies have coverage packs: a working thesis, debates, research questions, and model drivers; "
     "save_coverage_pack creates and edits them. Use a covered company's pack to frame answers about it. "
+    "Claims are also assessed against active research questions (question_assessments; INFORMS with stance/strength "
+    "in the graph). Treat these as leads and read the claim and quote; never claim a driver has moved: drivers "
+    "only show which forecast lines a question feeds. Pack alerts cover high-signal answers whichever side they favor. "
     "Claims are automatically assessed against each active thesis: thesis_assessments in Postgres and "
     "SUPPORTS/CHALLENGES edges with strength 0-100 in the graph; treat these as leads and read the claim "
     "and quote before relying on them. add_subscription sets up email alerts. "
