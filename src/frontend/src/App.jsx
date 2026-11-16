@@ -15,6 +15,35 @@ const SUGGESTED_PROMPTS = [
     text: 'New thesis - Microsoft can capture enterprise AI spending through both Azure and its applications rather than risk disintermediation from AI.',
   },
   {
+    label: 'Add a coverage pack',
+    icon: BookmarkSimpleIcon,
+    text: `Add Amazon (AMZN) to coverage with this complete company pack: a working thesis, two debates, three research questions and seven model drivers. Put the first two questions under D1 and the third under D2. For D2, the counter-view is that agent-driven shopping erodes Amazon's customer relationships and advertising economics, offsetting the delivery and automation gains. Save the pack and read it back.
+
+Amazon — AMZN
+Working investment thesis: Amazon can convert AWS AI demand into durable cash
+earnings while fulfillment moat and advertising improve retail profitability in an agentic
+world.
+Two key debates
+D1 — AWS growth and returns: Is AI demand translating into sustained, attractively
+priced cloud consumption, or will infrastructure costs, competition and monopsony
+power from labs absorb the incremental profits?
+D2 — Retail and advertising economics: Can faster delivery and automation expand
+retail margins while Amazon retains customer relationships and advertising economics
+as shopping becomes more agent-driven?
+Ongoing research questions and model drivers
+As a few labs account for more incremental demand, can they extract lower prices,
+financing support and more flexible commitments? What protection does AWS retain if
+their compute requirements change? Model: realized pricing, customer concentration
+and incremental AWS margins.
+What annual revenue and operating profit does the next utilized IT GW generate, and
+what is the cash payback after construction, power and hardware replacement? How
+much of Trainium's cost advantage does AWS retain versus pass to customers? Model:
+revenue per GW, capex intensity and ROIC.
+If agents control product discovery and comparison, does Amazon retain the customer
+relationship and sponsored-placement economics? Can its fulfillment advantage sustain
+monetization even when discovery starts elsewhere? Model: advertising revenue.`,
+  },
+  {
     label: 'Get email alerts',
     icon: BellSimpleIcon,
     text: 'Regarding my thesis on Microsoft and its enterprise AI spending: email me at holtkam2@gmail.com if you see a high signal claim which refutes my theory',
