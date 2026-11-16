@@ -25,6 +25,8 @@ Use this when the user asks you to watch, monitor, follow, or keep an eye on a p
    - `registered`: say you're now watching the podcast. Name its newest episode,
      which will be ingested within minutes. Explain that later episodes are picked
      up automatically (feeds are checked hourly) and that older episodes are not ingested.
+   - `resumed`: the user had stopped watching this podcast; say you're watching it
+     again, as for `registered`.
    - `already_registered`: say the podcast is already being watched.
    - `invalid`: give the reason. If another credible feed URL exists, try it (at
      most two more attempts). Otherwise ask the user for the podcast's RSS feed URL.

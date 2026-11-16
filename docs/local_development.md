@@ -86,7 +86,8 @@ the feed and registers it with `register_rss_to_watcher`. Within about a minute 
 job is pending or running), the watcher queues the podcast's newest episode, and the status
 appears in the backend log (`src.backend.ingestion.watcher_service: Watcher queued ...`) and in
 `ingestion_jobs`. Feeds are rechecked hourly. To force a recheck, run
-`UPDATE watch_sources SET last_checked_at = NULL`. See the
+`UPDATE watch_sources SET last_checked_at = NULL`. "Stop watching the Dwarkesh Podcast" calls
+`update_subscription`; asking to watch it again resumes it. See the
 [watcher design](etl_design.md#rss-watchers).
 
 ### Browse the database (cabinet)

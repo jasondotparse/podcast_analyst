@@ -1,0 +1,14 @@
+{
+  "type": "function",
+  "name": "update_thesis",
+  "description": "Archive a thesis the user no longer holds (is_active false), or restore an archived one (is_active true). Only call this when the user asks. Find the ID with postgres_database_query on theses; if several theses plausibly match, ask which one. While archived, a thesis is not assessed against new claims, sends no email alerts or digest sections, and is hidden from the knowledge graph view; its existing assessments are kept. Its email alert subscriptions are kept too and resume if it is restored; if the user wants them gone, turn them off with update_notification. Archiving is how a thesis is removed. To change a thesis's wording, archive it and save the new version with add_thesis. Confirm to the user what was archived or restored.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "thesis_id": {"type": "string", "description": "theses.id"},
+      "is_active": {"type": "boolean", "description": "false to archive the thesis, true to restore it."}
+    },
+    "required": ["thesis_id", "is_active"],
+    "additionalProperties": false
+  }
+}
