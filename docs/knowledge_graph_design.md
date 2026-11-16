@@ -44,8 +44,10 @@ thesis stance claims, ordered by their strongest edge. Neighbor traversal includ
 
 ## API and limits
 
-- `GET /api/graph`: all theses, their entities, up to 150 distinct stance claims
-  ordered by strongest stance, then those claims' episodes.
+- `GET /api/graph`: all active theses, their entities, up to 150 distinct stance claims
+  ordered by strongest stance, then those claims' episodes. Theses archived with
+  `update_thesis` are left out here and, through `graph_labels`, everywhere else
+  (`thesis_id` view 404, neighborhoods, chat previews); their graph nodes and edges stay.
 - `GET /api/graph?thesis_id=<uuid>`: the same for one thesis.
 - `GET /api/graph/neighbors?node_id=<uuid>`: the node plus at most 60 neighbors;
   non-claims first, then claims by descending signal (NULL last).

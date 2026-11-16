@@ -47,7 +47,7 @@ Design priorities: *Simple data model*, Clear & well defined abstractions, and l
 * timestamp attribution to quotes. this is not a feature of RSS, so it would not have been trivial to add and therefore did not make it into the v1 of the product, but it could be done using more sophisticated audio ingestion pipeline whereby the audio is chunked prior to transcription. 
 * evaluation for the ingestion process and for the agent retrieval / tool use itself. Didn't have time to build evals for v0 and didn't need to because it was working well enough for a proof of concept product. But to make the product maintainable it really would be necessay to prevent regreression after tool/skill/harness config changes. Or LLM changes, for that matter. 
 * guest identity attribution. Again - not a feature of RSS nor openai's gpt-transcribe, - so this would have been too much work to add in v0, but it would make claims more useful.
-* ability to delete / modify claims and thesis in case the model gets it wrong or your stance has changed. 
+* ability to delete / modify claims, and to edit a thesis's wording in place, in case the model gets it wrong or your stance has changed. (Theses can already be archived and restored through the chat.)
 * Richer investment research ontology. Coverage packs now include debates, research questions, and model drivers; catalysts, risks, and read-across remain follow-ups. Extend the remaining ontology to catalysts, risks, and industry value-chain relationships. Distinguish direct company evidence from indirect read-across and help analysts connect evidence to specific forecast assumptions.
 * Direct episode URL ingestion. Support submitting a public podcast or video URL for immediate processing, rather than requiring a file upload or RSS watcher registration. Add appropriate media acquisition, format handling, and failure reporting.
 * a novelty / non-consensus axis on the 'signal' measure. If a claim is determined to be unique or novel or inconsistent with other claims, that is especially interesting to an analyst, and it should boost its signal. Didn't have time to implement this one since it would make the claim ingestion pipeline a lot more time consuming / complex.
@@ -101,7 +101,10 @@ hosts only, timeouts and size caps) and saves it in `watch_sources`.
   RSS GUID against `episodes`. It uses the feed's transcript (plain text, WebVTT, or SRT) if there is
   one, otherwise the audio enclosure, through the existing ingestion path. Its progress appears
   in the page's status bar, like an upload's.
-- **Limitations:** no UI to remove feeds (the left-hand cabinet lists them); episodes that drop out of a feed before they are
+- **Stopping:** *"Stop watching All-In"* stops a feed (`update_subscription`); asking to watch it again
+  resumes it from its newest episode. Theses and email alerts work the same way: Codex can archive or
+  restore a thesis (`update_thesis`) and turn alerts off or on (`update_notification`).
+- **Limitations:** no UI to remove feeds (the left-hand cabinet lists them; ask the chat); episodes that drop out of a feed before they are
   queued are missed; video-only feeds and HTML/JSON transcripts are not supported; and a failed
   job is not retried automatically.
 

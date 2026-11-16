@@ -318,6 +318,11 @@ class PostgresBackedTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await self.db.one('SELECT count(*) FROM theses'), (97,))
         self.assertEqual(await self.db.one('SELECT count(*) FROM model_drivers'), (7,))
         self.assertEqual(await self.db.one('SELECT count(*) FROM research_questions'), (3,))
+        (archived,) = await self.db.one("INSERT INTO theses (description, is_active) "
+                                       "VALUES ('Archived', false) RETURNING id")
+        with self.assertRaisesRegex(ValueError, '202.*200'):
+            await self.tools.update_thesis(str(archived), True)
+        self.assertEqual(await self.db.one('SELECT is_active FROM theses WHERE id = %s', archived), (False,))
 
     async def test_question_reflection_sweep_and_evidence_survives_pack_rebuild(self):
         thesis = await self.reflection_fixture()
@@ -355,7 +360,7 @@ class PostgresBackedTests(unittest.IsolatedAsyncioTestCase):
             graph.project_informs([], [(weak_claim, questions[0], 'neutral', 24)])
             self.assertEqual(graph.view_nodes([str(weak_claim)]), [])
             self.assertTrue(any(e['stance'] == 'neutral' and e['strength'] == 75 for e in edges))
-            self.assertEqual(len([i for i in graph.thesis_neighborhood(str(saved['thesis_id']), 2)
+            self.assertEqual(len([i for i in graph.thesis_neighborhood([str(saved['thesis_id'])], 2)
                                  if i in {e['c'] for e in edges}]), 2)
             view = await GraphView(self.db, graph).theses(saved['thesis_id'])
             self.assertEqual(len([e for e in view['links'] if e['type'] == 'INFORMS']), 17)
@@ -679,6 +684,42 @@ class PostgresBackedTests(unittest.IsolatedAsyncioTestCase):
                     await self.tools.call("add_thesis", empty)
             self.assertEqual(await self.db.all("SELECT count(*) FROM theses"), [(1,)])
             self.tools.graph.close()
+
+    async def test_update_thesis_archives_and_restores_it_and_the_graph_view_follows(self):
+        await self.extractor.write_claim(self.episode, {
+            "text": "Lasers ship next year.", "evidence_quote": "Lasers ship next year.", "speaker": None,
+            "entities": [{"name": "Sivers", "kind": "company"}]})
+        thesis, entities = await self.db.add_thesis("Optics ships soon.", [('Sivers', 'company')])
+        (claim,) = await self.db.one("SELECT id FROM claims")
+        await self.db.save_assessments([(claim, thesis, 'challenges', 88)])
+        await self.tools.add_subscription('analyst@example.com', [str(thesis)])
+
+        async def update(is_active, thesis_id=str(thesis)):
+            return json.loads(await self.tools.call("update_thesis", {"thesis_id": thesis_id, "is_active": is_active}))
+
+        with tempfile.TemporaryDirectory() as directory:
+            graph = GraphClient(open_graph(Path(directory) / "graph.lbug"))
+            self.addCleanup(graph.close)
+            graph.project_thesis(thesis, entities)
+            graph.project_episode(await self.db.episode_graph(self.episode))
+            view = GraphView(self.db, graph)
+            self.assertEqual(await update(False), {"thesis_id": str(thesis), "thesis": "Optics ships soon.",
+                                                   "is_active": False, "status": "archived"})
+            self.assertEqual((await update(False))["status"], "already_archived")
+            self.assertEqual(await self.db.one("SELECT is_active FROM theses"), (False,))
+            # Hidden from the graph view, claims and all; its assessments and alert subscription are kept.
+            self.assertEqual(await view.theses(), {"nodes": [], "links": [], "truncated": False})
+            self.assertIsNone(await view.theses(thesis))
+            self.assertNotIn(str(thesis), {node["id"] for node in (await view.subgraph([str(thesis), str(claim)]))["nodes"]})
+            self.assertEqual(await self.db.one("SELECT count(*) FROM thesis_assessments"), (1,))
+            self.assertEqual(await self.db.one("SELECT count(*) FROM subscriptions"), (1,))
+
+            self.assertEqual((await update(True))["status"], "restored")
+            self.assertEqual((await update(True))["status"], "already_active")
+            self.assertTrue({str(thesis), str(claim)} <= {node["id"] for node in (await view.theses())["nodes"]})
+        for bad_id, error in ((str(uuid4()), "No thesis with ID"), ("nope", "Invalid thesis ID: nope")):
+            with self.assertRaisesRegex(ValueError, error):
+                await update(False, bad_id)
 
     async def reflection_fixture(self):
         for index in range(6):
