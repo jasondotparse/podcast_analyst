@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="benchmark-run-id" content="20261115-192847">
+<title>Ingestion benchmark · Nov 15, 2026</title>
+<style>
+  :root {
+    --bg: #161826; --surface: #232532; --text: #e9e9ed; --muted: #9397ab; --accent: #9184d9;
+    --divider: color-mix(in srgb, #e9e9ed 16%, transparent); --error: oklch(0.76 0.09 22);
+    --ok: oklch(0.80 0.10 155); --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.55 Inter, system-ui, sans-serif; }
+  main { max-width: 1120px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 28px; margin: 0 0 4px; font-weight: 600; }
+  h2 { font-size: 18px; margin: 40px 0 12px; font-weight: 600; }
+  h3 { font-size: 16px; margin: 0 0 12px; font-weight: 600; }
+  h4 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 16px 0 6px; }
+  a { color: var(--accent); }
+  code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+  pre { white-space: pre-wrap; margin: 4px 0 8px; color: var(--muted); }
+  .meta, .muted { color: var(--muted); }
+  .meta { margin: 0; font-size: 13px; }
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 28px; }
+  .tile { background: var(--surface); border-radius: var(--radius); padding: 16px 18px; }
+  .tile-label { color: var(--muted); font-size: 13px; }
+  .tile-value { font-size: 32px; font-weight: 600; margin: 2px 0 8px; font-variant-numeric: tabular-nums; }
+  .tile-unit { font-size: 15px; color: var(--muted); font-weight: 400; }
+  .bar { display: inline-block; width: 100%; height: 6px; border-radius: 3px; background: var(--divider); overflow: hidden; vertical-align: middle; }
+  .bar > span { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+  .summary { background: var(--surface); border-radius: var(--radius); padding: 16px 20px; margin-top: 12px; }
+  .summary p { margin: 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--divider); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; font-size: 13px; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .claims td.quote { color: var(--muted); font-style: italic; }
+  .scroll { overflow-x: auto; }
+  .facts { display: flex; gap: 32px; flex-wrap: wrap; margin: 16px 0 12px; }
+  .facts dt { color: var(--muted); font-size: 13px; }
+  .facts dd { margin: 0; font-size: 18px; font-weight: 600; }
+  .status { font-size: 14px; padding: 2px 10px; border-radius: 999px; border: 1px solid currentColor; }
+  .status.ok { color: var(--ok); } .status.bad { color: var(--error); }
+  .error { color: var(--error); }
+  details { margin: 8px 0; }
+  summary { cursor: pointer; color: var(--accent); }
+  .steps { columns: 3; font-size: 13px; }
+  .card { background: var(--surface); border-radius: var(--radius); padding: 20px 22px; margin-bottom: 16px; }
+  .qid { color: var(--accent); margin-right: 6px; }
+  .columns { display: grid; grid-template-columns: 3fr 2fr; gap: 28px; }
+  .columns ul { margin: 0; padding-left: 18px; }
+  .answer { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--divider); border-radius: 8px; padding: 12px 14px; font-size: 14px; }
+  .score { margin-bottom: 10px; }
+  .score-head { display: grid; grid-template-columns: 1fr 24px 80px; align-items: center; gap: 10px; }
+  .score-head strong { text-align: right; font-variant-numeric: tabular-nums; }
+  .score p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+  .tools { padding-left: 18px; font-size: 13px; }
+  @media (max-width: 760px) { .tiles { grid-template-columns: repeat(2, 1fr); } .columns { grid-template-columns: 1fr; } .steps { columns: 1; } }
+</style>
+</head>
+<body data-run-id="20261115-192847">
+<main>
+  <h1>Ingestion benchmark</h1>
+  <p class="meta">Sunday, November 15, 2026 at 7:28 PM · case <code>optical-bottlenecks</code> ·
+    chat model <code>gpt-6-luna</code> · commit <code>47b01b6</code>
+    on <code>alpha</code> ·
+    graded by claude-opus-5-5</p>
+
+  <section class="tiles" aria-label="Average scores, 1 to 5"><div class="tile"><div class="tile-label">Overall</div><div class="tile-value">4.9<span class="tile-unit"> / 5</span></div><span class="bar" title="4.9 of 5"><span style="width:98%"></span></span></div><div class="tile"><div class="tile-label">Accuracy</div><div class="tile-value">4.8<span class="tile-unit"> / 5</span></div><span class="bar" title="4.8 of 5"><span style="width:97%"></span></span></div><div class="tile"><div class="tile-label">Adherence to transcript</div><div class="tile-value">4.8<span class="tile-unit"> / 5</span></div><span class="bar" title="4.8 of 5"><span style="width:97%"></span></span></div><div class="tile"><div class="tile-label">Helpfulness</div><div class="tile-value">5.0<span class="tile-unit"> / 5</span></div><span class="bar" title="5.0 of 5"><span style="width:100%"></span></span></div></section>
+  <div class="summary"><p>Baseline (alpha, unmodified CHAT_INSTRUCTIONS) is close to ceiling on this case: all six answers are correct, the self-correction (q4), the rumor (q5), and the uncovered topic (q6) are all handled properly, and answers are concise and cited. The only adherence slip is one quote in q3 that is not verbatim (&#x27;it&#x27;s a risk&#x27; for &#x27;is a risk&#x27;), an answer-side error. The ingestion gap is that the acquisition rumor was never extracted as a claim; chat recovered it from the raw passage via vector_search. Chat never called graph_query on any question.</p></div>
+
+  <h2>Ingestion</h2>
+  <p class="meta">“Optical bottlenecks in the AI buildout” from The Margin Call,
+    1580 words. Synthetic transcript written for this benchmark. The podcast, people, and companies are fictional, so web search can&#x27;t answer the questions: a good answer has to come from what ingestion extracted. It plants a self-correction (q4), an unconfirmed rumor (q5), and a topic the episode never covers (q6).</p>
+  
+      <dl class="facts">
+        <div><dt>Status</dt><dd><span class="status ok">completed</span></dd></div>
+        <div><dt>Duration</dt><dd>2.2 min</dd></div>
+        <div><dt>Passages</dt><dd>3</dd></div>
+        <div><dt>Claims extracted</dt><dd>26</dd></div>
+      </dl>
+      
+      
+      <p>12 of 14 extractable expected facts appear in the 26 claims (q6 has none to extract). Missing: the host&#x27;s acquisition chatter and Priya Raman&#x27;s &#x27;can&#x27;t confirm / management hasn&#x27;t said anything&#x27; (q5) have no claim at all. The q4 self-correction resolved correctly (claim gives 40 weeks, up from 12). All 26 claim quotes are verbatim and every speaker attribution is correct. Ingestion took 132s for 3 passages.</p>
+      <details><summary>Pipeline steps</summary><ul class="steps"><li><code>embed</code> at 5s</li><li><code>extract_claims</code> at 10s</li><li><code>project_graph</code> at 126s</li><li><code>notify</code> at 132s</li></ul></details>
+      <details><summary>All 26 extracted claims, highest signal first</summary>
+        <div class="scroll"><table class="claims"><thead><tr><th>Signal</th><th>Speaker</th><th>Claim</th><th>Evidence quote</th></tr></thead>
+        <tbody><tr><td class='num'>82</td><td>PRIYA RAMAN</td><td>Priya Raman expects Corvane Semiconductor&#x27;s gross margin to rise from 41% last quarter to 47% by Q4 2027, mostly because of a richer 1.6T product mix.</td><td class='quote'>Corvane&#x27;s gross margin was 41% last quarter. I expect it to reach 47% by the fourth quarter of 2027. That&#x27;s almost entirely mix.</td></tr><tr><td class='num'>81</td><td>PRIYA RAMAN</td><td>Priya Raman says Corvane Semiconductor&#x27;s two largest hyperscaler customers generated 68% of revenue last fiscal year, so a buildout pause or share shift by either could quickly affect results, although she considers that unlikely over the next 12 months.</td><td class='quote'>Corvane&#x27;s top two customers, both hyperscalers, were 68% of revenue last fiscal year. That&#x27;s a lot of eggs in two baskets. If either of them pauses a buildout for a quarter, or shifts share to a competitor, it shows up immediately in Corvane&#x27;s numbers. I don&#x27;t think that&#x27;s likely in the next twelve months, given the order visibility they&#x27;ve talked about, but it&#x27;s the risk I&#x27;d watch most closely.</td></tr><tr><td class='num'>80</td><td>MARCUS OYELARAN</td><td>Based on his experience, Marcus Oyelaran says 800G transceiver prices fell about 15% to 20% annually after second and third suppliers qualified, and expects 1.6T to follow a similar curve with roughly a one-year lag.</td><td class='quote'>In my experience 800G transceiver prices fell something like 15 to 20 percent a year once the second and third suppliers were qualified. I&#x27;d expect 1.6T to follow the same curve, maybe with a lag of a year or so.</td></tr><tr><td class='num'>79</td><td>PRIYA RAMAN</td><td>Priya Raman&#x27;s model expects Corvane Semiconductor&#x27;s 1.6T unit shipments to triple in 2027 versus 2026.</td><td class='quote'>My model has Corvane&#x27;s 1.6T unit shipments tripling in 2027 versus 2026.</td></tr><tr><td class='num'>79</td><td>MARCUS OYELARAN</td><td>Marcus Oyelaran says laser supply will limit 1.6T module shipments until Talmadge Photonics&#x27; new fab comes online, creating a supply-side risk to Corvane Semiconductor&#x27;s tripling forecast.</td><td class='quote'>Until then, laser supply is going to gate how many 1.6T modules the industry can actually ship, no matter how much demand there is. Which, by the way, is a risk to Priya&#x27;s tripling number, not because demand isn&#x27;t there but because the lasers might not be.</td></tr><tr><td class='num'>77</td><td>MARCUS OYELARAN</td><td>Marcus Oyelaran says indium phosphide substrate lead times have risen from about 12 weeks two years ago to roughly 40 weeks in the latest quotes, making substrate procurement a near-year-long early step in adding laser capacity.</td><td class='quote'>The latest quotes I&#x27;ve seen are closer to 40 weeks. Two years ago it was about 12 weeks. So it has more than tripled. When a laser maker wants to add capacity, the substrate order is one of the very first things they have to place, and it&#x27;s now most of a year out.</td></tr><tr><td class='num'>74</td><td>MARCUS OYELARAN</td><td>Marcus Oyelaran does not expect co-packaged optics to reach volume adoption before 2028 at the earliest.</td><td class='quote'>I don&#x27;t see co-packaged optics hitting volume adoption until 2028 at the earliest.</td></tr><tr><td class='num'>70</td><td>PRIYA RAMAN</td><td>Priya Raman&#x27;s model assumes 1.6T transceiver pricing will begin declining in the second half of 2027.</td><td class='quote'>I assume 1.6T pricing starts declining in the back half of 2027.</td></tr><tr><td class='num'>70</td><td>MARCUS OYELARAN</td><td>Marcus Oyelaran says EML lasers are the scarce component in high-speed modules because few companies can produce them at volume with good yields, and identifies Talmadge Photonics as the laser bottleneck.</td><td class='quote'>The scarce part is the laser. For the highest speed modules you need EML lasers, electro-absorption modulated lasers, and there are very few companies that can make them at volume with good yields. The one I&#x27;d point to is Talmadge Photonics. Talmadge is the laser bottleneck for this whole cycle.</td></tr><tr><td class='num'>68</td><td>PRIYA RAMAN</td><td>Priya Raman models co-packaged optics at less than 5% of the optical interconnect market in 2027 and views it as a 2028-and-beyond story.</td><td class='quote'>I model co-packaged optics as less than 5% of the optical interconnect market in 2027. It&#x27;s a 2028 and beyond story.</td></tr><tr><td class='num'>67</td><td>PRIYA RAMAN</td><td>Priya Raman says Corvane Semiconductor has qualified parts at three of the four largest cloud buyers, and expects the fourth qualification to finish early next year.</td><td class='quote'>They have qualified parts at three of the four largest cloud buyers, and the fourth qualification should finish early next year.</td></tr><tr><td class='num'>67</td><td>MARCUS OYELARAN</td><td>Marcus Oyelaran says large cloud providers dual-source 1.6T transceivers to create a second source for procurement negotiations, as they did with 800G.</td><td class='quote'>From the buyer&#x27;s side, the playbook is always the same. You qualify a second source as fast as you can, and then you use that second source to negotiate. Every large cloud provider I know is dual-sourcing 1.6T, the same way they dual-sourced 800G.</td></tr><tr><td class='num'>67</td><td>MARCUS OYELARAN</td><td>Marcus Oyelaran says optics ranked among the top three line items in a new data center after accelerators and power, drawing significant finance attention.</td><td class='quote'>When I was in the seat, optics was one of the top three line items in a new data center after the accelerators themselves and power. That gets a lot of attention from finance.</td></tr><tr><td class='num'>67</td><td>MARCUS OYELARAN</td><td>Marcus Oyelaran says nearly all companies shipping 1.6T modules, including Corvane Semiconductor, buy at least some EML lasers from Talmadge Photonics.</td><td class='quote'>Almost everyone shipping 1.6T, Corvane included, is buying at least some of their EML lasers from Talmadge.</td></tr><tr><td class='num'>67</td><td>MARCUS OYELARAN</td><td>Marcus Oyelaran says tight laser capacity gives Talmadge Photonics pricing power that transceiver makers lack.</td><td class='quote'>Whoever wins the transceiver share battle, they&#x27;re buying lasers from Talmadge, and capacity is tight, so Talmadge has pricing power the transceiver makers don&#x27;t have.</td></tr><tr><td class='num'>66</td><td>MARCUS OYELARAN</td><td>Marcus Oyelaran says one large cloud provider delayed its co-packaged optics pilot by two quarters because of thermal problems, and heat from nearby switch chips can hurt laser reliability.</td><td class='quote'>I know of one large cloud provider that pushed its co-packaged optics pilot back by two quarters this year because of thermal problems. When you put the lasers right next to a switch chip that&#x27;s running extremely hot, laser reliability suffers.</td></tr><tr><td class='num'>66</td><td>MARCUS OYELARAN</td><td>Marcus Oyelaran expects pluggable optical modules to remain the volume product for at least a few more years.</td><td class='quote'>At least a few more years as the volume product, yes.</td></tr><tr><td class='num'>65</td><td>PRIYA RAMAN</td><td>Priya Raman says 1.6T modules have meaningfully higher gross margins than 800G modules, and limited volume suppliers currently keep pricing rational.</td><td class='quote'>1.6T modules carry meaningfully higher gross margins than 800G, because there are only two or three vendors that can ship them at volume today, so pricing is still rational.</td></tr><tr><td class='num'>62</td><td>PRIYA RAMAN</td><td>Priya Raman says Corvane Semiconductor&#x27;s newer laser design reduces components per module, lowering costs faster than selling prices and helping preserve margins as ASPs fall.</td><td class='quote'>The difference is that Corvane&#x27;s costs are coming down faster than pricing, because of their move to a newer laser design that cuts the number of components per module. So I think the margin holds even as average selling prices fall.</td></tr><tr><td class='num'>62</td><td>MARCUS OYELARAN</td><td>Marcus Oyelaran says co-packaged optics has a serviceability drawback because a failed laser may require replacing the whole switch, which operations teams dislike.</td><td class='quote'>And there&#x27;s a serviceability problem. With a pluggable module, if a laser fails, a technician pulls the module and slots in a new one in a couple of minutes. With co-packaged optics, a failed laser can mean replacing the whole switch. Operations teams hate that.</td></tr><tr><td class='num'>59</td><td>PRIYA RAMAN</td><td>Priya Raman says Corvane Semiconductor signed a multi-year capacity agreement with Talmadge Photonics last year but remains not fully insulated from laser supply constraints.</td><td class='quote'>They signed a multi-year capacity agreement with Talmadge last year. But Marcus is right that nobody is fully insulated.</td></tr><tr><td class='num'>58</td><td>PRIYA RAMAN</td><td>Priya Raman says Corvane Semiconductor has a co-packaged optics program whose light engines could be used inside co-packaged systems, making the technology a longer-term shift rather than a near-term risk to Corvane.</td><td class='quote'>Long term it&#x27;s a real shift, but I don&#x27;t think it&#x27;s a near-term risk. Corvane has its own co-packaged optics program, and their light engines could end up inside those packages.</td></tr><tr><td class='num'>53</td><td>MARCUS OYELARAN</td><td>Marcus Oyelaran expects co-packaged optics to first appear in specific high-density deployments and expand from there.</td><td class='quote'>Co-packaged optics will show up first in specific, very high density deployments, and grow from there.</td></tr><tr><td class='num'>52</td><td>MARCUS OYELARAN</td><td>Marcus Oyelaran warns that indium phosphide substrate constraints may remain a quiet risk until they have already become an operational problem.</td><td class='quote'>And it&#x27;s a quiet risk because it doesn&#x27;t show up in anyone&#x27;s earnings call until it&#x27;s already a problem.</td></tr><tr><td class='num'>50</td><td>MARCUS OYELARAN</td><td>Marcus Oyelaran says Talmadge Photonics is building a new fab in Malaysia that he has heard is expected to come online in the second half of 2027.</td><td class='quote'>They&#x27;re building out a new fab in Malaysia, and from what I&#x27;ve heard it comes online in the second half of 2027.</td></tr><tr><td class='num'>48</td><td>DANA WHITFIELD</td><td>Dana Whitfield says AI clusters are shifting inter-rack traffic from copper to optical links, making transceivers, lasers, and laser materials bottlenecks.</td><td class='quote'>Every GPU cluster needs to move enormous amounts of data between racks, and that traffic increasingly runs over light, not copper. So the transceivers, the lasers inside them, and the materials those lasers are made from have become real bottlenecks.</td></tr></tbody></table></div></details>
+
+  <h2>Questions</h2>
+  <div class="scroll"><table><thead><tr><th>#</th><th>Question</th><th class="num">Accuracy</th><th class="num">Adherence</th>
+    <th class="num">Helpfulness</th><th class="num">Time</th><th class="num">Tools</th></tr></thead>
+    <tbody><tr><td><a href='#q1'>q1</a></td><td>What did Priya Raman say about Corvane Semiconductor&#x27;s gross margin outlook?</td><td class='num'>5</td><td class='num'>5</td><td class='num'>5</td><td class='num'>14s</td><td class='num'>2</td></tr><tr><td><a href='#q2'>q2</a></td><td>When do the guests expect co-packaged optics to reach volume adoption, and why?</td><td class='num'>5</td><td class='num'>5</td><td class='num'>5</td><td class='num'>17s</td><td class='num'>2</td></tr><tr><td><a href='#q3'>q3</a></td><td>What risks to the Corvane Semiconductor bull case came up in the episode?</td><td class='num'>5</td><td class='num'>4</td><td class='num'>5</td><td class='num'>37s</td><td class='num'>6</td></tr><tr><td><a href='#q4'>q4</a></td><td>What lead times were mentioned for indium phosphide substrates?</td><td class='num'>5</td><td class='num'>5</td><td class='num'>5</td><td class='num'>12s</td><td class='num'>2</td></tr><tr><td><a href='#q5'>q5</a></td><td>Is Corvane Semiconductor acquiring another company?</td><td class='num'>4</td><td class='num'>5</td><td class='num'>5</td><td class='num'>18s</td><td class='num'>3</td></tr><tr><td><a href='#q6'>q6</a></td><td>What did the guests say about Nvidia&#x27;s latest earnings?</td><td class='num'>5</td><td class='num'>5</td><td class='num'>5</td><td class='num'>15s</td><td class='num'>5</td></tr></tbody></table></div>
+
+  <h2>Answers and grades</h2>
+  
+      <article class="card" id="q1">
+        <h3><span class="qid">q1</span> What did Priya Raman say about Corvane Semiconductor&#x27;s gross margin outlook?</h3>
+        
+        <div class="columns">
+          <div>
+            <h4>Expected</h4><ul><li>Priya Raman said Corvane&#x27;s gross margin was 41% last quarter and she expects it to reach 47% by Q4 2027.</li><li>She attributed the expansion almost entirely to mix: 1.6T modules carry higher gross margins than 800G.</li><li>Optional context: she models 1.6T unit shipments tripling in 2027 versus 2026, and thinks cost declines offset falling prices.</li></ul>
+            <h4>Answer <span class="muted">(14s)</span></h4>
+            <div class="answer">I’ll search the ingested podcast transcripts for Priya Raman’s comments on Corvane Semiconductor’s gross margin outlook.
+
+Priya Raman expected Corvane’s gross margin to rise from **41% last quarter to 47% by Q4 2027**, mainly as higher-margin 1.6T modules become a larger share of sales. Her claim was high-signal (82/100).
+
+She allowed that 1.6T pricing could start falling in the second half of 2027, but said Corvane’s costs should fall faster because its newer laser design uses fewer components. As she put it: “So I think the margin holds even as average selling prices fall.”
+
+**Source:** Raman, on *The Margin Call*, episode “Optical bottlenecks in the AI buildout.” The episode record has no URL. This is her forecast, not an independently verified outcome.</div>
+          </div>
+          <div>
+            <h4>Grades</h4><div class='score'><div class='score-head'><span>Accuracy</span><strong>5</strong><span class="bar" title="5.0 of 5"><span style="width:100%"></span></span></div><p>Gives 41% last quarter to 47% by Q4 2027, attributes it to 1.6T mix, and adds her view that cost declines (newer laser design, fewer components) offset 2H 2027 price declines. Omits the optional tripling-shipments context.</p></div><div class='score'><div class='score-head'><span>Adherence to transcript</span><strong>5</strong><span class="bar" title="5.0 of 5"><span style="width:100%"></span></span></div><p>Every figure traces to lines 13 and 19; the one quote (&#x27;So I think the margin holds even as average selling prices fall.&#x27;) is verbatim and correctly attributed to Raman, and it labels the number as her forecast.</p></div><div class='score'><div class='score-head'><span>Helpfulness</span><strong>5</strong><span class="bar" title="5.0 of 5"><span style="width:100%"></span></span></div><p>Direct answer first with the numbers, then the offsetting-cost nuance, a verbatim quote, signal score, and source. Short and analyst-ready.</p></div>
+            
+            <details><summary>2 tool calls</summary><ul class="tools"><li><code>vector_search</code> <span class='muted'>succeeded, 0.6s</span><pre>{
+ &quot;query&quot;: &quot;Priya Raman comments about Corvane Semiconductor gross margin outlook&quot;,
+ &quot;limit&quot;: 10
+}</pre></li><li><code>postgres_database_query</code> <span class='muted'>succeeded, 0.0s</span><pre>{
+ &quot;sql&quot;: &quot;SELECT e.title AS episode, e.published_at, e.source_url, pod.name AS podcast, c.speaker, c.text AS claim, c.evidence_quote, c.signal FROM passages p JOIN episodes e ON e.id = p.episode_id JOIN podcasts pod ON pod.id = e.podcast_id LEFT JOIN claims c ON c.passage_id = p.id WHERE p.id = &#x27;117c1e7a-3d22-44af-ab58-367c2eb84f76&#x27; OR p.id = &#x27;200e8143-575b-46d7-b81a-320f842094bc&#x27; ORDER BY c.signal DESC NULLS LAST&quot;
+}</pre></li></ul></details>
+          </div>
+        </div>
+      </article>
+      <article class="card" id="q2">
+        <h3><span class="qid">q2</span> When do the guests expect co-packaged optics to reach volume adoption, and why?</h3>
+        
+        <div class="columns">
+          <div>
+            <h4>Expected</h4><ul><li>Marcus Oyelaran: not until 2028 at the earliest.</li><li>One large cloud provider pushed its co-packaged optics pilot back two quarters because of thermal problems (laser reliability next to a hot switch chip).</li><li>Serviceability: a failed laser can mean replacing the whole switch, versus swapping a pluggable module.</li><li>Priya Raman agreed and models co-packaged optics at under 5% of the optical interconnect market in 2027.</li></ul>
+            <h4>Answer <span class="muted">(17s)</span></h4>
+            <div class="answer">I’ll search the ingested podcast transcripts for when guests expect co-packaged optics to scale and what they say is driving or delaying adoption.
+
+The guests see **2028 as the earliest point for volume adoption**. Priya Raman expects co-packaged optics to remain under 5% of the optical interconnect market in 2027, calling it “a 2028 and beyond story.” Both guests expect it to appear first in specific, very high-density deployments and grow from there.
+
+Marcus Oyelaran gave two reasons for the delay:
+
+- **Heat and reliability:** He said one cloud provider pushed its pilot back by two quarters because heat from the switch chip can hurt nearby laser reliability.
+- **Serviceability:** A failed laser in a pluggable module can be swapped quickly; with co-packaged optics, Marcus said, it could mean replacing the whole switch, which operations teams dislike.
+
+These are the guests’ views from *The Margin Call*, “Optical bottlenecks in the AI buildout.” The supporting claims have signal scores of 74 for Marcus’s timing estimate, 68 for Priya’s market estimate, and 66 for Marcus’s thermal explanation. The ingested record has no episode date or URL.</div>
+          </div>
+          <div>
+            <h4>Grades</h4><div class='score'><div class='score-head'><span>Accuracy</span><strong>5</strong><span class="bar" title="5.0 of 5"><span style="width:100%"></span></span></div><p>Covers all four expected points: 2028 at the earliest, the two-quarter thermal pilot delay, the whole-switch serviceability problem, and Priya&#x27;s under-5% of the 2027 market.</p></div><div class='score'><div class='score-head'><span>Adherence to transcript</span><strong>5</strong><span class="bar" title="5.0 of 5"><span style="width:100%"></span></span></div><p>&#x27;a 2028 and beyond story&#x27; is verbatim; the thermal and serviceability reasons are correctly attributed to Marcus, and saying both guests expect early high-density deployments is fair since Priya said &#x27;I agree with that.&#x27;</p></div><div class='score'><div class='score-head'><span>Helpfulness</span><strong>5</strong><span class="bar" title="5.0 of 5"><span style="width:100%"></span></span></div><p>Leads with the timeline, then two clearly labeled reasons with speakers and signal scores; well sized for an analyst.</p></div>
+            
+            <details><summary>2 tool calls</summary><ul class="tools"><li><code>vector_search</code> <span class='muted'>succeeded, 0.5s</span><pre>{
+ &quot;query&quot;: &quot;co-packaged optics volume adoption timeline why expected adoption&quot;,
+ &quot;limit&quot;: 10
+}</pre></li><li><code>postgres_database_query</code> <span class='muted'>succeeded, 0.0s</span><pre>{
+ &quot;sql&quot;: &quot;SELECT e.title AS episode, p.name AS podcast, e.published_at, e.source_url, c.speaker, c.text AS claim, c.evidence_quote, c.signal FROM claims c JOIN passages pa ON pa.id = c.passage_id JOIN episodes e ON e.id = pa.episode_id JOIN podcasts p ON p.id = e.podcast_id WHERE (c.text ILIKE &#x27;%co-packaged optic%&#x27; OR c.evidence_quote ILIKE &#x27;%co-packaged optic%&#x27;) ORDER BY c.signal DESC NULLS LAST LIMIT 20&quot;
+}</pre></li></ul></details>
+          </div>
+        </div>
+      </article>
+      <article class="card" id="q3">
+        <h3><span class="qid">q3</span> What risks to the Corvane Semiconductor bull case came up in the episode?</h3>
+        
+        <div class="columns">
+          <div>
+            <h4>Expected</h4><ul><li>Customer concentration (Priya): the top two customers, both hyperscalers, were 68% of revenue last fiscal year.</li><li>Pricing pressure (Marcus): buyers dual-source, and 800G prices fell about 15-20% a year once more suppliers qualified; he expects 1.6T to follow.</li><li>Supply (Marcus): Talmadge Photonics&#x27; EML lasers gate 1.6T shipments until its Malaysia fab comes online in 2H 2027; indium phosphide substrate lead times of about 40 weeks.</li><li>Co-packaged optics was discussed as a long-term shift, but both guests saw it as not a near-term risk.</li></ul>
+            <h4>Answer <span class="muted">(37s)</span></h4>
+            <div class="answer">I’ll search the ingested podcast evidence for Corvane Semiconductor and the risks discussed against its bull case.
+
+In *The Margin Call* episode “Optical bottlenecks in the AI buildout,” the main risks to Corvane’s bull case were:
+
+- **Customer concentration** — Bullish analyst Priya Raman said Corvane’s two largest hyperscaler customers accounted for 68% of revenue. “If either of them pauses a buildout for a quarter, or shifts share to a competitor, it shows up immediately in Corvane’s numbers.” She said she thought that was unlikely over the next 12 months. **Signal: 81/100.**
+- **Pricing and margin pressure** — Former cloud supply-chain operator Marcus Oyelaran said cloud buyers are dual-sourcing 1.6T transceivers to negotiate prices. He expects 1.6T pricing to follow 800G, whose prices, in his experience, fell “15 to 20 percent a year” after more suppliers qualified. Priya allows for 1.6T price declines from the second half of 2027, but argues Corvane’s costs will fall faster. **Signal: 80/100.**
+- **Laser supply could constrain the 1.6T ramp** — Oyelaran said laser supply could limit shipments even if demand is strong: “it’s a risk to Priya’s tripling number, not because demand isn’t there but because the lasers might not be.” He pointed to concentrated EML laser capacity and said Talmadge Photonics’ new fab was expected in the second half of 2027. Priya said Corvane has a multi-year capacity agreement with Talmadge, though “nobody is fully insulated.” **Signal: 79/100.**
+- **Indium phosphide substrate delays could worsen that bottleneck** — Oyelaran said lead times had risen to about 40 weeks, versus about 12 weeks two years earlier, making substrate procurement “most of a year out.” **Signal: 77/100.**
+
+They also discussed **co-packaged optics** as a longer-term transition risk for pluggable transceivers. Oyelaran cited thermal and serviceability problems; Priya said it was not a near-term risk and that Corvane has its own program. These claims scored lower, at 58–66/100.
+
+These are attributed comments from the episode, not independently verified facts. The episode record has no publication date or source URL.</div>
+          </div>
+          <div>
+            <h4>Grades</h4><div class='score'><div class='score-head'><span>Accuracy</span><strong>5</strong><span class="bar" title="5.0 of 5"><span style="width:100%"></span></span></div><p>Hits customer concentration (68%), dual-sourcing pricing pressure (15-20%/yr on 800G), Talmadge EML supply gating until the 2H 2027 fab, ~40-week InP lead times, and frames co-packaged optics as long-term and not near-term.</p></div><div class='score'><div class='score-head'><span>Adherence to transcript</span><strong>4</strong><span class="bar" title="4.0 of 5"><span style="width:80%"></span></span></div><p>The quote &#x27;it&#x27;s a risk to Priya&#x27;s tripling number, not because demand isn&#x27;t there...&#x27; is not verbatim; the transcript says &#x27;Which, by the way, is a risk to Priya&#x27;s tripling number&#x27;. Every other quote, figure, and attribution checks out.</p></div><div class='score'><div class='score-head'><span>Helpfulness</span><strong>5</strong><span class="bar" title="5.0 of 5"><span style="width:100%"></span></span></div><p>Ranked risks with speakers, verbatim quotes, and signal scores, plus Priya&#x27;s counterpoints and a closing caveat; exactly the bull-case risk list an analyst wants.</p></div>
+            
+            <details><summary>6 tool calls</summary><ul class="tools"><li><code>postgres_database_query</code> <span class='muted'>succeeded, 0.1s</span><pre>{
+ &quot;sql&quot;: &quot;SELECT id, name, kind FROM entities WHERE name ILIKE &#x27;%Corvane%&#x27; ORDER BY name LIMIT 20&quot;
+}</pre></li><li><code>vector_search</code> <span class='muted'>succeeded, 0.3s</span><pre>{
+ &quot;query&quot;: &quot;Corvane Semiconductor risks to the bull case, bear arguments, business risks&quot;,
+ &quot;limit&quot;: 10
+}</pre></li><li><code>postgres_database_query</code> <span class='muted'>failed, 0.0s</span><pre>{
+ &quot;sql&quot;: &quot;SELECT c.id, c.text AS claim, c.evidence_quote, c.speaker, c.signal, c.specificity, c.materiality, c.source_standing, e.title AS episode, p.published_at, e.source_url, p.text AS passage_text FROM claims c JOIN claim_entities ce ON ce.claim_id = c.id JOIN entities ent ON ent.id = ce.entity_id JOIN passages pa ON pa.id = c.passage_id JOIN episodes e ON e.id = pa.episode_id LEFT JOIN LATERAL (SELECT pa2.published_at) p ON TRUE WHERE ent.name = &#x27;Corvane Semiconductor&#x27; ORDER BY c.signal DESC NULLS LAST LIMIT 50&quot;
+}</pre></li><li><code>postgres_database_query</code> <span class='muted'>succeeded, 0.0s</span><pre>{
+ &quot;sql&quot;: &quot;SELECT c.id, c.text AS claim, c.evidence_quote, c.speaker, c.signal, c.specificity, c.materiality, c.source_standing, e.title AS episode, e.published_at, e.source_url, p.text AS passage_text FROM claims c JOIN claim_entities ce ON ce.claim_id = c.id JOIN entities ent ON ent.id = ce.entity_id JOIN passages p ON p.id = c.passage_id JOIN episodes e ON e.id = p.episode_id WHERE ent.name = &#x27;Corvane Semiconductor&#x27; ORDER BY c.signal DESC NULLS LAST LIMIT 50&quot;
+}</pre></li><li><code>postgres_database_query</code> <span class='muted'>succeeded, 0.0s</span><pre>{
+ &quot;sql&quot;: &quot;SELECT c.text AS claim, c.evidence_quote, c.speaker, c.signal, e.title AS episode, e.source_url FROM claims c JOIN claim_entities ce ON ce.claim_id = c.id JOIN entities ent ON ent.id = ce.entity_id JOIN passages p ON p.id = c.passage_id JOIN episodes e ON e.id = p.episode_id WHERE ent.name = &#x27;Corvane Semiconductor&#x27; ORDER BY c.signal DESC NULLS LAST LIMIT 25&quot;
+}</pre></li><li><code>postgres_database_query</code> <span class='muted'>succeeded, 0.0s</span><pre>{
+ &quot;sql&quot;: &quot;SELECT c.text AS claim, c.evidence_quote, c.speaker, c.signal FROM claims c JOIN passages p ON p.id = c.passage_id JOIN episodes e ON e.id = p.episode_id WHERE e.title = &#x27;Optical bottlenecks in the AI buildout&#x27; AND (c.text ILIKE &#x27;%price%&#x27; OR c.text ILIKE &#x27;%laser%&#x27; OR c.text ILIKE &#x27;%customer%&#x27; OR c.text ILIKE &#x27;%indium%&#x27; OR c.text ILIKE &#x27;%co-packaged%&#x27; OR c.text ILIKE &#x27;%procurement%&#x27;) ORDER BY c.signal DESC NULLS LAST LIMIT 30&quot;
+}</pre></li></ul></details>
+          </div>
+        </div>
+      </article>
+      <article class="card" id="q4">
+        <h3><span class="qid">q4</span> What lead times were mentioned for indium phosphide substrates?</h3>
+        
+        <div class="columns">
+          <div>
+            <h4>Expected</h4><ul><li>About 40 weeks per the latest quotes Marcus Oyelaran has seen. He first said 30 weeks, then corrected himself: 30 weeks was last year&#x27;s number.</li><li>About 12 weeks two years ago, so lead times have more than tripled.</li><li>Answering 30 weeks as the current figure is wrong.</li></ul>
+            <h4>Answer <span class="muted">(12s)</span></h4>
+            <div class="answer">I’ll search the podcast transcripts for mentions of indium phosphide substrate lead times, then check the original episode passage and speaker.
+
+Marcus Oyelaran said the latest quotes for indium phosphide substrates were **about 40 weeks**—up from **about 12 weeks two years earlier**. He first mentioned 30 weeks, then corrected himself, saying that was last year’s figure. He described the current wait as “most of a year out.”
+
+He said this on *The Margin Call*, in “Optical bottlenecks in the AI buildout.” The episode data has no URL or timestamp.</div>
+          </div>
+          <div>
+            <h4>Grades</h4><div class='score'><div class='score-head'><span>Accuracy</span><strong>5</strong><span class="bar" title="5.0 of 5"><span style="width:100%"></span></span></div><p>About 40 weeks per the latest quotes, about 12 weeks two years ago, and explicitly notes Marcus first said 30 weeks and corrected it as last year&#x27;s number.</p></div><div class='score'><div class='score-head'><span>Adherence to transcript</span><strong>5</strong><span class="bar" title="5.0 of 5"><span style="width:100%"></span></span></div><p>All figures and the correction match line 39; &#x27;most of a year out&#x27; is verbatim and attributed to Marcus.</p></div><div class='score'><div class='score-head'><span>Helpfulness</span><strong>5</strong><span class="bar" title="5.0 of 5"><span style="width:100%"></span></span></div><p>Two-sentence direct answer that handles the correction cleanly and cites speaker and episode.</p></div>
+            
+            <details><summary>2 tool calls</summary><ul class="tools"><li><code>vector_search</code> <span class='muted'>succeeded, 0.7s</span><pre>{
+ &quot;query&quot;: &quot;lead times for indium phosphide (InP) substrates, substrate availability, delivery wait times&quot;,
+ &quot;limit&quot;: 10
+}</pre></li><li><code>postgres_database_query</code> <span class='muted'>succeeded, 0.0s</span><pre>{
+ &quot;sql&quot;: &quot;SELECT e.title, p.text AS passage_text, e.published_at, e.source_url, c.speaker, c.evidence_quote, c.text AS claim_text, c.signal FROM passages p JOIN episodes e ON e.id = p.episode_id LEFT JOIN claims c ON c.passage_id = p.id WHERE p.id IN (&#x27;200e8143-575b-46d7-b81a-320f842094bc&#x27;,&#x27;4e23bc07-61df-4b6b-97b3-11d3d207d01b&#x27;) ORDER BY c.signal DESC NULLS LAST&quot;
+}</pre></li></ul></details>
+          </div>
+        </div>
+      </article>
+      <article class="card" id="q5">
+        <h3><span class="qid">q5</span> Is Corvane Semiconductor acquiring another company?</h3>
+        
+        <div class="columns">
+          <div>
+            <h4>Expected</h4><ul><li>Only an unconfirmed rumor: the host mentioned market chatter that Corvane is in talks to acquire a small silicon photonics startup.</li><li>Priya Raman said she couldn&#x27;t confirm it, management hasn&#x27;t said anything, and she wouldn&#x27;t put weight on it.</li><li>Presenting the acquisition as fact is a serious error.</li></ul>
+            <h4>Answer <span class="muted">(18s)</span></h4>
+            <div class="answer">I’ll check the podcast database for mentions of Corvane Semiconductor and any acquisition claims.
+
+The podcast mentions **market chatter** that Corvane may be in talks to acquire a small silicon photonics startup, but there’s no confirmation. In *The Margin Call* episode “Optical bottlenecks in the AI buildout,” Priya Raman said: “I&#x27;ve heard the same chatter, and I can&#x27;t confirm it. Management hasn&#x27;t said anything.” She called the idea speculation.
+
+So, based on the podcast evidence, **an acquisition has not been confirmed**. No publication date or episode URL was available in the database.</div>
+          </div>
+          <div>
+            <h4>Grades</h4><div class='score'><div class='score-head'><span>Accuracy</span><strong>4</strong><span class="bar" title="4.0 of 5"><span style="width:80%"></span></span></div><p>Correctly frames it as unconfirmed market chatter and gives Priya&#x27;s &#x27;can&#x27;t confirm&#x27; and management&#x27;s silence, but omits that she wouldn&#x27;t put any weight on it and doesn&#x27;t say it was the host who raised the chatter.</p></div><div class='score'><div class='score-head'><span>Adherence to transcript</span><strong>5</strong><span class="bar" title="5.0 of 5"><span style="width:100%"></span></span></div><p>The quote &#x27;I&#x27;ve heard the same chatter, and I can&#x27;t confirm it. Management hasn&#x27;t said anything.&#x27; is verbatim, and the rumor is never presented as fact.</p></div><div class='score'><div class='score-head'><span>Helpfulness</span><strong>5</strong><span class="bar" title="5.0 of 5"><span style="width:100%"></span></span></div><p>Bold bottom line that no acquisition is confirmed, backed by a verbatim quote; exactly the answer an analyst needs.</p></div>
+            
+            <details><summary>3 tool calls</summary><ul class="tools"><li><code>postgres_database_query</code> <span class='muted'>succeeded, 0.0s</span><pre>{
+ &quot;sql&quot;: &quot;SELECT id, name, kind FROM entities WHERE name ILIKE &#x27;%Corvane%&#x27; OR name ILIKE &#x27;%Semiconductor%&#x27; ORDER BY name LIMIT 50&quot;
+}</pre></li><li><code>vector_search</code> <span class='muted'>succeeded, 0.3s</span><pre>{
+ &quot;query&quot;: &quot;Corvane Semiconductor acquiring or buying another company, acquisition deal&quot;,
+ &quot;limit&quot;: 10
+}</pre></li><li><code>postgres_database_query</code> <span class='muted'>succeeded, 0.0s</span><pre>{
+ &quot;sql&quot;: &quot;SELECT c.id, c.text, c.evidence_quote, c.speaker, c.signal, c.specificity, c.materiality, c.source_standing, e.title AS episode, e.published_at, e.source_url, p.name AS podcast FROM claims c JOIN claim_entities ce ON ce.claim_id = c.id JOIN entities en ON en.id = ce.entity_id JOIN passages pa ON pa.id = c.passage_id JOIN episodes e ON e.id = pa.episode_id JOIN podcasts p ON p.id = e.podcast_id WHERE en.name = &#x27;Corvane Semiconductor&#x27; ORDER BY c.signal DESC NULLS LAST LIMIT 50&quot;
+}</pre></li></ul></details>
+          </div>
+        </div>
+      </article>
+      <article class="card" id="q6">
+        <h3><span class="qid">q6</span> What did the guests say about Nvidia&#x27;s latest earnings?</h3>
+        
+        <div class="columns">
+          <div>
+            <h4>Expected</h4><ul><li>Nothing: the episode never discusses Nvidia or its earnings.</li><li>A good answer says the ingested episode doesn&#x27;t cover it. If it brings in outside information, it must clearly label it as not from the podcast.</li></ul>
+            <h4>Answer <span class="muted">(15s)</span></h4>
+            <div class="answer">I’ll check the podcast database for Nvidia earnings discussions and see whether Nvidia has a coverage pack to frame the evidence.
+
+I couldn’t find any guest comments on Nvidia’s latest earnings in the ingested podcast data. Searches for Nvidia/NVDA episodes and claims returned no matches, so I don’t have a podcast-backed summary.</div>
+          </div>
+          <div>
+            <h4>Grades</h4><div class='score'><div class='score-head'><span>Accuracy</span><strong>5</strong><span class="bar" title="5.0 of 5"><span style="width:100%"></span></span></div><p>Correctly reports that the ingested podcast data has no guest comments on Nvidia&#x27;s earnings.</p></div><div class='score'><div class='score-head'><span>Adherence to transcript</span><strong>5</strong><span class="bar" title="5.0 of 5"><span style="width:100%"></span></span></div><p>Makes no claims about the episode and brings in no outside information.</p></div><div class='score'><div class='score-head'><span>Helpfulness</span><strong>5</strong><span class="bar" title="5.0 of 5"><span style="width:100%"></span></span></div><p>A clear, short &#x27;not covered&#x27; answer that says what was searched.</p></div>
+            
+            <details><summary>5 tool calls</summary><ul class="tools"><li><code>postgres_database_query</code> <span class='muted'>succeeded, 0.0s</span><pre>{
+ &quot;sql&quot;: &quot;SELECT e.id AS entity_id, e.name, e.kind, c.ticker, c.thesis_id\n    FROM entities e\n    LEFT JOIN coverage c ON c.entity_id = e.id\n    WHERE lower(e.name) LIKE &#x27;%nvidia%&#x27; OR lower(e.name) = &#x27;nvda&#x27;\n    ORDER BY e.name&quot;
+}</pre></li><li><code>vector_search</code> <span class='muted'>succeeded, 0.4s</span><pre>{
+ &quot;query&quot;: &quot;Nvidia latest earnings results revenue data center guidance margins Blackwell commentary&quot;,
+ &quot;limit&quot;: 10
+}</pre></li><li><code>postgres_database_query</code> <span class='muted'>succeeded, 0.0s</span><pre>{
+ &quot;sql&quot;: &quot;SELECT c.id, c.text, c.evidence_quote, c.speaker, c.signal, e.title, e.published_at, p.name AS podcast, e.source_url\n    FROM claims c\n    JOIN passages pa ON pa.id = c.passage_id\n    JOIN episodes e ON e.id = pa.episode_id\n    JOIN podcasts p ON p.id = e.podcast_id\n    WHERE c.text ILIKE &#x27;%Nvidia%&#x27; OR c.evidence_quote ILIKE &#x27;%Nvidia%&#x27; OR c.text ILIKE &#x27;%earnings%&#x27;\n    ORDER BY e.published_at DESC NULLS LAST, c.signal DESC NULLS LAST\n    LIMIT 50&quot;
+}</pre></li><li><code>postgres_database_query</code> <span class='muted'>succeeded, 0.0s</span><pre>{
+ &quot;sql&quot;: &quot;SELECT e.id, e.title, e.published_at, p.name AS podcast, e.source_url,\n      left(e.transcript_text, 400) AS excerpt\n    FROM episodes e JOIN podcasts p ON p.id = e.podcast_id\n    WHERE e.transcript_text ILIKE &#x27;%Nvidia%&#x27; OR e.transcript_text ILIKE &#x27;%NVIDIA%&#x27; OR e.transcript_text ILIKE &#x27;%NVDA%&#x27;\n    ORDER BY e.published_at DESC NULLS LAST\n    LIMIT 30&quot;
+}</pre></li><li><code>vector_search</code> <span class='muted'>succeeded, 0.2s</span><pre>{
+ &quot;query&quot;: &quot;NVIDIA quarterly earnings: guests discussing latest reported results, revenue, data center growth, gross margins, guidance, Blackwell sales.&quot;,
+ &quot;limit&quot;: 10
+}</pre></li></ul></details>
+          </div>
+        </div>
+      </article>
+  <p class="meta">Run <code>20261115-192847</code>. Raw data: <code>.local/benchmarks/20261115-192847/</code>.
+    Scores are 1–5, graded against the transcript by an LLM, so treat single-point differences between runs as noise.</p>
+</main>
+</body>
+</html>
